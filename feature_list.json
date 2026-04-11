@@ -1,0 +1,766 @@
+{
+  "project": "helpucompli-document-repository",
+  "version": "1.0.0",
+  "total_features": 67,
+  "modules": [
+    {
+      "module": "01-auth",
+      "name": "Authentication & Authorization",
+      "phase": 1,
+      "features": [
+        {
+          "id": "F1.1",
+          "description": "Auth0 SDK v4 integration with proxy.ts",
+          "steps": [
+            "Install @auth0/nextjs-auth0",
+            "Create src/lib/auth0.ts with Auth0Client singleton",
+            "Create src/app/proxy.ts for auth route auto-mounting",
+            "Verify /auth/login, /auth/logout, /auth/callback routes work",
+            "Test auth0.getSession() in a Server Component"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F1.2",
+          "description": "Role-Based Access Control (RBAC) with Auth0 roles",
+          "steps": [
+            "Define roles in Auth0: super_admin, admin, viewer",
+            "Create post-login Action to inject role claim into access token",
+            "Create role guard utility in src/lib/auth-guard.ts",
+            "Test role extraction from session in API route",
+            "Verify unauthorized role returns 403"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F1.3",
+          "description": "MFA enforcement for admin roles",
+          "steps": [
+            "Configure Auth0 Adaptive MFA for super_admin and admin",
+            "Test MFA prompt appears for admin login",
+            "Verify viewer login does not require MFA"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F1.4",
+          "description": "Session management with 30-min timeout",
+          "steps": [
+            "Configure session timeout in Auth0 SDK",
+            "Set cookie flags: httpOnly, secure, SameSite=Lax",
+            "Test session expiry after inactivity",
+            "Verify redirect to login on expired session"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F1.5",
+          "description": "Auth0 Universal Login branding",
+          "steps": [
+            "Configure Auth0 Universal Login with HelpUcompli logo",
+            "Apply brand colors (pink #E91E8C, blue #2563EB)",
+            "Test branded login page renders correctly"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F1.6",
+          "description": "Zod environment variable validation",
+          "steps": [
+            "Create src/lib/config.ts with Zod schema for all env vars",
+            "Validate AUTH0_*, AWS_*, DATABASE_URL at startup",
+            "Test that missing env vars throw clear error messages"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F1.7",
+          "description": "Access denied page for unauthorized users",
+          "steps": [
+            "Create src/app/(auth)/access-denied/page.tsx",
+            "Show branded error with contact admin message",
+            "Redirect users without valid roles to this page"
+          ],
+          "passes": false
+        }
+      ]
+    },
+    {
+      "module": "02-database",
+      "name": "Database Schema",
+      "phase": 1,
+      "features": [
+        {
+          "id": "F2.1",
+          "description": "Prisma schema with 7 core tables",
+          "steps": [
+            "Create prisma/schema.prisma with users, buckets, documents, access_policies, generated_links, audit_logs, user_bucket_access",
+            "Define all enums: Role, AuditAction, PolicyTargetType",
+            "Add all foreign key relationships",
+            "Run npx prisma migrate dev --name init",
+            "Verify tables created in PostgreSQL"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F2.2",
+          "description": "Prisma client singleton",
+          "steps": [
+            "Create src/lib/prisma.ts with globalThis singleton pattern",
+            "Verify no connection pool exhaustion in dev mode",
+            "Test basic query (prisma.user.findMany())"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F2.3",
+          "description": "Database indexes for performance",
+          "steps": [
+            "Add unique index on users.auth0_id and users.email",
+            "Add index on documents.bucket_id, documents.s3_key",
+            "Add indexes on audit_logs: created_at, user_id, action",
+            "Add index on generated_links.presigned_url_hash",
+            "Run migration and verify indexes exist"
+          ],
+          "passes": false
+        }
+      ]
+    },
+    {
+      "module": "03-s3",
+      "name": "AWS S3 Integration",
+      "phase": 1,
+      "features": [
+        {
+          "id": "F3.1",
+          "description": "S3 client singleton with SSE-KMS",
+          "steps": [
+            "Create src/lib/s3.ts with S3Client singleton",
+            "Configure SSE-KMS encryption on all operations",
+            "Use IAM role-based auth (env vars for dev)",
+            "Test connection to S3"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F3.2",
+          "description": "Presigned URL generation (upload + download)",
+          "steps": [
+            "Create presigned PUT URL generator for uploads",
+            "Create presigned GET URL generator for downloads",
+            "Configure TTL (default 15 min, configurable)",
+            "Test upload via presigned URL",
+            "Test download via presigned URL"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F3.3",
+          "description": "S3 bucket operations with HIPAA auto-config",
+          "steps": [
+            "Implement CreateBucket with SSE-KMS, versioning, Block Public Access",
+            "Implement ListBuckets",
+            "Implement DeleteBucket (empty only)",
+            "Add bucket policy denying non-HTTPS access",
+            "Test all HIPAA settings auto-applied"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F3.4",
+          "description": "S3 object operations (list, copy, delete)",
+          "steps": [
+            "Implement ListObjectsV2 with prefix browsing",
+            "Implement CopyObject for move/copy",
+            "Implement DeleteObject (soft delete via versioning)",
+            "Test listing, copying, deleting objects"
+          ],
+          "passes": false
+        }
+      ]
+    },
+    {
+      "module": "04-dashboard",
+      "name": "Dashboard Home",
+      "phase": 2,
+      "features": [
+        {
+          "id": "F4.1",
+          "description": "Dashboard layout with sidebar and topbar",
+          "steps": [
+            "Create src/app/(dashboard)/layout.tsx with sidebar + topbar",
+            "Create src/components/layout/sidebar.tsx with nav links",
+            "Create src/components/layout/topbar.tsx with logo + user info",
+            "Add responsive sidebar (collapse on mobile)",
+            "Apply brand colors and Inter font"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F4.2",
+          "description": "Summary metric cards",
+          "steps": [
+            "Create summary cards component: total docs, buckets, recent uploads, recent links, active users",
+            "Fetch counts from Prisma queries",
+            "Create API route GET /api/dashboard/stats",
+            "Test cards show correct data"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F4.3",
+          "description": "Recent activity feed",
+          "steps": [
+            "Query last 20 audit_logs entries",
+            "Display timestamp, user, action badge, target",
+            "Add auto-refresh every 30 seconds",
+            "Test feed shows recent actions"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F4.4",
+          "description": "Quick action buttons",
+          "steps": [
+            "Add Upload Document button (links to document browser)",
+            "Add Create Bucket button (super_admin only)",
+            "Add Generate Link button",
+            "Add View Audit Log button",
+            "Test role-based button visibility"
+          ],
+          "passes": false
+        }
+      ]
+    },
+    {
+      "module": "05-buckets",
+      "name": "Bucket Manager",
+      "phase": 2,
+      "features": [
+        {
+          "id": "F5.1",
+          "description": "Bucket list view with metrics",
+          "steps": [
+            "Create src/app/(dashboard)/buckets/page.tsx",
+            "Display buckets as card grid with name, region, doc count, status",
+            "Create GET /api/s3/buckets API route",
+            "Add sorting by name, date, doc count",
+            "Filter by region, status"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F5.2",
+          "description": "Create bucket with HIPAA auto-config",
+          "steps": [
+            "Create bucket creation modal with name, region, description",
+            "Validate bucket name (lowercase, alphanumeric, hyphens, 3-63 chars)",
+            "POST /api/s3/buckets auto-applies HIPAA settings",
+            "Register bucket in PostgreSQL",
+            "Log BUCKET_CREATE in audit trail",
+            "Test only super_admin can create"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F5.3",
+          "description": "Delete bucket (super_admin, empty only)",
+          "steps": [
+            "Add delete button with confirmation dialog (type bucket name)",
+            "DELETE /api/s3/buckets/[id] checks bucket is empty",
+            "Deactivate in PostgreSQL, delete from S3",
+            "Log BUCKET_DELETE in audit trail",
+            "Test rejection when bucket has objects"
+          ],
+          "passes": false
+        }
+      ]
+    },
+    {
+      "module": "06-documents",
+      "name": "Document Browser",
+      "phase": 2,
+      "features": [
+        {
+          "id": "F6.1",
+          "description": "File explorer layout with tree sidebar",
+          "steps": [
+            "Create src/app/(dashboard)/documents/page.tsx",
+            "Create file tree sidebar showing bucket/folder hierarchy",
+            "Create content area with breadcrumb navigation",
+            "Support grid and list view modes",
+            "Test navigation between buckets and folders"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F6.2",
+          "description": "Document upload via presigned PUT URL",
+          "steps": [
+            "Create drag-and-drop upload zone with react-dropzone",
+            "Request presigned PUT URL from POST /api/s3/upload-url",
+            "Upload directly from browser to S3",
+            "On completion, POST /api/s3/upload-complete to save metadata",
+            "Show upload progress bar per file",
+            "Support multi-file upload",
+            "Log DOCUMENT_UPLOAD in audit trail"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F6.3",
+          "description": "Document download via presigned GET URL",
+          "steps": [
+            "Click to download generates presigned GET URL",
+            "POST /api/s3/download-url with policy check",
+            "Log DOCUMENT_DOWNLOAD in audit trail",
+            "Test download works in browser"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F6.4",
+          "description": "Move/copy documents between buckets",
+          "steps": [
+            "Create move/copy dialog with target bucket/folder picker",
+            "POST /api/s3/move executes CopyObject + optional DeleteObject",
+            "Update metadata in PostgreSQL",
+            "Log DOCUMENT_MOVE or DOCUMENT_COPY in audit",
+            "Test move and copy work correctly"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F6.5",
+          "description": "Document deletion (soft + hard delete)",
+          "steps": [
+            "Soft delete: S3 delete marker, hide in browser, retain via versioning",
+            "Hard delete: super_admin only, remove all versions, confirm by typing name",
+            "Log DOCUMENT_SOFT_DELETE or DOCUMENT_HARD_DELETE",
+            "Test soft delete hides but recoverable",
+            "Test hard delete requires super_admin"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F6.6",
+          "description": "Document preview (PDF + images)",
+          "steps": [
+            "PDF preview via iframe with presigned URL",
+            "Image preview inline (jpg, png, gif, webp)",
+            "Show metadata for unsupported types",
+            "Test preview renders correctly"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F6.7",
+          "description": "Context menu and search/filter",
+          "steps": [
+            "Right-click context menu: download, move, copy, generate link, delete",
+            "Search by filename within current bucket/folder",
+            "Filter by content type, upload date, uploader",
+            "Sort by name, date, size"
+          ],
+          "passes": false
+        }
+      ]
+    },
+    {
+      "module": "07-audit",
+      "name": "Audit Logging",
+      "phase": 2,
+      "features": [
+        {
+          "id": "F7.1",
+          "description": "Audit log writer helper function",
+          "steps": [
+            "Create src/lib/audit.ts with logAudit() function",
+            "Accept userId, action, targetType, targetId, metadata, ipAddress, userAgent",
+            "Write to audit_logs table via Prisma",
+            "Ensure append-only (no update/delete methods)",
+            "Test audit entry creation"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F7.2",
+          "description": "Audit log viewer with search and filter",
+          "steps": [
+            "Create src/app/(dashboard)/audit/page.tsx",
+            "TanStack Table with columns: timestamp, user, action badge, target, IP",
+            "Filter by user, action type, date range, target type",
+            "Cursor-based pagination (50 rows per page)",
+            "GET /api/audit with query params",
+            "Test filters work correctly"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F7.3",
+          "description": "CSV export of audit logs",
+          "steps": [
+            "Add Export CSV button to audit page",
+            "Export filtered results with all columns",
+            "Filename: audit_log_YYYY-MM-DD_HH-mm.csv",
+            "Test export downloads correctly"
+          ],
+          "passes": false
+        }
+      ]
+    },
+    {
+      "module": "08-policies",
+      "name": "Policy Engine",
+      "phase": 3,
+      "features": [
+        {
+          "id": "F8.1",
+          "description": "Visual policy builder form",
+          "steps": [
+            "Create src/app/(dashboard)/policies/new/page.tsx",
+            "Form fields: name, target picker, allowed domains, allowed IPs, TTL, max downloads, require auth",
+            "Domain input with chip tags and validation",
+            "IP CIDR input with validation",
+            "TTL dropdown (15min, 1hr, 24hr, 7days, custom)",
+            "Test form validation with Zod"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F8.2",
+          "description": "Policy CRUD API routes",
+          "steps": [
+            "POST /api/policies — create policy",
+            "GET /api/policies — list all policies",
+            "GET /api/policies/[id] — get policy details",
+            "PUT /api/policies/[id] — update policy",
+            "DELETE /api/policies/[id] — delete policy",
+            "Log POLICY_CREATE, POLICY_UPDATE, POLICY_DELETE in audit",
+            "Test all CRUD operations"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F8.3",
+          "description": "Policy enforcement engine",
+          "steps": [
+            "Create src/lib/policy-engine.ts",
+            "Implement policy lookup: object > prefix > bucket > default",
+            "Check authentication requirement",
+            "Check IP against allowed_ip_ranges (CIDR matching)",
+            "Check HTTP Referer against allowed_domains",
+            "Return pass/fail with no info leakage on failure",
+            "Log LINK_ACCESS or LINK_DENIED in audit",
+            "Test each enforcement check individually"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F8.4",
+          "description": "Live policy preview panel",
+          "steps": [
+            "Show summary panel updating as form changes",
+            "Display: target, TTL, max downloads, IP restriction, domain restriction, auth required",
+            "Test preview updates in real-time"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F8.5",
+          "description": "Policy list page",
+          "steps": [
+            "Create src/app/(dashboard)/policies/page.tsx",
+            "Table showing all policies with target, restrictions summary",
+            "Edit and delete actions",
+            "Test list page renders correctly"
+          ],
+          "passes": false
+        }
+      ]
+    },
+    {
+      "module": "09-links",
+      "name": "Link Generator",
+      "phase": 3,
+      "features": [
+        {
+          "id": "F9.1",
+          "description": "Link generation form and copy-to-clipboard",
+          "steps": [
+            "Create src/app/(dashboard)/links/page.tsx",
+            "Select document > select/create policy > generate",
+            "POST /api/links generates presigned URL and stores hash",
+            "Copy-to-clipboard button with toast notification",
+            "Test link generation flow"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F9.2",
+          "description": "Link access endpoint with policy enforcement",
+          "steps": [
+            "Create GET /api/links/[hash] endpoint",
+            "Look up link in generated_links table",
+            "Check: expired? Download count exceeded?",
+            "Enforce associated policy (IP, domain, auth)",
+            "If pass: generate fresh presigned URL, 302 redirect",
+            "If fail: 403 Forbidden",
+            "Increment download_count",
+            "Log in audit trail",
+            "Test all enforcement scenarios"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F9.3",
+          "description": "Link usage analytics and revocation",
+          "steps": [
+            "Show per-link: download count, last accessed, accessing IPs",
+            "Generated links list with status (active/expired/revoked)",
+            "DELETE /api/links/[hash] for manual revocation",
+            "Test analytics display and revocation"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F9.4",
+          "description": "QR code generation for links",
+          "steps": [
+            "Generate QR code for presigned URL",
+            "Download QR as PNG",
+            "Test QR code scans to correct URL"
+          ],
+          "passes": false
+        }
+      ]
+    },
+    {
+      "module": "10-users",
+      "name": "User Management",
+      "phase": 3,
+      "features": [
+        {
+          "id": "F10.1",
+          "description": "User list with role badges",
+          "steps": [
+            "Create src/app/(dashboard)/users/page.tsx",
+            "Data table: name, email, role badge, last login, status, actions",
+            "Search by name or email",
+            "Filter by role, status",
+            "GET /api/users with query params",
+            "Test list rendering and filters"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F10.2",
+          "description": "Invite user via Auth0 Management API",
+          "steps": [
+            "Create invite modal with email, name, role",
+            "POST /api/users calls Auth0 Management API to create user",
+            "Send invitation email via Auth0",
+            "Sync user to local PostgreSQL",
+            "Log USER_INVITE in audit",
+            "Test invite flow end-to-end"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F10.3",
+          "description": "Role management with hierarchy enforcement",
+          "steps": [
+            "Role change dropdown on user row",
+            "super_admin can assign any role",
+            "admin can only assign viewer",
+            "Cannot demote yourself",
+            "PUT /api/users/[id] updates Auth0 + local DB",
+            "Log USER_ROLE_CHANGE in audit",
+            "Test hierarchy enforcement"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F10.4",
+          "description": "Bucket access control for viewers",
+          "steps": [
+            "Multi-select bucket picker for viewer users",
+            "PUT /api/users/[id]/buckets manages user_bucket_access",
+            "Viewers only see assigned buckets in document browser",
+            "Test viewer sees only assigned buckets"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F10.5",
+          "description": "Disable/enable user and Auth0 sync",
+          "steps": [
+            "Toggle status (active/disabled) on user row",
+            "Disabled users blocked in Auth0",
+            "Upsert user on login from Auth0 profile",
+            "Log USER_DISABLE or USER_ENABLE in audit",
+            "Test disabled user cannot log in"
+          ],
+          "passes": false
+        }
+      ]
+    },
+    {
+      "module": "11-security",
+      "name": "Security & HIPAA",
+      "phase": 4,
+      "features": [
+        {
+          "id": "F11.1",
+          "description": "Security headers on all responses",
+          "steps": [
+            "Add Strict-Transport-Security, X-Content-Type-Options, X-Frame-Options",
+            "Add Content-Security-Policy, Referrer-Policy",
+            "Configure in proxy.ts or next.config.ts headers",
+            "Test headers present on all responses"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F11.2",
+          "description": "Rate limiting on API endpoints",
+          "steps": [
+            "Create src/lib/rate-limit.ts with @upstash/ratelimit",
+            "100 req/min per authenticated user",
+            "10 req/min for link generation",
+            "Return 429 Too Many Requests when exceeded",
+            "Test rate limiting triggers correctly"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F11.3",
+          "description": "Zod validation on every API route",
+          "steps": [
+            "Create src/lib/validation.ts with shared schemas",
+            "Add Zod parse on every API route input",
+            "Return 400 Bad Request on invalid input",
+            "No sensitive info in error responses",
+            "Test validation rejects malformed input"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F11.4",
+          "description": "HIPAA Technical Safeguard verification",
+          "steps": [
+            "Verify SSE-KMS on all buckets",
+            "Verify TLS-only bucket policies",
+            "Verify Block Public Access enabled",
+            "Verify CloudTrail data events active",
+            "Verify MFA enforced for admin roles",
+            "Verify 30-min session timeout",
+            "Document evidence in docs/HIPAA-COMPLIANCE-CHECKLIST.md"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F11.5",
+          "description": "AWS CloudWatch alerts and incident response plan",
+          "steps": [
+            "Configure alerts for unauthorized API calls, login failures",
+            "Document incident response plan",
+            "Document 60-day HIPAA breach notification requirement",
+            "Create docs/INCIDENT-RESPONSE-PLAN.md"
+          ],
+          "passes": false
+        }
+      ]
+    },
+    {
+      "module": "12-testing",
+      "name": "Testing & Launch",
+      "phase": 4,
+      "features": [
+        {
+          "id": "F12.1",
+          "description": "Unit tests for lib functions (80%+ coverage)",
+          "steps": [
+            "Test src/lib/audit.ts",
+            "Test src/lib/config.ts",
+            "Test src/lib/policy-engine.ts",
+            "Test src/lib/auth-guard.ts",
+            "Test Zod validation schemas",
+            "Verify 80%+ coverage on lib/"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F12.2",
+          "description": "Integration tests for API routes",
+          "steps": [
+            "Test S3 API routes with mocked S3",
+            "Test policy CRUD routes",
+            "Test link generation and access routes",
+            "Test user management routes",
+            "Test audit log query route",
+            "Test role enforcement on all protected routes"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F12.3",
+          "description": "E2E tests for critical flows (Playwright)",
+          "steps": [
+            "Login → dashboard loads",
+            "Create bucket → appears in list",
+            "Upload document → appears in browser",
+            "Download document → works",
+            "Create policy → apply to document",
+            "Generate link → access → download",
+            "Invite user → assign role → verify access",
+            "Audit log → filter → export CSV"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F12.4",
+          "description": "Performance targets met",
+          "steps": [
+            "Dashboard load < 2 seconds",
+            "Document browser load < 2 seconds",
+            "Presigned URL generation < 500ms",
+            "Audit log query < 1 second",
+            "Test with realistic data volume"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F12.5",
+          "description": "Error handling and monitoring",
+          "steps": [
+            "React Error Boundaries on route groups",
+            "Friendly error pages (403, 404, 500)",
+            "Health check endpoint GET /api/health",
+            "Sentry error tracking configured",
+            "Test error pages render correctly"
+          ],
+          "passes": false
+        },
+        {
+          "id": "F12.6",
+          "description": "Launch checklist complete",
+          "steps": [
+            "All E2E tests passing",
+            "Performance targets met",
+            "Security headers verified",
+            "HIPAA checklist complete",
+            "AWS BAA signed",
+            "DNS configured",
+            "SSL valid",
+            "Env vars set in production",
+            "DB migrations applied",
+            "CloudTrail active",
+            "Sentry configured"
+          ],
+          "passes": false
+        }
+      ]
+    }
+  ]
+}

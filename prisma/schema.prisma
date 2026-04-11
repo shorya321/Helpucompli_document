@@ -1,0 +1,181 @@
+// HelpUcompli Document Repository — Database Schema
+// Run: npx prisma migrate dev --name init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  super_admin
+  admin
+  viewer
+}
+
+enum AuditAction {
+  LOGIN
+  LOGOUT
+  BUCKET_CREATE
+  BUCKET_DELETE
+  DOCUMENT_UPLOAD
+  DOCUMENT_DOWNLOAD
+  DOCUMENT_SOFT_DELETE
+  DOCUMENT_HARD_DELETE
+  DOCUMENT_MOVE
+  DOCUMENT_COPY
+  POLICY_CREATE
+  POLICY_UPDATE
+  POLICY_DELETE
+  LINK_GENERATE
+  LINK_ACCESS
+  LINK_DENIED
+  USER_INVITE
+  USER_ROLE_CHANGE
+  USER_DISABLE
+  USER_ENABLE
+}
+
+enum PolicyTargetType {
+  bucket
+  prefix
+  object
+}
+
+model User {
+  id          String   @id @default(uuid())
+  auth0Id     String   @unique @map("auth0_id")
+  email       String   @unique
+  name        String?
+  role        Role     @default(viewer)
+  status      String   @default("active") // active | disabled
+  createdAt   DateTime @default(now()) @map("created_at")
+  lastLoginAt DateTime? @map("last_login_at")
+
+  buckets          Bucket[]
+  documents        Document[]       @relation("UploadedBy")
+  deletedDocuments Document[]       @relation("DeletedBy")
+  policies         AccessPolicy[]
+  generatedLinks   GeneratedLink[]
+  auditLogs        AuditLog[]
+  grantedAccess    UserBucketAccess[] @relation("GrantedBy")
+  bucketAccess     UserBucketAccess[] @relation("UserAccess")
+
+  @@map("users")
+}
+
+model Bucket {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  awsRegion   String   @map("aws_region")
+  description String?
+  createdById String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  isActive    Boolean  @default(true) @map("is_active")
+
+  createdBy    User               @relation(fields: [createdById], references: [id])
+  documents    Document[]
+  userAccess   UserBucketAccess[]
+
+  @@map("buckets")
+}
+
+model Document {
+  id          String    @id @default(uuid())
+  bucketId    String    @map("bucket_id")
+  s3Key       String    @map("s3_key")
+  filename    String
+  contentType String?   @map("content_type")
+  sizeBytes   BigInt?   @map("size_bytes")
+  uploadedById String   @map("uploaded_by")
+  uploadedAt  DateTime  @default(now()) @map("uploaded_at")
+  isDeleted   Boolean   @default(false) @map("is_deleted")
+  deletedAt   DateTime? @map("deleted_at")
+  deletedById String?   @map("deleted_by")
+
+  bucket       Bucket         @relation(fields: [bucketId], references: [id])
+  uploadedBy   User           @relation("UploadedBy", fields: [uploadedById], references: [id])
+  deletedBy    User?          @relation("DeletedBy", fields: [deletedById], references: [id])
+  generatedLinks GeneratedLink[]
+
+  @@index([bucketId])
+  @@index([s3Key])
+  @@map("documents")
+}
+
+model AccessPolicy {
+  id              String           @id @default(uuid())
+  name            String
+  targetType      PolicyTargetType @map("target_type")
+  targetValue     String           @map("target_value")
+  allowedDomains  Json?            @map("allowed_domains")   // String[]
+  allowedIpRanges Json?            @map("allowed_ip_ranges") // String[]
+  linkTtlSeconds  Int              @default(900) @map("link_ttl_seconds")
+  maxDownloads    Int?             @map("max_downloads")
+  requireAuth     Boolean          @default(false) @map("require_auth")
+  createdById     String           @map("created_by")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  createdBy      User            @relation(fields: [createdById], references: [id])
+  generatedLinks GeneratedLink[]
+
+  @@map("access_policies")
+}
+
+model GeneratedLink {
+  id              String   @id @default(uuid())
+  documentId      String   @map("document_id")
+  policyId        String?  @map("policy_id")
+  generatedById   String   @map("generated_by")
+  presignedUrlHash String  @map("presigned_url_hash")
+  expiresAt       DateTime @map("expires_at")
+  downloadCount   Int      @default(0) @map("download_count")
+  maxDownloads    Int?     @map("max_downloads")
+  isRevoked       Boolean  @default(false) @map("is_revoked")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  document    Document      @relation(fields: [documentId], references: [id])
+  policy      AccessPolicy? @relation(fields: [policyId], references: [id])
+  generatedBy User          @relation(fields: [generatedById], references: [id])
+
+  @@index([documentId])
+  @@index([presignedUrlHash])
+  @@map("generated_links")
+}
+
+model AuditLog {
+  id         String      @id @default(uuid())
+  userId     String?     @map("user_id")
+  action     AuditAction
+  targetType String      @map("target_type")
+  targetId   String      @map("target_id")
+  metadata   Json?       @default("{}")
+  ipAddress  String      @map("ip_address")
+  userAgent  String      @map("user_agent")
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([createdAt])
+  @@index([userId])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+model UserBucketAccess {
+  userId    String   @map("user_id")
+  bucketId  String   @map("bucket_id")
+  grantedById String @map("granted_by")
+  grantedAt DateTime @default(now()) @map("granted_at")
+
+  user      User   @relation("UserAccess", fields: [userId], references: [id])
+  bucket    Bucket @relation(fields: [bucketId], references: [id])
+  grantedBy User   @relation("GrantedBy", fields: [grantedById], references: [id])
+
+  @@id([userId, bucketId])
+  @@map("user_bucket_access")
+}
