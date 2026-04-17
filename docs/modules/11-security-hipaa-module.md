@@ -44,6 +44,11 @@ Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'
 - Reject malformed input with 400 Bad Request
 - No sensitive information in error responses
 
+#### Validated environment at boot (follow-up from F2.2)
+- Wire `src/lib/prisma.ts` through `getConfig().DATABASE_URL` (validated by `src/lib/config.ts` — see F1.6) instead of reading `process.env` directly. Fail-fast if any required env missing or malformed.
+- Add `vitest.setup.ts` with `beforeAll` stubs for every validated key (`AUTH0_*`, `AWS_*`, `DATABASE_URL`, `APP_BASE_URL`, `NODE_ENV`) so unit tests don't blow up at `getConfig()` cache-populate.
+- Runbook entry: on boot failure, check the aggregated per-field error list from `ConfigError` and cross-reference with `.env.example`.
+
 ### F11.5 — CSRF Protection
 - SameSite=Lax cookies (Auth0 default)
 - Auth0 state parameter on OAuth flow

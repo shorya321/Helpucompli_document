@@ -108,13 +108,16 @@
           "steps": [
             "Create prisma/schema.prisma with users, buckets, documents, access_policies, generated_links, audit_logs, user_bucket_access",
             "Define all fields per module doc spec (BigInt for size_bytes, JSONB for metadata, composite PK on user_bucket_access, is_revoked Boolean on generated_links)",
-            "Define all enums: Role, AuditAction, PolicyTargetType, UserStatus",
-            "Add all foreign key relationships with HIPAA-safe onDelete semantics (audit_logs.user_id SET NULL; generated_links.document_id RESTRICT; no CASCADE anywhere)",
-            "Unique constraint on generated_links.presigned_url_hash (prevent hash collision serving wrong file)",
-            "audit_logs append-only enforced at DB layer via BEFORE UPDATE/DELETE/TRUNCATE triggers (RAISE EXCEPTION with insufficient_privilege)",
+            "Define all enums: Role, AuditAction (21 actions), PolicyTargetType, UserStatus (typed; replaces free-text status column — sec-review M2)",
+            "Add all foreign key relationships with HIPAA-safe onDelete semantics (audit_logs.user_id SET NULL; generated_links.document_id RESTRICT; documents.uploaded_by / buckets.created_by RESTRICT; documents.deleted_by SET NULL; NO ON DELETE CASCADE anywhere)",
+            "Unique constraint on generated_links.presigned_url_hash (prevent hash-collision serving wrong file — sec-review L2)",
+            "audit_logs append-only enforced at DB layer via PL/pgSQL function audit_logs_reject_mutation() + BEFORE UPDATE/DELETE/TRUNCATE triggers (RAISE EXCEPTION with insufficient_privilege — sec-review H1, bypassable source sentinel hardened)",
+            "Create prisma.config.ts (Prisma 6.4+ native) that dotenv-loads .env.local from __dirname so every Prisma CLI command resolves DATABASE_URL without shell sourcing (closes env-drift follow-up)",
+            "Configure prisma.config.ts migrations.seed = 'tsx prisma/seed.ts' and schema/migrations paths",
             "Run npx prisma migrate dev --name init",
             "Run npx prisma generate to create Prisma client",
-            "Verify all 7 tables created in PostgreSQL"
+            "Verify all 7 tables + 4 enums + append-only triggers created in PostgreSQL",
+            "Write hermetic schema tests (47 tests: DMMF-style regex on schema.prisma + migration.sql + 4 bypass-vector source scans — no live-DB needed)"
           ],
           "passes": true
         },
@@ -122,8 +125,12 @@
           "id": "F2.2",
           "description": "Prisma client singleton",
           "steps": [
-            "Create src/lib/prisma.ts with globalThis singleton pattern",
+            "Create src/lib/prisma.ts with globalThis singleton pattern (HMR-safe: reuses client across Next.js dev hot-reload)",
             "Prevent connection pool exhaustion in Next.js dev mode",
+            "Security hardening (sec-review M2): route Prisma error events to 'event' emit (NOT stdout) — prevents DATABASE_URL connection-string leakage in CloudWatch/Datadog log scrapers",
+            "Deployment comment (sec-review L1): document singleton assumes long-lived Node runtime; Lambda/serverless needs per-invocation lifecycle",
+            "Test pattern (sec-review L2): afterEach calls prisma.$disconnect() BEFORE dropping globalThis ref (prevents orphan pool)",
+            "Use duck-typing ($connect/$disconnect/$transaction function checks) — NOT instanceof — because Prisma v6 proxy triggers vitest serializer stack-overflow on toBeInstanceOf and class name is minified to 'r'",
             "Test basic query (prisma.user.findMany())",
             "Verify singleton reuses same client across imports"
           ],
@@ -899,7 +906,10 @@
             "Add Zod safeParse on every API route input",
             "Return 400 Bad Request on invalid input",
             "No sensitive info in error responses (no stack traces, file paths)",
-            "Test validation rejects malformed input for each schema"
+            "Test validation rejects malformed input for each schema",
+            "FOLLOW-UP from F2.2: wire src/lib/prisma.ts through getConfig().DATABASE_URL (validated by src/lib/config.ts — F1.6) instead of process.env direct read",
+            "FOLLOW-UP: create vitest.setup.ts with beforeAll env stubs for every validated key (AUTH0_*, AWS_*, DATABASE_URL, APP_BASE_URL, NODE_ENV) so unit tests pass getConfig() cache-populate",
+            "Add runbook entry: on boot failure, ConfigError aggregated per-field messages cross-reference .env.example"
           ],
           "passes": false
         },
@@ -1077,7 +1087,9 @@
             "Set up uptime monitoring with external ping to /api/health",
             "Add toast notifications for client-side errors",
             "No sensitive info in error responses",
-            "Test error pages render correctly"
+            "Test error pages render correctly",
+            "FOLLOW-UP from F2.2: register SIGTERM + SIGINT handlers in server bootstrap (instrumentation.ts or custom server) calling prisma.$disconnect() to flush connection pool on graceful shutdown",
+            "Verify via `kill -TERM <pid>` in staging: Postgres connection count returns to baseline; no orphan pools on rolling deploy"
           ],
           "passes": false
         },

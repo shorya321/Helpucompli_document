@@ -53,6 +53,11 @@ Comprehensive testing (unit, integration, E2E), performance validation, document
 - No sensitive information in error responses (no stack traces, no file paths)
 - Toast notifications for client-side errors
 
+#### Graceful shutdown (follow-up from F2.2)
+- Register `SIGTERM` + `SIGINT` handlers in server bootstrap (`instrumentation.ts` or custom server) that call `prisma.$disconnect()` to flush the connection pool before exit.
+- Prevents orphaned DB connections on rolling deploy / container restart.
+- Verify via `kill -TERM <pid>` in staging: connection count on Postgres returns to baseline.
+
 ### F12.6 — Monitoring Setup
 - **Sentry:** Error tracking and performance monitoring
 - **Vercel Analytics** or **CloudWatch:** Request metrics
