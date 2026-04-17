@@ -1,7 +1,7 @@
 {
   "project": "helpucompli-document-repository",
   "current_phase": 1,
-  "current_module": "02-database",
+  "current_module": "03-s3",
   "last_completed_feature": "F2.4",
   "total_features": 77,
   "completed_features": 11,
