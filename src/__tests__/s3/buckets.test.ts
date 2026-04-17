@@ -10,10 +10,7 @@ import {
   PutBucketVersioningCommand,
   PutPublicAccessBlockCommand,
 } from "@aws-sdk/client-s3";
-import {
-  GetEventSelectorsCommand,
-  PutEventSelectorsCommand,
-} from "@aws-sdk/client-cloudtrail";
+import { PutEventSelectorsCommand } from "@aws-sdk/client-cloudtrail";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const baseEnv = {
@@ -206,6 +203,43 @@ describe("F3.2 — createHipaaBucket auto-config", () => {
     ]);
   });
 
+  it("applies bucket policy denying TLS versions below 1.2 (HIPAA posture)", async () => {
+    stubAll();
+    const { createHipaaBucket, s3Send } = await importBucketsWithMocks();
+    await createHipaaBucket({ name: "helpucompli-docs-acme" });
+    const [call] = commandCalls(s3Send, PutBucketPolicyCommand);
+    const policy = JSON.parse(call.input.Policy as string);
+    const deny = policy.Statement.find(
+      (s: { Sid?: string }) => s.Sid === "DenyTls11OrBelow",
+    );
+    expect(deny).toBeDefined();
+    expect(deny.Effect).toBe("Deny");
+    expect(deny.Principal).toBe("*");
+    expect(deny.Condition.NumericLessThan["s3:TlsVersion"]).toBe("1.2");
+  });
+
+  it("applies AbortIncompleteMultipartUpload lifecycle rule (7 days)", async () => {
+    stubAll();
+    const { createHipaaBucket, s3Send } = await importBucketsWithMocks();
+    await createHipaaBucket({ name: "helpucompli-docs-acme" });
+    const calls = s3Send.mock.calls.filter(
+      (args: unknown[]) =>
+        (args[0] as { constructor: { name: string } }).constructor.name ===
+        "PutBucketLifecycleConfigurationCommand",
+    );
+    expect(calls).toHaveLength(1);
+    const input = (calls[0][0] as { input: Record<string, unknown> }).input;
+    const rules = (input.LifecycleConfiguration as {
+      Rules: Array<{
+        ID: string;
+        Status: string;
+        AbortIncompleteMultipartUpload: { DaysAfterInitiation: number };
+      }>;
+    }).Rules;
+    expect(rules[0].Status).toBe("Enabled");
+    expect(rules[0].AbortIncompleteMultipartUpload.DaysAfterInitiation).toBe(7);
+  });
+
   it("orders setup: Create → OwnershipControls → PublicAccessBlock → … → BucketPolicy", async () => {
     stubAll();
     const { createHipaaBucket, s3Send } = await importBucketsWithMocks();
@@ -283,7 +317,7 @@ describe("F3.2 — rollback on partial failure", () => {
     expect(deletes[0].input.Bucket).toBe("helpucompli-docs-rbx");
   });
 
-  it("logs a warning (but still re-throws original) when rollback DeleteBucket itself fails", async () => {
+  it("logs an error (structured payload, still re-throws original) when rollback DeleteBucket fails", async () => {
     stubAll();
     const send = vi.fn().mockImplementation((cmd: unknown) => {
       if (cmd instanceof PutBucketPolicyCommand) {
@@ -294,14 +328,40 @@ describe("F3.2 — rollback on partial failure", () => {
       }
       return Promise.resolve({});
     });
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
     const { createHipaaBucket } = await importBucketsWithMocks({ s3Send: send });
     await expect(createHipaaBucket({ name: "helpucompli-docs-rbx" })).rejects.toThrow(
       /policy apply failed/,
     );
-    expect(warn).toHaveBeenCalled();
-    expect(warn.mock.calls[0][0]).toMatch(/rollback FAILED/);
-    warn.mockRestore();
+    expect(err).toHaveBeenCalled();
+    expect(err.mock.calls[0][0]).toMatch(/rollback FAILED/);
+    err.mockRestore();
+  });
+
+  it("tags the bucket hipaa:provisioning=failed before attempting rollback", async () => {
+    stubAll();
+    const send = vi.fn().mockImplementation((cmd: unknown) => {
+      if (cmd instanceof PutBucketEncryptionCommand) {
+        return Promise.reject(new Error("KMS access denied"));
+      }
+      return Promise.resolve({});
+    });
+    const { createHipaaBucket } = await importBucketsWithMocks({ s3Send: send });
+    await expect(createHipaaBucket({ name: "helpucompli-docs-rbx" })).rejects.toThrow(
+      /KMS access denied/,
+    );
+    const tagCall = send.mock.calls.find(
+      (args: unknown[]) =>
+        (args[0] as { constructor: { name: string } }).constructor.name ===
+        "PutBucketTaggingCommand",
+    );
+    expect(tagCall).toBeDefined();
+    const input = (tagCall![0] as { input: Record<string, unknown> }).input;
+    const tags = (input.Tagging as { TagSet: Array<{ Key: string; Value: string }> })
+      .TagSet;
+    expect(tags).toEqual(
+      expect.arrayContaining([{ Key: "hipaa:provisioning", Value: "failed" }]),
+    );
   });
 
   it("does NOT rollback when the initial CreateBucket itself fails (nothing to delete)", async () => {
@@ -320,7 +380,7 @@ describe("F3.2 — rollback on partial failure", () => {
   });
 });
 
-describe("F3.2 — CloudTrail data events (read-modify-write)", () => {
+describe("F3.2 — CloudTrail data events (AdvancedEventSelectors)", () => {
   beforeEach(() => {
     vi.unstubAllEnvs();
   });
@@ -332,74 +392,41 @@ describe("F3.2 — CloudTrail data events (read-modify-write)", () => {
     vi.resetModules();
   });
 
-  it("calls GetEventSelectors before PutEventSelectors when trail is configured", async () => {
+  it("issues exactly one PutEventSelectors call with AdvancedEventSelectors (no read-modify-write)", async () => {
     stubAll({ AWS_CLOUDTRAIL_NAME: "helpucompli-trail" });
-    const ct = vi.fn().mockResolvedValue({ EventSelectors: [] });
+    const ct = vi.fn().mockResolvedValue({});
     const { createHipaaBucket } = await importBucketsWithMocks({ cloudTrailSend: ct });
     await createHipaaBucket({ name: "helpucompli-docs-acme" });
     const sent = ct.mock.calls.map(
       (args: unknown[]) =>
         (args[0] as { constructor: { name: string } }).constructor.name,
     );
-    expect(sent[0]).toBe("GetEventSelectorsCommand");
-    expect(sent[1]).toBe("PutEventSelectorsCommand");
+    // Advanced selector pattern is idempotent — single PutEventSelectors,
+    // no GetEventSelectors round-trip.
+    expect(sent).toEqual(["PutEventSelectorsCommand"]);
   });
 
-  it("merges new bucket ARN into existing selectors (does NOT overwrite prior buckets)", async () => {
+  it("builds AdvancedEventSelector with StartsWith on helpucompli-docs- prefix", async () => {
     stubAll({ AWS_CLOUDTRAIL_NAME: "helpucompli-trail" });
-    const existingArn = "arn:aws:s3:::helpucompli-docs-original/";
-    const ct = vi.fn().mockImplementation((cmd: unknown) => {
-      if (cmd instanceof GetEventSelectorsCommand) {
-        return Promise.resolve({
-          EventSelectors: [
-            {
-              ReadWriteType: "All",
-              IncludeManagementEvents: false,
-              DataResources: [
-                { Type: "AWS::S3::Object", Values: [existingArn] },
-              ],
-            },
-          ],
-        });
-      }
-      return Promise.resolve({});
-    });
+    const ct = vi.fn().mockResolvedValue({});
     const { createHipaaBucket } = await importBucketsWithMocks({ cloudTrailSend: ct });
     await createHipaaBucket({ name: "helpucompli-docs-acme" });
     const [put] = commandCalls(ct, PutEventSelectorsCommand);
-    const selectors = put.input.EventSelectors as Array<{
-      DataResources: Array<{ Type: string; Values: string[] }>;
+    expect(put.input.TrailName).toBe("helpucompli-trail");
+    expect(put.input.EventSelectors).toBeUndefined();
+    const adv = put.input.AdvancedEventSelectors as Array<{
+      Name: string;
+      FieldSelectors: Array<{ Field: string; Equals?: string[]; StartsWith?: string[] }>;
     }>;
-    expect(selectors[0].DataResources[0].Values).toEqual([
-      existingArn,
-      "arn:aws:s3:::helpucompli-docs-acme/",
-    ]);
-  });
-
-  it("is idempotent: re-registering the same bucket does not duplicate its ARN", async () => {
-    stubAll({ AWS_CLOUDTRAIL_NAME: "helpucompli-trail" });
-    const arn = "arn:aws:s3:::helpucompli-docs-acme/";
-    const ct = vi.fn().mockImplementation((cmd: unknown) => {
-      if (cmd instanceof GetEventSelectorsCommand) {
-        return Promise.resolve({
-          EventSelectors: [
-            {
-              ReadWriteType: "All",
-              IncludeManagementEvents: false,
-              DataResources: [{ Type: "AWS::S3::Object", Values: [arn] }],
-            },
-          ],
-        });
-      }
-      return Promise.resolve({});
-    });
-    const { createHipaaBucket } = await importBucketsWithMocks({ cloudTrailSend: ct });
-    await createHipaaBucket({ name: "helpucompli-docs-acme" });
-    const [put] = commandCalls(ct, PutEventSelectorsCommand);
-    const selectors = put.input.EventSelectors as Array<{
-      DataResources: Array<{ Type: string; Values: string[] }>;
-    }>;
-    expect(selectors[0].DataResources[0].Values).toEqual([arn]);
+    expect(adv).toHaveLength(1);
+    const fs = adv[0].FieldSelectors;
+    expect(fs).toEqual(
+      expect.arrayContaining([
+        { Field: "eventCategory", Equals: ["Data"] },
+        { Field: "resources.type", Equals: ["AWS::S3::Object"] },
+        { Field: "resources.ARN", StartsWith: ["arn:aws:s3:::helpucompli-docs-"] },
+      ]),
+    );
   });
 
   it("skips CloudTrail wiring when AWS_CLOUDTRAIL_NAME is absent, returning carry-forward flag", async () => {
@@ -420,32 +447,23 @@ describe("F3.2 — CloudTrail data events (read-modify-write)", () => {
   });
 });
 
-describe("F3.2 — mergeBucketIntoSelectors (unit)", () => {
-  it("returns a new array (immutability)", async () => {
-    const { mergeBucketIntoSelectors } = await import("@/lib/s3-buckets");
-    const input = [
-      {
-        ReadWriteType: "All" as const,
-        DataResources: [{ Type: "AWS::S3::Object", Values: ["arn:aws:s3:::b1/"] }],
-      },
-    ];
-    const out = mergeBucketIntoSelectors(input, "arn:aws:s3:::b2/");
-    expect(out).not.toBe(input);
-    expect(input[0].DataResources?.[0].Values).toEqual(["arn:aws:s3:::b1/"]);
-    expect(out[0].DataResources?.[0].Values).toEqual([
-      "arn:aws:s3:::b1/",
-      "arn:aws:s3:::b2/",
-    ]);
-  });
-
-  it("creates a new selector when there are no existing selectors", async () => {
-    const { mergeBucketIntoSelectors } = await import("@/lib/s3-buckets");
-    const out = mergeBucketIntoSelectors(undefined, "arn:aws:s3:::b1/");
-    expect(out).toHaveLength(1);
-    expect(out[0].DataResources?.[0]).toEqual({
-      Type: "AWS::S3::Object",
-      Values: ["arn:aws:s3:::b1/"],
-    });
+describe("F3.2 — buildHipaaDataEventSelectors (unit)", () => {
+  it("returns a single selector with Data category + S3 Object + prefix StartsWith", async () => {
+    const { buildHipaaDataEventSelectors, HIPAA_BUCKET_PREFIX } = await import(
+      "@/lib/s3-buckets"
+    );
+    const sel = buildHipaaDataEventSelectors();
+    expect(sel).toHaveLength(1);
+    expect(sel[0].FieldSelectors).toEqual(
+      expect.arrayContaining([
+        { Field: "eventCategory", Equals: ["Data"] },
+        { Field: "resources.type", Equals: ["AWS::S3::Object"] },
+        {
+          Field: "resources.ARN",
+          StartsWith: [`arn:aws:s3:::${HIPAA_BUCKET_PREFIX}`],
+        },
+      ]),
+    );
   });
 });
 

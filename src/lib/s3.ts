@@ -13,17 +13,15 @@ export type { S3Client };
 const globalForS3 = globalThis as unknown as { s3?: S3Client };
 
 function buildClient(): S3Client {
-  // loadConfig (uncached) so tests that mutate env between resetModules()
-  // cycles observe fresh values. In production env is frozen at boot so
-  // cached vs fresh is equivalent.
+  // loadConfig (uncached) validates env at boot. We only pass `region`
+  // explicitly — credentials are resolved by the SDK default provider
+  // chain (env → shared config → ECS task role → EC2 IMDSv2). This lets
+  // IAM-role-based deployments refresh session credentials automatically
+  // and still works for local dev via AWS_ACCESS_KEY_ID / AWS_SECRET_*
+  // env vars.
+  // Ref: https://docs.aws.amazon.com/sdk-for-javascript/v3/developer-guide/setting-credentials-node.html
   const cfg = loadConfig();
-  return new S3Client({
-    region: cfg.AWS_REGION,
-    credentials: {
-      accessKeyId: cfg.AWS_ACCESS_KEY_ID,
-      secretAccessKey: cfg.AWS_SECRET_ACCESS_KEY,
-    },
-  });
+  return new S3Client({ region: cfg.AWS_REGION });
 }
 
 export function getS3Client(): S3Client {

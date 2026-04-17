@@ -50,17 +50,24 @@ describe("F3.3 — presignPutUrl", () => {
     expect(url).toContain("2026/04/letter.pdf");
   });
 
-  it("signs SSE-KMS headers so unencrypted uploads are rejected", async () => {
+  it("pins SSE-KMS headers to X-Amz-SignedHeaders via unhoistableHeaders (upload client MUST resend)", async () => {
     stubAll();
     const { presignPutUrl } = await importPresign();
     const url = await presignPutUrl({
       bucket: "b",
       key: "k",
     });
-    // when the SDK signs SSE-KMS headers into the query string, their names
-    // appear URL-encoded in X-Amz-SignedHeaders (comma-separated, lower-case)
-    const decoded = decodeURIComponent(url);
-    expect(decoded).toMatch(/x-amz-server-side-encryption/i);
+    // Parse SignedHeaders query param directly — asserts that the three
+    // SSE-KMS headers are in the signature, not hoisted to the query
+    // string where a stolen URL could drop them.
+    const signedHeadersMatch = decodeURIComponent(url)
+      .toLowerCase()
+      .match(/x-amz-signedheaders=([^&]+)/);
+    expect(signedHeadersMatch).not.toBeNull();
+    const signed = signedHeadersMatch![1].split(";");
+    expect(signed).toContain("x-amz-server-side-encryption");
+    expect(signed).toContain("x-amz-server-side-encryption-aws-kms-key-id");
+    expect(signed).toContain("x-amz-server-side-encryption-bucket-key-enabled");
   });
 
   it("uses 900s (15 min) as default TTL", async () => {

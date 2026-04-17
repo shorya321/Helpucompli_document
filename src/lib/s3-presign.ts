@@ -134,8 +134,20 @@ export async function presignPutUrl(input: PresignPutInput): Promise<string> {
     }),
   );
 
+  // Pin SSE-KMS headers to SignedHeaders (never moved to query string)
+  // so the uploader MUST resend them verbatim. A stolen presigned URL
+  // cannot drop these headers and land unencrypted bytes — S3 would
+  // reject the request with SignatureDoesNotMatch.
+  // Ref: https://docs.aws.amazon.com/AmazonS3/latest/userguide/PresignedUrlUploadObject.html
+  const unhoistableHeaders = new Set([
+    "x-amz-server-side-encryption",
+    "x-amz-server-side-encryption-aws-kms-key-id",
+    "x-amz-server-side-encryption-bucket-key-enabled",
+  ]);
+
   return getSignedUrl(getS3Client(), cmd, {
     expiresIn: ttl,
+    unhoistableHeaders,
     ...(input.contentType ? { signableHeaders: new Set(["content-type"]) } : {}),
   });
 }

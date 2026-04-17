@@ -376,6 +376,11 @@ export async function deleteObjects(
       s3.send(
         new DeleteObjectsCommand({
           Bucket: input.bucket,
+          // Quiet: false — we need Deleted[] + Errors[] per key so the
+          // API route can emit a per-key audit row (F7). A Quiet: true
+          // response only returns keys that errored, forcing us to
+          // reconstruct the success set from the request, which
+          // double-counts when a partial-success race occurs.
           Delete: { Objects: batch.map((Key) => ({ Key })), Quiet: false },
         }),
       ),

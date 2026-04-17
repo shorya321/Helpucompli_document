@@ -5,15 +5,16 @@ import {
   ListBucketsCommand,
   ListObjectsV2Command,
   PutBucketEncryptionCommand,
+  PutBucketLifecycleConfigurationCommand,
   PutBucketLoggingCommand,
   PutBucketOwnershipControlsCommand,
   PutBucketPolicyCommand,
+  PutBucketTaggingCommand,
   PutBucketVersioningCommand,
   PutPublicAccessBlockCommand,
 } from "@aws-sdk/client-s3";
 import {
-  type EventSelector,
-  GetEventSelectorsCommand,
+  type AdvancedEventSelector,
   PutEventSelectorsCommand,
 } from "@aws-sdk/client-cloudtrail";
 import { getS3Client } from "./s3";
@@ -26,6 +27,11 @@ import { loadConfig } from "./config";
 // reject AWS-reserved prefixes/suffixes: `xn--` (IDN ACE prefix reserved)
 // and `-s3alias` (access-point aliases reserved).
 const BUCKET_NAME_RE = /^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$/;
+
+// Prefix every managed bucket MUST start with. Matches the IAM policy
+// resource scope in src/lib/iam-policies.ts (BUCKET_ARN_PATTERN) and the
+// CloudTrail AdvancedEventSelectors StartsWith filter below.
+export const HIPAA_BUCKET_PREFIX = "helpucompli-docs-";
 
 function assertValidBucketName(name: string): void {
   if (!BUCKET_NAME_RE.test(name)) throw new InvalidBucketNameError(name);
@@ -64,6 +70,13 @@ export interface CreateHipaaBucketResult {
 
 export const HIPAA_LOG_PREFIX = "s3-access-logs/";
 
+// AbortIncompleteMultipartUpload lifecycle rule — safety net for F3.5
+// abandoned multipart uploads (client disconnects, server crashes). 7 days
+// is AWS's common recommendation; any shorter risks user-facing upload
+// failures on slow networks.
+// Ref: https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpu-abort-incomplete-mpu-lifecycle-config.html
+const MULTIPART_ABORT_DAYS = 7;
+
 export function httpsOnlyBucketPolicy(bucket: string): string {
   return JSON.stringify({
     Version: "2012-10-17",
@@ -79,39 +92,43 @@ export function httpsOnlyBucketPolicy(bucket: string): string {
         ],
         Condition: { Bool: { "aws:SecureTransport": "false" } },
       },
+      {
+        // HIPAA posture: TLS 1.2 minimum. aws:SecureTransport only ensures
+        // *some* TLS; without this condition a legacy TLS 1.0 / 1.1 client
+        // still passes. s3:TlsVersion is the S3-specific condition key.
+        // Ref: https://docs.aws.amazon.com/AmazonS3/latest/userguide/amazon-s3-policy-keys.html#example-object-tls-version
+        Sid: "DenyTls11OrBelow",
+        Effect: "Deny",
+        Principal: "*",
+        Action: "s3:*",
+        Resource: [
+          `arn:aws:s3:::${bucket}`,
+          `arn:aws:s3:::${bucket}/*`,
+        ],
+        Condition: { NumericLessThan: { "s3:TlsVersion": "1.2" } },
+      },
     ],
   });
 }
 
-// Merge a bucket's object-level ARN into an existing CloudTrail selector
-// list WITHOUT wiping previously registered buckets. Returns a new array
-// so tests can diff against input (immutability preserved).
-export function mergeBucketIntoSelectors(
-  existing: ReadonlyArray<EventSelector> | undefined,
-  bucketArn: string,
-): EventSelector[] {
-  const selectors: EventSelector[] = (existing ?? []).map((s) => ({
-    ...s,
-    DataResources: s.DataResources?.map((r) => ({ ...r, Values: [...(r.Values ?? [])] })),
-  }));
-
-  const s3Selector = selectors.find((s) =>
-    s.DataResources?.some((r) => r.Type === "AWS::S3::Object"),
-  );
-  if (s3Selector?.DataResources) {
-    const dr = s3Selector.DataResources.find((r) => r.Type === "AWS::S3::Object");
-    if (dr) {
-      const values = dr.Values ?? [];
-      if (!values.includes(bucketArn)) dr.Values = [...values, bucketArn];
-    }
-  } else {
-    selectors.push({
-      ReadWriteType: "All",
-      IncludeManagementEvents: false,
-      DataResources: [{ Type: "AWS::S3::Object", Values: [bucketArn] }],
-    });
-  }
-  return selectors;
+// AdvancedEventSelector covering every managed bucket via one StartsWith
+// rule on the object-ARN prefix. Replaces the per-bucket merge of basic
+// EventSelectors which would hit the 5-ARN cap on large accounts.
+// Ref: https://docs.aws.amazon.com/awscloudtrail/latest/userguide/logging-data-events-with-cloudtrail.html#creating-data-event-selectors-advanced
+export function buildHipaaDataEventSelectors(): AdvancedEventSelector[] {
+  return [
+    {
+      Name: "helpucompli-docs-s3-data-events",
+      FieldSelectors: [
+        { Field: "eventCategory", Equals: ["Data"] },
+        { Field: "resources.type", Equals: ["AWS::S3::Object"] },
+        {
+          Field: "resources.ARN",
+          StartsWith: [`arn:aws:s3:::${HIPAA_BUCKET_PREFIX}`],
+        },
+      ],
+    },
+  ];
 }
 
 // Orchestrates every HIPAA S3 bucket control in a specific order:
@@ -123,15 +140,18 @@ export function mergeBucketIntoSelectors(
 //   4. PutBucketVersioning.
 //   5. PutBucketEncryption — SSE-KMS + BucketKeyEnabled.
 //   6. PutBucketLogging — to AWS_S3_LOGS_BUCKET with per-bucket prefix.
-//   7. PutBucketPolicy — deny aws:SecureTransport=false.
-//   8. CloudTrail: read-modify-write event selectors via
-//      GetEventSelectors + PutEventSelectors so we APPEND this bucket's
-//      object-ARN to the existing trail selector list (never replace).
+//   7. PutBucketPolicy — deny non-HTTPS + deny TLS < 1.2.
+//   8. PutBucketLifecycleConfiguration — AbortIncompleteMultipartUpload
+//      safety net for F3.5 abandoned uploads.
+//   9. CloudTrail: PutEventSelectorsCommand with AdvancedEventSelectors
+//      covering the entire helpucompli-docs-* prefix — idempotent across
+//      bucket creations (no per-bucket merge needed).
 //
-// If any step 2–7 fails, we attempt a best-effort DeleteBucket rollback
+// If any step 2–8 fails, we tag the bucket hipaa:provisioning=failed for
+// audit discoverability, then attempt a best-effort DeleteBucket rollback
 // so a half-configured (possibly unencrypted / HTTP-open) bucket cannot
-// be consumed by downstream callers. Rollback failure is logged to
-// console.warn with an explicit manual-cleanup message.
+// be consumed by downstream callers. Rollback failure is logged with a
+// structured payload; ops runbook must reconcile.
 export async function createHipaaBucket(
   input: CreateHipaaBucketInput,
 ): Promise<CreateHipaaBucketResult> {
@@ -217,20 +237,56 @@ export async function createHipaaBucket(
         Policy: httpsOnlyBucketPolicy(Bucket),
       }),
     );
+
+    await s3.send(
+      new PutBucketLifecycleConfigurationCommand({
+        Bucket,
+        LifecycleConfiguration: {
+          Rules: [
+            {
+              ID: "abort-incomplete-multipart-uploads",
+              Status: "Enabled",
+              // Filter with empty Prefix applies to every object in bucket.
+              Filter: { Prefix: "" },
+              AbortIncompleteMultipartUpload: {
+                DaysAfterInitiation: MULTIPART_ABORT_DAYS,
+              },
+            },
+          ],
+        },
+      }),
+    );
   } catch (err) {
+    // Tag the bucket so orphans after a failed rollback are discoverable
+    // by ops (aws s3api get-bucket-tagging). Best-effort: if tagging
+    // fails we still attempt rollback + warn.
+    try {
+      await s3.send(
+        new PutBucketTaggingCommand({
+          Bucket,
+          Tagging: {
+            TagSet: [
+              { Key: "hipaa:provisioning", Value: "failed" },
+              { Key: "hipaa:provisioned-at", Value: new Date().toISOString() },
+            ],
+          },
+        }),
+      );
+    } catch {
+      // swallow — tagging is best-effort diagnostics
+    }
+
     // best-effort rollback
     try {
       await s3.send(new DeleteBucketCommand({ Bucket }));
     } catch (deleteErr) {
-      // Rollback DeleteBucket fails when the bucket already has objects
-      // written between CreateBucket and the failure (unlikely but not
-      // impossible). Signal loudly; ops runbook must reconcile.
-      console.warn(
-        `[s3-buckets] createHipaaBucket rollback FAILED for '${Bucket}'. ` +
-          `Bucket exists in AWS without full HIPAA controls. ` +
-          `Manual remediation required. Rollback error: ` +
-          (deleteErr instanceof Error ? deleteErr.message : String(deleteErr)),
-      );
+      // eslint-disable-next-line no-console
+      console.error("[s3-buckets] createHipaaBucket rollback FAILED", {
+        bucket: Bucket,
+        rollbackError:
+          deleteErr instanceof Error ? deleteErr.message : String(deleteErr),
+        remediation: "Manual cleanup required; bucket tagged hipaa:provisioning=failed",
+      });
     }
     throw err;
   }
@@ -238,17 +294,14 @@ export async function createHipaaBucket(
   let cloudTrailConfigured = false;
   if (cfg.AWS_CLOUDTRAIL_NAME) {
     const trail = getCloudTrailClient();
-    const existing = await trail.send(
-      new GetEventSelectorsCommand({ TrailName: cfg.AWS_CLOUDTRAIL_NAME }),
-    );
-    const merged = mergeBucketIntoSelectors(
-      existing.EventSelectors,
-      `arn:aws:s3:::${Bucket}/`,
-    );
+    // AdvancedEventSelectors are idempotent across calls — overwriting
+    // with the same selector set produces the same configuration. We
+    // still issue the call on every bucket create so a tenant that
+    // manually reset the trail selectors is auto-healed.
     await trail.send(
       new PutEventSelectorsCommand({
         TrailName: cfg.AWS_CLOUDTRAIL_NAME,
-        EventSelectors: merged,
+        AdvancedEventSelectors: buildHipaaDataEventSelectors(),
       }),
     );
     cloudTrailConfigured = true;

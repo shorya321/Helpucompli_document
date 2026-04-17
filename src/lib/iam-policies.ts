@@ -25,7 +25,13 @@ export interface IamStatement {
   Principal?: string | { AWS: string | string[] };
   Action: string | string[];
   Resource: string | string[];
-  Condition?: Record<string, Record<string, string | string[]>>;
+  // Condition operator maps (StringEquals, Bool, NumericLessThan, …) vary
+  // in value type. AWS accepts strings, numbers, booleans, and arrays of
+  // strings as condition values.
+  Condition?: Record<
+    string,
+    Record<string, string | number | boolean | string[]>
+  >;
 }
 
 export interface IamPolicyDocument {
@@ -80,6 +86,10 @@ export function buildAppRolePolicy(args: {
           "s3:PutBucketOwnershipControls",
           "s3:PutBucketPolicy",
           "s3:GetBucketPolicy",
+          "s3:PutLifecycleConfiguration",
+          "s3:GetLifecycleConfiguration",
+          "s3:PutBucketTagging",
+          "s3:GetBucketTagging",
         ],
         Resource: BUCKET_ARN_PATTERN,
       },
@@ -202,6 +212,7 @@ export function buildHipaaBucketPolicy(bucket: string): IamPolicyDocument {
 export function buildDocumentKmsKeyPolicy(args: {
   awsAccountId: string;
   appRoleArn: string;
+  awsRegion: string;
 }): IamPolicyDocument {
   return {
     Version: "2012-10-17",
@@ -225,6 +236,16 @@ export function buildDocumentKmsKeyPolicy(args: {
         Principal: { AWS: args.appRoleArn },
         Action: ["kms:Decrypt", "kms:GenerateDataKey", "kms:DescribeKey"],
         Resource: "*",
+        // kms:ViaService pins the grant so a compromised role can call
+        // KMS ONLY through S3 — direct kms:Decrypt on exfiltrated
+        // ciphertext (e.g., via aws kms decrypt CLI) is denied.
+        // Ref: https://docs.aws.amazon.com/kms/latest/developerguide/conditions-kms.html#conditions-kms-via-service
+        Condition: {
+          StringEquals: {
+            "kms:ViaService": `s3.${args.awsRegion}.amazonaws.com`,
+            "kms:CallerAccount": args.awsAccountId,
+          },
+        },
       },
     ],
   };

@@ -13,14 +13,11 @@ const globalForCloudTrail = globalThis as unknown as {
 };
 
 function buildCloudTrailClient(): CloudTrailClient {
+  // Region only — credentials resolved by the SDK default provider chain
+  // (matches src/lib/s3.ts). Keeps IAM role refresh behaviour consistent
+  // across both SDK clients.
   const cfg = loadConfig();
-  return new CloudTrailClient({
-    region: cfg.AWS_REGION,
-    credentials: {
-      accessKeyId: cfg.AWS_ACCESS_KEY_ID,
-      secretAccessKey: cfg.AWS_SECRET_ACCESS_KEY,
-    },
-  });
+  return new CloudTrailClient({ region: cfg.AWS_REGION });
 }
 
 export function getCloudTrailClient(): CloudTrailClient {

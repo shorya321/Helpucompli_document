@@ -52,6 +52,8 @@ describe("F3.6 — app role policy (helpucompli-docs-app-role)", () => {
     expect(a).toContain("s3:PutBucketOwnershipControls");
     expect(a).toContain("s3:PutBucketPolicy");
     expect(a).toContain("s3:PutBucketLogging");
+    expect(a).toContain("s3:PutLifecycleConfiguration");
+    expect(a).toContain("s3:PutBucketTagging");
   });
 
   it("scopes KMS usage to the configured document CMK only", () => {
@@ -163,6 +165,7 @@ describe("F3.6 — KMS key policy (Principal-based scope, not Condition-based)",
   const policy = buildDocumentKmsKeyPolicy({
     awsAccountId: "123456789012",
     appRoleArn: ROLE_ARN,
+    awsRegion: "us-east-1",
   });
 
   it("root break-glass uses Principal: arn:aws:iam::<account>:root (AWS-canonical)", () => {
@@ -174,12 +177,10 @@ describe("F3.6 — KMS key policy (Principal-based scope, not Condition-based)",
     expect(s.Condition).toBeUndefined();
   });
 
-  it("app-role grant uses Principal: <roleArn> and only encrypt/decrypt/describe", () => {
+  it("app-role grant uses Principal: <roleArn> + kms:ViaService condition, only encrypt/decrypt/describe", () => {
     const s = statement(policy, "AppRoleEncryptDecrypt");
     expect(s.Effect).toBe("Allow");
     expect(s.Principal).toEqual({ AWS: ROLE_ARN });
-    // Critical: scope MUST be via Principal field, not aws:PrincipalArn Condition
-    expect(s.Condition).toBeUndefined();
     const a = actions(s);
     expect(a).toEqual(
       expect.arrayContaining(["kms:Decrypt", "kms:GenerateDataKey", "kms:DescribeKey"]),
@@ -187,5 +188,11 @@ describe("F3.6 — KMS key policy (Principal-based scope, not Condition-based)",
     expect(a).not.toContain("kms:*");
     expect(a).not.toContain("kms:CreateGrant");
     expect(a).not.toContain("kms:ScheduleKeyDeletion");
+    // kms:ViaService pins the grant so a compromised role cannot call
+    // kms:Decrypt on exfiltrated ciphertexts directly — only via S3.
+    expect(s.Condition?.StringEquals?.["kms:ViaService"]).toBe(
+      "s3.us-east-1.amazonaws.com",
+    );
+    expect(s.Condition?.StringEquals?.["kms:CallerAccount"]).toBe("123456789012");
   });
 });
