@@ -36,6 +36,7 @@ Immutable, append-only audit trail capturing every significant action in the sys
 | `LINK_GENERATE` | Presigned URL generated |
 | `LINK_ACCESS` | Generated link accessed |
 | `LINK_DENIED` | Link access denied (policy check failed) |
+| `LINK_REVOKE` | Generated link manually revoked |
 | `USER_INVITE` | New user invited |
 | `USER_ROLE_CHANGE` | User role changed |
 | `USER_DISABLE` | User account disabled |

@@ -23,17 +23,22 @@ fi
 NODE_VERSION=$(node -v)
 echo "  Node.js $NODE_VERSION found"
 
-# 2. Check .env
+# 2. Check .env / .env.local
 echo ""
 echo "[2/6] Checking environment..."
-if [ ! -f .env ]; then
-    echo "  WARNING: .env file not found!"
-    echo "  Copy .env.example to .env and fill in your credentials:"
-    echo "    cp .env.example .env"
+if [ ! -f .env ] && [ ! -f .env.local ]; then
+    echo "  WARNING: .env or .env.local file not found!"
+    echo "  Copy .env.example to .env.local and fill in your credentials:"
+    echo "    cp .env.example .env.local"
     echo ""
-    echo "  Continuing without .env (some features will not work)..."
+    echo "  Continuing without env file (some features will not work)..."
 else
-    echo "  .env file found"
+    if [ -f .env.local ]; then
+        echo "  .env.local file found"
+    fi
+    if [ -f .env ]; then
+        echo "  .env file found"
+    fi
 fi
 
 # 3. Install dependencies
@@ -58,9 +63,12 @@ fi
 # 5. Run database migrations (if DATABASE_URL is set)
 echo ""
 echo "[5/6] Checking database..."
-if [ -f .env ] && grep -q "DATABASE_URL" .env 2>/dev/null; then
+ENV_FILE=""
+[ -f .env ] && ENV_FILE=".env"
+[ -f .env.local ] && ENV_FILE=".env.local"
+if [ -n "$ENV_FILE" ] && grep -q "DATABASE_URL" "$ENV_FILE" 2>/dev/null; then
     if [ -f prisma/schema.prisma ]; then
-        echo "  Running Prisma migrations..."
+        echo "  Running Prisma migrations from $ENV_FILE..."
         npx prisma migrate dev --name init 2>/dev/null || echo "  Migration skipped (may already be applied)"
     fi
 else

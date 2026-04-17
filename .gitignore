@@ -45,3 +45,7 @@ prisma/migrations/*.sql.bak
 
 # claude
 .claude/settings.local.json
+
+# local agent scratch + resolved skill cache (rehydrated from skills-lock.json)
+.agents/
+.claude/skills/
