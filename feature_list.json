@@ -108,13 +108,15 @@
           "steps": [
             "Create prisma/schema.prisma with users, buckets, documents, access_policies, generated_links, audit_logs, user_bucket_access",
             "Define all fields per module doc spec (BigInt for size_bytes, JSONB for metadata, composite PK on user_bucket_access, is_revoked Boolean on generated_links)",
-            "Define all enums: Role, AuditAction, PolicyTargetType",
-            "Add all foreign key relationships and constraints",
+            "Define all enums: Role, AuditAction, PolicyTargetType, UserStatus",
+            "Add all foreign key relationships with HIPAA-safe onDelete semantics (audit_logs.user_id SET NULL; generated_links.document_id RESTRICT; no CASCADE anywhere)",
+            "Unique constraint on generated_links.presigned_url_hash (prevent hash collision serving wrong file)",
+            "audit_logs append-only enforced at DB layer via BEFORE UPDATE/DELETE/TRUNCATE triggers (RAISE EXCEPTION with insufficient_privilege)",
             "Run npx prisma migrate dev --name init",
             "Run npx prisma generate to create Prisma client",
             "Verify all 7 tables created in PostgreSQL"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F2.2",
