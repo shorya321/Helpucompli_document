@@ -74,12 +74,13 @@
           "id": "F1.6",
           "description": "Zod environment variable validation",
           "steps": [
-            "Create src/lib/config.ts with Zod schema for all env vars",
-            "Validate AUTH0_*, AUTH0_MGMT_*, AUTH0_DOMAIN, AWS_*, DATABASE_URL at startup",
-            "Throw clear actionable error messages on missing vars",
-            "Test that missing env vars throw correct errors"
+            "src/lib/config.ts: Zod schema covering AUTH0_SECRET (min 32), APP_BASE_URL (url), AUTH0_DOMAIN, AUTH0_CLIENT_ID/SECRET, AUTH0_MGMT_CLIENT_ID/SECRET, AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_KMS_KEY_ID, AWS_S3_LOGS_BUCKET, DATABASE_URL, NODE_ENV (enum), and optional UPSTASH_* + SENTRY_DSN",
+            "loadConfig(source=process.env) parses eagerly and throws ConfigError with aggregated per-field issues",
+            "getConfig() memoized accessor for runtime use",
+            "Error prefix: 'Invalid environment configuration' with per-field actionable messages pointing to .env.example",
+            "11 unit tests in config.test.ts covering happy path, each required-field rejection, short-secret, invalid-URL, and multi-issue aggregation"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F1.7",
