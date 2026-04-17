@@ -185,18 +185,21 @@
           "id": "F3.2",
           "description": "S3 bucket operations with HIPAA auto-config",
           "steps": [
-            "Implement CreateBucket with SSE-KMS and CMK selection",
-            "Auto-apply versioning on bucket creation",
-            "Auto-apply Block Public Access (all 4 blocks)",
-            "Enable Server Access Logging to dedicated logs bucket",
-            "Add bucket policy denying non-HTTPS access (aws:SecureTransport=false)",
-            "Enable CloudTrail Data Events on all document buckets (logs GetObject, PutObject, DeleteObject)",
-            "Enable S3 Bucket Keys to reduce KMS API call costs while maintaining encryption",
-            "Implement ListBuckets",
-            "Implement DeleteBucket (empty only)",
-            "Test all HIPAA settings auto-applied on new bucket"
+            "src/lib/s3-buckets.ts: createHipaaBucket() orchestrates CreateBucket → PutBucketOwnershipControls (BucketOwnerEnforced, disables ACLs to close the pre-PAB window — sec-review H1) → PutPublicAccessBlock (all 4 flags) → PutBucketVersioning (Enabled) → PutBucketEncryption (SSE-KMS with CMK + BucketKeyEnabled=true) → PutBucketLogging (to AWS_S3_LOGS_BUCKET with s3-access-logs/<bucket>/ prefix) → PutBucketPolicy (DenyNonHttps via aws:SecureTransport=false)",
+            "Best-effort rollback (sec-review H2): try/catch after CreateBucket attempts DeleteBucket on any post-create failure; if rollback DeleteBucket itself fails, console.warn with explicit 'rollback FAILED / manual remediation required' so the bucket cannot silently exist half-configured",
+            "Bucket name validation: 3–63 chars lowercase alphanumeric + hyphens, no leading/trailing hyphen, no underscores/dots; reject AWS-reserved 'xn--' prefix and '-s3alias' suffix (sec-review H1 sub-item)",
+            "BucketLocationConstraint used for region cast (code-review HIGH — replaces unsafe 'us-west-2' literal cast); us-east-1 still sent WITHOUT CreateBucketConfiguration per S3 quirk",
+            "CloudTrail data events via read-modify-write (sec-review C1 CRITICAL fix): GetEventSelectorsCommand → mergeBucketIntoSelectors() (immutable — returns new array, original untouched) → PutEventSelectorsCommand. Previous naive PutEventSelectors would have wiped every previously-registered bucket on second createHipaaBucket call. Idempotent: re-registering same bucket does not duplicate its ARN",
+            "src/lib/cloudtrail.ts new singleton mirroring s3.ts pattern: getCloudTrailClient() with explicit AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY credentials from validated config (code-review HIGH — previous inline `new CloudTrailClient({ region })` used implicit provider chain divergent from S3 client)",
+            "config.ts: added AWS_CLOUDTRAIL_NAME optional env with empty-string-to-undefined transform. When unset, createHipaaBucket still applies every S3 control but returns cloudTrailConfigured=false carry-forward flag so the deploy runbook surfaces the gap before go-live",
+            "httpsOnlyBucketPolicy(bucket) returns JSON string with Principal:* Action:s3:* (locks out account root too when non-HTTPS — intentional HIPAA behaviour, document in runbook)",
+            "listHipaaBuckets() returns normalized [{Name, CreationDate}] via ListBucketsCommand (carry-forward: filter to managed buckets by DB join in F5.1 — currently returns entire AWS account bucket list)",
+            "deleteEmptyHipaaBucket(name): validates name, ListObjectsV2 MaxKeys=1 preflight (throws BucketNotEmptyError if KeyCount>0), DeleteBucketCommand; TOCTOU-safe rewrap: AWS BucketNotEmpty/BucketNotEmptyException rethrow as BucketNotEmptyError so callers see a single error surface",
+            "InvalidBucketNameError + BucketNotEmptyError custom classes for typed error handling (following ConfigError pattern)",
+            "Test mock strategy: vi.doMock('@/lib/s3') + vi.doMock('@/lib/cloudtrail') to inject fake send() spies; no live AWS calls. 25 tests covering LocationConstraint regional branch, all 6 S3 commands, ordering assertions, 5 invalid-name variants + xn-- / -s3alias reserved-name guards, rollback-on-failure (3 scenarios: mid-setup failure, failed rollback-warn, no-rollback-on-create-failure), CloudTrail read-modify-write, CloudTrail idempotency, CloudTrail missing-trail carry-forward, CloudTrail error propagation, mergeBucketIntoSelectors immutability unit tests, listHipaaBuckets normalization, deleteEmptyHipaaBucket TOCTOU rewrap",
+            "Carry-forward (deploy runbook): (a) logs bucket existence + S3 LogDelivery group ACL grants — sec-review M2; (b) HTTPS-only policy locks out root account for non-HTTPS ops; (c) DB-scoped bucket filter in F5.1 listing; (d) account-level Block Public Access assertion at deploy time"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F3.3",

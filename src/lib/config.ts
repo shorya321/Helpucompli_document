@@ -33,6 +33,15 @@ const envSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
     .default("development"),
+  // CloudTrail trail name that receives S3 data-event selectors for
+  // document buckets (F3.2). Optional: when unset, createHipaaBucket()
+  // still applies every S3-level HIPAA control but skips the trail
+  // update and surfaces a carry-forward so the deploy pipeline wires
+  // it before go-live. Empty string is treated as unset.
+  AWS_CLOUDTRAIL_NAME: z
+    .string()
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined)),
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
   SENTRY_DSN: z.string().optional(),
