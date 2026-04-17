@@ -38,6 +38,39 @@ describe("loadConfig — validation failures", () => {
     expect(() => loadConfig(env)).toThrow(/APP_BASE_URL/);
   });
 
+  it("rejects APP_BASE_URL with javascript: scheme", () => {
+    const env = { ...validEnv(), APP_BASE_URL: "javascript:alert(1)" };
+    expect(() => loadConfig(env)).toThrow(/APP_BASE_URL/);
+  });
+
+  it("rejects APP_BASE_URL with file: scheme", () => {
+    const env = { ...validEnv(), APP_BASE_URL: "file:///etc/passwd" };
+    expect(() => loadConfig(env)).toThrow(/APP_BASE_URL/);
+  });
+
+  it("rejects APP_BASE_URL with data: scheme", () => {
+    const env = { ...validEnv(), APP_BASE_URL: "data:text/html,<script>x</script>" };
+    expect(() => loadConfig(env)).toThrow(/APP_BASE_URL/);
+  });
+
+  it("rejects NODE_ENV=development paired with https APP_BASE_URL", () => {
+    const env = {
+      ...validEnv(),
+      APP_BASE_URL: "https://docs.helpucompli.com",
+      NODE_ENV: "development",
+    };
+    expect(() => loadConfig(env)).toThrow(/NODE_ENV|APP_BASE_URL/);
+  });
+
+  it("accepts NODE_ENV=production paired with https APP_BASE_URL", () => {
+    const env = {
+      ...validEnv(),
+      APP_BASE_URL: "https://docs.helpucompli.com",
+      NODE_ENV: "production",
+    };
+    expect(() => loadConfig(env)).not.toThrow();
+  });
+
   it("rejects empty AUTH0_CLIENT_ID", () => {
     const env = { ...validEnv(), AUTH0_CLIENT_ID: "" };
     expect(() => loadConfig(env)).toThrow(/AUTH0_CLIENT_ID/);

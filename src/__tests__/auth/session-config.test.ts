@@ -37,6 +37,36 @@ describe("SESSION_CONFIG (HIPAA 30-min inactivity + cookie flags)", () => {
   });
 });
 
+describe("SESSION_CONFIG — secure cookie gated on https origin", () => {
+  const env = process.env as Record<string, string | undefined>;
+
+  it("forces secure=true when APP_BASE_URL is https, even without NODE_ENV=production", async () => {
+    const original = { NODE_ENV: env.NODE_ENV, APP_BASE_URL: env.APP_BASE_URL };
+    env.NODE_ENV = "development";
+    env.APP_BASE_URL = "https://docs.helpucompli.com";
+    try {
+      const { isSecureCookieOrigin } = await import("@/lib/auth0");
+      expect(isSecureCookieOrigin()).toBe(true);
+    } finally {
+      env.NODE_ENV = original.NODE_ENV;
+      env.APP_BASE_URL = original.APP_BASE_URL;
+    }
+  });
+
+  it("allows secure=false when APP_BASE_URL is http and NODE_ENV!=production", async () => {
+    const original = { NODE_ENV: env.NODE_ENV, APP_BASE_URL: env.APP_BASE_URL };
+    env.NODE_ENV = "development";
+    env.APP_BASE_URL = "http://localhost:3000";
+    try {
+      const { isSecureCookieOrigin } = await import("@/lib/auth0");
+      expect(isSecureCookieOrigin()).toBe(false);
+    } finally {
+      env.NODE_ENV = original.NODE_ENV;
+      env.APP_BASE_URL = original.APP_BASE_URL;
+    }
+  });
+});
+
 describe("TRANSACTION_COOKIE_CONFIG (OAuth state cookie)", () => {
   it("sets sameSite='lax' on the transaction cookie", async () => {
     const { TRANSACTION_COOKIE_CONFIG } = await import("@/lib/auth0");

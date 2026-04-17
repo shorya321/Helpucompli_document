@@ -1,6 +1,12 @@
 import { Auth0Client } from "@auth0/nextjs-auth0/server";
 
-const SECURE_COOKIE = process.env.NODE_ENV === "production";
+export function isSecureCookieOrigin(): boolean {
+  if (process.env.NODE_ENV === "production") return true;
+  const url = process.env.APP_BASE_URL ?? "";
+  return url.startsWith("https://");
+}
+
+const SECURE_COOKIE = isSecureCookieOrigin();
 
 export const SESSION_CONFIG = {
   rolling: true,

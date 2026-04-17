@@ -14,7 +14,11 @@ const envSchema = z.object({
     .min(32, "AUTH0_SECRET must be at least 32 characters (use `openssl rand -hex 32`)"),
   APP_BASE_URL: z
     .string({ required_error: "APP_BASE_URL is required" })
-    .url("APP_BASE_URL must be a valid URL (e.g. http://localhost:3000)"),
+    .url("APP_BASE_URL must be a valid URL (e.g. http://localhost:3000)")
+    .refine(
+      (u) => /^https?:\/\//i.test(u),
+      "APP_BASE_URL must use http or https scheme (javascript:, data:, file: are rejected)",
+    ),
   AUTH0_DOMAIN: nonEmpty("AUTH0_DOMAIN"),
   AUTH0_CLIENT_ID: nonEmpty("AUTH0_CLIENT_ID"),
   AUTH0_CLIENT_SECRET: nonEmpty("AUTH0_CLIENT_SECRET"),
@@ -47,16 +51,31 @@ export function loadConfig(
   source: Record<string, string | undefined> = process.env,
 ): Env {
   const parsed = envSchema.safeParse(source);
-  if (parsed.success) return parsed.data;
+  if (!parsed.success) {
+    const issues = parsed.error.issues
+      .map((i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`)
+      .join("\n");
+    throw new ConfigError(
+      `Invalid environment configuration:\n${issues}\n\n` +
+        `Check .env.local against .env.example and ensure every required variable is set.`,
+    );
+  }
 
-  const issues = parsed.error.issues
-    .map((i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`)
-    .join("\n");
+  // HIPAA guard: https origin MUST pair with NODE_ENV=production so the
+  // cookie `secure` flag is enforced. Catches prod deployments that ship
+  // with a stale NODE_ENV=development.
+  if (
+    parsed.data.NODE_ENV !== "production" &&
+    parsed.data.APP_BASE_URL.startsWith("https://")
+  ) {
+    throw new ConfigError(
+      "Invalid environment configuration:\n" +
+        "  - NODE_ENV: must be 'production' when APP_BASE_URL is https:// " +
+        "(otherwise session cookies ship without the Secure flag over TLS)\n",
+    );
+  }
 
-  throw new ConfigError(
-    `Invalid environment configuration:\n${issues}\n\n` +
-      `Check .env.local against .env.example and ensure every required variable is set.`,
-  );
+  return parsed.data;
 }
 
 let cached: Env | undefined;

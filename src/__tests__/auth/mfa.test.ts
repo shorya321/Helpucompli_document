@@ -47,6 +47,13 @@ describe("hasMfa", () => {
   it("false for null session", () => {
     expect(hasMfa(null)).toBe(false);
   });
+
+  it("false when amr is a truthy non-array value (fail-closed)", () => {
+    // security review: Auth0 always emits amr as an array per OIDC.
+    // A scalar string must not satisfy the MFA check.
+    const s = makeSession({ amr: "mfa" });
+    expect(hasMfa(s)).toBe(false);
+  });
 });
 
 describe("requireMfaForPrivilegedRole", () => {
