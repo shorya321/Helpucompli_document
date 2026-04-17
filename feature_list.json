@@ -301,13 +301,13 @@
           "id": "F4.2",
           "description": "Summary metric cards",
           "steps": [
-            "Create src/components/dashboard/summary-cards.tsx",
-            "Show: total documents, total buckets, recent uploads (7 days), recent links (7 days), active users",
-            "Fetch counts from Prisma queries",
-            "Create API route GET /api/dashboard/stats",
-            "Test cards show correct data"
+            "src/lib/dashboard-stats.ts: getDashboardStats(prisma, now=new Date()) runs all 5 counts in Promise.all — totalDocuments (isDeleted=false), totalBuckets (isActive=true), recentUploads (isDeleted=false + uploadedAt≥now-7d), recentLinks (createdAt≥now-7d), activeUsers (status='active'). RECENT_WINDOW_DAYS=7 exported constant. DashboardStatsPrisma narrow interface (only .count on the four models) so tests inject plain stubs without Prisma's huge generated types; getDashboardStatsFromClient adapter for code paths holding the real PrismaClient. `now` parameter is injected so tests are deterministic",
+            "src/app/api/dashboard/stats/route.ts: GET — dynamic='force-dynamic', auth0.getSession() → 401 if missing, getRole() → 403 if no valid role, else returns ApiResponse<DashboardStats> JSON. catch-all returns generic 'Failed to load dashboard stats' (raw err.message can contain DATABASE_URL engine output — F2.2 sec-review M2 carry-forward)",
+            "src/components/dashboard/summary-cards.tsx: server component rendering 5 cards in a CSS grid ul[role='list']. 7-day sub-label on recent windows. Uses BRAND tokens (blue label, dark value). Inline styles (repo convention — no Tailwind on these yet)",
+            "src/app/(dashboard)/page.tsx: wires home page to prisma + SummaryCards; dynamic='force-dynamic' so stats are live on every request",
+            "16 new tests: stats.test.ts (7 — RECENT_WINDOW_DAYS=7, shape, isDeleted=false filter, isActive=true filter, recent-upload window gte, recent-link window gte, status='active' filter, parallelization 5 calls); stats-route.test.ts (4 — 401 no session, 403 no role, 200 happy, 500 error-message redaction asserting response body does NOT contain 'password' or 'postgres://' regardless of what the underlying error was); summary-cards.test.tsx (4 — all 5 values render, labels present, 7-day window label, semantic role='list'). Full suite 326/326, typecheck clean"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F4.3",
