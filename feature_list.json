@@ -139,7 +139,7 @@
             "Add index on generated_links.presigned_url_hash and generated_links.document_id",
             "Run migration and verify indexes exist"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F2.4",

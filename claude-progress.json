@@ -2,9 +2,9 @@
   "project": "helpucompli-document-repository",
   "current_phase": 1,
   "current_module": "02-database",
-  "last_completed_feature": "F2.2",
+  "last_completed_feature": "F2.3",
   "total_features": 77,
-  "completed_features": 9,
+  "completed_features": 10,
   "blockers": [],
   "sessions": [
     {
@@ -16,7 +16,7 @@
     {
       "date": "2026-04-17",
       "module": "02-database",
-      "features_completed": ["F2.1", "F2.2"],
+      "features_completed": ["F2.1", "F2.2", "F2.3"],
       "notes": "F2.1: Prisma init migration (20260417100556_init) applied on local Docker Postgres (helpucompli-postgres, postgres:16). Seven tables created: users, buckets, documents, access_policies, generated_links, audit_logs, user_bucket_access. Four enums: Role, AuditAction (21 actions), PolicyTargetType, UserStatus (new — replaces free-text status column per sec-review M2). Unique constraint added on generated_links.presigned_url_hash (sec-review L2 — prevents hash-collision collision serving wrong file). audit_logs append-only enforced at DB layer via PL/pgSQL function audit_logs_reject_mutation() + BEFORE UPDATE/DELETE/TRUNCATE triggers raising ERRCODE insufficient_privilege (sec-review H1 — source-layer sentinel alone was bypassable via $executeRaw / aliased clients / bracket-dispatch). FK retention: audit_logs.user_id=SET NULL, generated_links.document_id=RESTRICT, all other user FKs RESTRICT, documents.deleted_by=SET NULL. No ON DELETE CASCADE anywhere. Tests: 47 schema tests (DMMF-style regex on schema.prisma + migration.sql + 4 bypass-vector source scans) — all hermetic, no live-DB needed. Total repo tests: 131 (was 84). Deferred: sec-review M1 (documents.uploaded_by RESTRICT→SET NULL — will revisit in F10 user-disable flow; HIPAA model is disable-not-delete anyway), sec-review L1 (generated_links.expires_at index — belongs to F2.3). Also fixed env drift: Prisma CLI loads .env by default, not .env.local — ran commands with 'set -a; source .env.local; set +a' for this session; follow-up chore can add dotenv-cli wrapper around db:* scripts. DATABASE_URL updated in .env.local with Docker container creds (helpucompli:helpucompli_dev_2024)."
     }
   ],

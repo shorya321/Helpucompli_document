@@ -109,6 +109,8 @@ model Document {
 
   @@index([bucketId])
   @@index([s3Key])
+  @@index([isDeleted])
+  @@index([uploadedAt])
   @@map("documents")
 }
 
@@ -149,6 +151,8 @@ model GeneratedLink {
   generatedBy User          @relation(fields: [generatedById], references: [id])
 
   @@index([documentId])
+  @@index([expiresAt])
+  @@index([isRevoked])
   @@map("generated_links")
 }
 
