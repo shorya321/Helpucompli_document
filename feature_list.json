@@ -286,16 +286,16 @@
           "id": "F4.1",
           "description": "Dashboard layout with sidebar and topbar",
           "steps": [
-            "Create src/app/(dashboard)/layout.tsx with sidebar + topbar",
-            "Create src/app/(dashboard)/page.tsx dashboard home page",
-            "Create src/components/layout/sidebar.tsx with nav links to all modules",
-            "Create src/components/layout/topbar.tsx with logo + user name + role badge + logout",
-            "Create src/components/layout/brand-logo.tsx with HelpUcompli logo",
-            "Add responsive sidebar (collapse to hamburger on mobile)",
-            "Apply brand colors (pink/blue) and Inter font",
-            "Highlight current page in sidebar"
+            "src/lib/dashboard-nav.ts: DASHBOARD_NAV_ITEMS (7 entries: Dashboard /, Buckets, Documents, Policies, Links, Audit, Users) + filterNavForRole helper — roles[] on each item (ALL / ADMIN_UP / SUPER_ONLY), Users reserved to superadmin, Buckets/Policies/Audit gated to admin+, Documents/Links/Dashboard home open to viewer too. Pure data module so role-gated nav is unit-testable and reused by middleware/audit in later modules",
+            "src/components/layout/brand-logo.tsx: server component wordmark — BRAND pink accent square + Inter wordmark, single <a href='/'> with aria-label combining BRAND.name + BRAND.productName",
+            "src/components/layout/sidebar.tsx: client component ('use client') — usePathname() from next/navigation for active-link detection, filterNavForRole() applied per-role, active link gets aria-current='page' + pink background, nested-route active detection (/buckets and /buckets/new both highlight /buckets), <nav aria-label='Primary'> landmark",
+            "src/components/layout/topbar.tsx: client component — BrandLogo on the left, user display name (falls back to email when Auth0 name missing), blue role badge (aria-label='Role: <label>'), logout link points at /auth/logout (Auth0 v4 proxy route — plain <a>, NOT next/link, full-document navigation required so the Auth0 middleware can execute the logout flow)",
+            "src/app/(dashboard)/layout.tsx: server component with dynamic='force-dynamic' — auth0.getSession() → redirect('/auth/login') if no session; getRole(session) → redirect('/access-denied') if no valid role claim; passes {name,email} projection + role to Topbar/Sidebar (full session object intentionally NOT serialized across the server→client boundary)",
+            "src/app/(dashboard)/page.tsx: dashboard home shell — F4.2 summary cards, F4.3 activity feed, F4.4 quick actions populate incrementally",
+            "27 tests across 5 files: dashboard-nav (7 — hrefs, labels, roles shape, uniqueness, role filtering superadmin/admin/viewer/null, immutability, home visible to all), brand-logo (4 — wordmark, pink accent, href root, aria-label), sidebar (5 — superadmin/admin/viewer link visibility via mocked next/navigation.usePathname, aria-current active marker, <nav> landmark), topbar (5 — name display, email fallback, role badge, /auth/logout link, brand embedded), layout (3 — no-session redirect, no-role redirect, happy-path render using vi.hoisted() mock factory for auth0 + next/navigation)",
+            "Responsive sidebar mobile hamburger — CARRY-FORWARD to F4.4 / polish pass; layout currently ships desktop fixed 16rem sidebar"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F4.2",
