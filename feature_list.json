@@ -205,13 +205,17 @@
           "id": "F3.3",
           "description": "Presigned URL generation (upload + download)",
           "steps": [
-            "Create presigned PUT URL generator for uploads",
-            "Create presigned GET URL generator for downloads",
-            "Configure TTL (default 15 min, configurable)",
-            "Test upload via presigned URL",
-            "Test download via presigned URL"
+            "src/lib/s3-presign.ts: presignPutUrl (upload) + presignGetUrl (download) via @aws-sdk/s3-request-presigner getSignedUrl",
+            "Split TTL caps by verb (sec-review MEDIUM): MIN_TTL_SECONDS=900 (15 min) floor for both; MAX_PUT_TTL_SECONDS=3600 (1 hour) for writes — stolen upload URL overwrite window tight; MAX_GET_TTL_SECONDS=604800 (7 days) matches SigV4 protocol cap for reads (F9 link engine layers policy + revocation + download-count gating on top). MAX_TTL_SECONDS retained as alias for backward compat. DEFAULT_TTL_SECONDS=900 for both",
+            "presignPutUrl bakes SSE-KMS params via withSseKms (code-review HIGH fix — was inlining ServerSideEncryption/SSEKMSKeyId/BucketKeyEnabled directly; now reuses src/lib/s3.ts helper so a future KMS-key-rotation change propagates). Upload client MUST send matching x-amz-server-side-encryption* headers or S3 returns 403 — unencrypted uploads impossible",
+            "ContentType on PUT is hoisted into the signed URL via signableHeaders: new Set(['content-type']) — uploader cannot swap MIME type post-signature (MIME confusion guard)",
+            "Input validation at boundary: assertTargets rejects empty bucket + empty key, keys starting with '/', and keys containing '..' segments (sec-review MEDIUM). assertTtl enforces Number.isFinite (NaN/Infinity/negative blocked) + per-verb bound. assertContentType uses RFC 6838 subset regex. assertContentDisposition allows only 'attachment' | 'inline' with optional quoted safe-char filename (sec-review HIGH — blocks XSS-via-MIME-override and filename-injection attacks on GET response overrides)",
+            "presignGetUrl supports ResponseContentDisposition + ResponseContentType for download filename/type override — both validated. ResponseContentDisposition is SDK-serialized as query parameter not header, so no signableHeaders needed",
+            "Typed errors: InvalidPresignTtlError, InvalidPresignTargetError, InvalidResponseOverrideError — consistent with ConfigError/InvalidBucketNameError sibling pattern",
+            "Bearer-token reality documented in JSDoc on presignPutUrl: never log the URL, keep TTL as short as UX tolerates, S3 lacks native one-time-use semantics",
+            "18 tests: happy-path URL structure (PUT + GET), SSE-KMS signed-headers, default + explicit TTL propagation, per-verb TTL rejection (PUT 3601 vs GET 604801), NaN/Infinity/negative TTL rejection, empty bucket/key rejection, key traversal + leading-slash rejection, malformed contentType rejection (MIME confusion), ResponseContentDisposition happy path, ResponseContentDisposition injection rejection (backslash-quote, filename traversal, no action token), ResponseContentType MIME override rejection, all exported TTL constants"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F3.4",
