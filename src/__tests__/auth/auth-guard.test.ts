@@ -70,13 +70,13 @@ describe("hasRole", () => {
   it("matches single role", () => {
     const s = makeSession({ [ROLE_CLAIM]: "admin" });
     expect(hasRole(s, "admin")).toBe(true);
-    expect(hasRole(s, "super_admin")).toBe(false);
+    expect(hasRole(s, "superadmin")).toBe(false);
   });
 
   it("matches any in role list", () => {
     const s = makeSession({ [ROLE_CLAIM]: "viewer" });
     expect(hasRole(s, ["admin", "viewer"])).toBe(true);
-    expect(hasRole(s, ["admin", "super_admin"])).toBe(false);
+    expect(hasRole(s, ["admin", "superadmin"])).toBe(false);
   });
 
   it("returns false for null session", () => {
@@ -85,8 +85,8 @@ describe("hasRole", () => {
 });
 
 describe("hasAccessToBucket", () => {
-  it("super_admin has access to any bucket (bypass)", () => {
-    const s = makeSession({ [ROLE_CLAIM]: "super_admin", [BUCKETS_CLAIM]: [] });
+  it("superadmin has access to any bucket (bypass)", () => {
+    const s = makeSession({ [ROLE_CLAIM]: "superadmin", [BUCKETS_CLAIM]: [] });
     expect(hasAccessToBucket(s, "any-bucket")).toBe(true);
   });
 
@@ -108,7 +108,7 @@ describe("requireRole", () => {
   it("passes silently when role matches", () => {
     const s = makeSession({ [ROLE_CLAIM]: "admin" });
     expect(() => requireRole(s, "admin")).not.toThrow();
-    expect(() => requireRole(s, ["admin", "super_admin"])).not.toThrow();
+    expect(() => requireRole(s, ["admin", "superadmin"])).not.toThrow();
   });
 
   it("throws ForbiddenError when role missing", () => {

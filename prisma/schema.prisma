@@ -11,7 +11,7 @@ datasource db {
 }
 
 enum Role {
-  super_admin
+  superadmin
   admin
   viewer
 }
@@ -33,6 +33,7 @@ enum AuditAction {
   LINK_GENERATE
   LINK_ACCESS
   LINK_DENIED
+  LINK_REVOKE
   USER_INVITE
   USER_ROLE_CHANGE
   USER_DISABLE

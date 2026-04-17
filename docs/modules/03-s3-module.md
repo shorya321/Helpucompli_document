@@ -41,7 +41,7 @@ AWS S3 serves as the document storage backend. All buckets are configured with H
 - `DeleteObject` — soft delete (versioning retains object)
 - `DeleteObjects` — bulk operations
 - `CreateBucket` — with all HIPAA settings auto-applied
-- `DeleteBucket` — super_admin only, bucket must be empty
+- `DeleteBucket` — superadmin only, bucket must be empty
 
 ### F3.5 — Multipart Upload Support
 - Files > 100 MB use S3 multipart upload
@@ -94,8 +94,8 @@ AWS_S3_LOGS_BUCKET=helpucompli-docs-access-logs
 | Route | Method | Purpose |
 |-------|--------|---------|
 | `/api/s3/buckets` | GET | List all registered buckets |
-| `/api/s3/buckets` | POST | Create new bucket (super_admin only) |
-| `/api/s3/buckets/[id]` | DELETE | Delete empty bucket (super_admin only) |
+| `/api/s3/buckets` | POST | Create new bucket (superadmin only) |
+| `/api/s3/buckets/[id]` | DELETE | Delete empty bucket (superadmin only) |
 | `/api/s3/objects` | GET | List objects in bucket/prefix |
 | `/api/s3/upload-url` | POST | Generate presigned PUT URL |
 | `/api/s3/download-url` | POST | Generate presigned GET URL |

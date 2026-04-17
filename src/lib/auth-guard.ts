@@ -3,7 +3,7 @@ import type { Role } from "@/types";
 export const ROLE_CLAIM = "https://docs.helpucompli.com/role" as const;
 export const BUCKETS_CLAIM = "https://docs.helpucompli.com/assigned_buckets" as const;
 
-const VALID_ROLES: readonly Role[] = ["super_admin", "admin", "viewer"] as const;
+const VALID_ROLES: readonly Role[] = ["superadmin", "admin", "viewer"] as const;
 
 export interface SessionUser {
   readonly sub: string;
@@ -58,7 +58,7 @@ export function hasAccessToBucket(
 ): boolean {
   const role = getRole(session);
   if (!role) return false;
-  if (role === "super_admin") return true;
+  if (role === "superadmin") return true;
   return getAssignedBuckets(session).includes(bucketId);
 }
 

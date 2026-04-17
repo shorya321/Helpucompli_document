@@ -11,50 +11,50 @@ User management is delegated to Auth0 with metadata synced to the local PostgreS
 
 ## Features
 
-### F10.1 — User List
+### F10.1 — User Sync from Auth0
+- On login: upsert user record from Auth0 profile to PostgreSQL
+- Fields synced: auth0_id, email, name, role, last_login_at
+- Handles edge cases: email change, name change
+
+### F10.2 — User List
 - Data table showing all users synced from Auth0
 - **Columns:** Name, Email, Role (badge), Last Login, Status (active/disabled), Actions
 - **Sorting:** By name, last login, role
 - **Search:** By name or email
 - **Filters:** By role, by status
 
-### F10.2 — Invite New User
-- **Access:** `super_admin` and `admin` roles
+### F10.3 — Invite New User
+- **Access:** `superadmin` and `admin` roles
 - Invite modal with fields:
   - Email address (required)
   - Name (optional)
-  - Role (dropdown: admin, viewer — only super_admin can create other admins)
+  - Role (dropdown: admin, viewer — only superadmin can create other admins)
 - Creates user in Auth0 via Management API
 - Sends invitation email via Auth0
 - Syncs user record to local PostgreSQL
 - Audit log entry: `USER_INVITE`
 
-### F10.3 — Role Management
+### F10.4 — Role Management
 - Change user role via dropdown
 - **Role hierarchy:**
-  - `super_admin` can assign any role
+  - `superadmin` can assign any role
   - `admin` can only assign `viewer` role
   - Cannot demote yourself
-  - Cannot modify another `super_admin` (only another super_admin can)
+  - Cannot modify another `superadmin` (only another superadmin can)
 - Auth0 role updated via Management API
 - Local DB role updated
 - Audit log entry: `USER_ROLE_CHANGE`
 
-### F10.4 — Bucket Access Control (Viewer Role)
+### F10.5 — Bucket Access Control (Viewer Role)
 - Assign specific buckets to viewer-role users
 - Uses `user_bucket_access` junction table
 - Viewers can only see documents in their assigned buckets
 - Multi-select bucket picker for assignment
 
-### F10.5 — Disable / Enable User
+### F10.6 — Disable / Enable User
 - Toggle user status (active/disabled)
 - Disabled users cannot log in (blocked in Auth0)
 - Audit log entry: `USER_DISABLE` or `USER_ENABLE`
-
-### F10.6 — User Sync from Auth0
-- On login: upsert user record from Auth0 profile to PostgreSQL
-- Fields synced: auth0_id, email, name, role, last_login_at
-- Handles edge cases: email change, name change
 
 ### F10.7 — User Details View
 - Click user row to see details:
@@ -107,7 +107,7 @@ AUTH0_DOMAIN=<tenant>.auth0.com
 - [ ] User list shows all Auth0 users with correct roles
 - [ ] Invite sends Auth0 invitation email
 - [ ] Role change updates both Auth0 and local DB
-- [ ] Role hierarchy enforced (admin cannot create super_admin)
+- [ ] Role hierarchy enforced (admin cannot create superadmin)
 - [ ] Viewer bucket access controls work
 - [ ] Disabled users cannot log in
 - [ ] User sync on login updates local DB

@@ -1,7 +1,7 @@
 // HelpUcompli Document Repository — Type Definitions
 // This file is populated as modules are implemented
 
-export type Role = "super_admin" | "admin" | "viewer";
+export type Role = "superadmin" | "admin" | "viewer";
 
 export type AuditAction =
   | "LOGIN"
@@ -20,6 +20,7 @@ export type AuditAction =
   | "LINK_GENERATE"
   | "LINK_ACCESS"
   | "LINK_DENIED"
+  | "LINK_REVOKE"
   | "USER_INVITE"
   | "USER_ROLE_CHANGE"
   | "USER_DISABLE"

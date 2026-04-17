@@ -15,7 +15,7 @@ PostgreSQL database on AWS RDS managed via Prisma ORM. Stores document metadata,
 
 #### `users`
 - Synced from Auth0
-- Fields: `id` (UUID), `auth0_id` (unique), `email`, `name`, `role` (enum: super_admin/admin/viewer), `status` (active/disabled), `created_at`, `last_login_at`
+- Fields: `id` (UUID), `auth0_id` (unique), `email`, `name`, `role` (enum: superadmin/admin/viewer), `status` (active/disabled), `created_at`, `last_login_at`
 
 #### `buckets`
 - Registered S3 buckets
@@ -31,7 +31,7 @@ PostgreSQL database on AWS RDS managed via Prisma ORM. Stores document metadata,
 
 #### `generated_links`
 - Presigned URL tracking
-- Fields: `id` (UUID), `document_id` (FK), `policy_id` (FK nullable), `generated_by` (FK users), `presigned_url_hash` (String), `expires_at`, `download_count` (Int default 0), `max_downloads` (Int nullable), `created_at`
+- Fields: `id` (UUID), `document_id` (FK), `policy_id` (FK nullable), `generated_by` (FK users), `presigned_url_hash` (String), `expires_at`, `download_count` (Int default 0), `max_downloads` (Int nullable), `is_revoked` (Boolean default false), `created_at`
 
 #### `audit_logs`
 - Immutable audit trail

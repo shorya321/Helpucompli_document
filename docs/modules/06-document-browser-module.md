@@ -43,7 +43,7 @@ File explorer UI for navigating, uploading, downloading, moving, copying, and de
 
 ### F6.5 — Document Deletion
 - **Soft delete:** S3 delete marker placed. Document hidden but recoverable via versioning.
-- **Hard delete:** `super_admin` only. Permanently removes all versions. Requires confirmation dialog with document name typed.
+- **Hard delete:** `superadmin` only. Permanently removes all versions. Requires confirmation dialog with document name typed.
 - **Regulatory hold:** Documents under HIPAA retention cannot be hard-deleted
 - Audit log entries: `DOCUMENT_SOFT_DELETE` or `DOCUMENT_HARD_DELETE`
 
@@ -117,7 +117,7 @@ File explorer UI for navigating, uploading, downloading, moving, copying, and de
 - [ ] Download generates presigned GET URL
 - [ ] Move/copy between buckets works correctly
 - [ ] Soft delete hides document but retains via versioning
-- [ ] Hard delete requires super_admin + confirmation
+- [ ] Hard delete requires superadmin + confirmation
 - [ ] PDF and image preview works
 - [ ] Search and filter functional
 - [ ] All operations logged in audit trail

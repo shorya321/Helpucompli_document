@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const role = session.user['https://docs.helpucompli.com/role'];
-  if (role !== 'super_admin' && role !== 'admin') {
+  if (role !== 'superadmin' && role !== 'admin') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

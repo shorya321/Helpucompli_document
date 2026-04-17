@@ -25,10 +25,10 @@
           "id": "F1.2",
           "description": "Role-Based Access Control (RBAC) with Auth0 roles",
           "steps": [
-            "Roles defined in Auth0 Dashboard: super_admin, admin, viewer (manual tenant config — deferred to deploy)",
+            "Roles defined in Auth0 Dashboard: superadmin, admin, viewer (manual tenant config — deferred to deploy)",
             "Post-login Action injecting role + assigned_buckets claims (manual tenant config — deferred to deploy)",
             "src/lib/auth-guard.ts: getRole, getAssignedBuckets, hasRole, hasAccessToBucket, requireRole, ForbiddenError",
-            "18 unit tests covering role extraction, bucket access, super_admin bypass, forbidden throws",
+            "18 unit tests covering role extraction, bucket access, superadmin bypass, forbidden throws",
             "Claim keys: https://docs.helpucompli.com/role, https://docs.helpucompli.com/assigned_buckets"
           ],
           "passes": true
@@ -37,7 +37,7 @@
           "id": "F1.3",
           "description": "MFA enforcement for admin roles",
           "steps": [
-            "Configure Auth0 Adaptive MFA for super_admin and admin",
+            "Configure Auth0 Adaptive MFA for superadmin and admin",
             "Test MFA prompt appears for admin login",
             "Verify viewer login does not require MFA"
           ],
@@ -280,7 +280,7 @@
           "steps": [
             "Create src/components/dashboard/quick-actions.tsx",
             "Add Upload Document button (links to document browser)",
-            "Add Create Bucket button (super_admin only, hidden for others)",
+            "Add Create Bucket button (superadmin only, hidden for others)",
             "Add Generate Link button",
             "Add View Audit Log button",
             "Test role-based button visibility"
@@ -318,7 +318,7 @@
             "POST /api/s3/buckets auto-applies all HIPAA settings",
             "Register bucket in PostgreSQL buckets table",
             "Log BUCKET_CREATE in audit trail",
-            "Test only super_admin can create"
+            "Test only superadmin can create"
           ],
           "passes": false
         },
@@ -336,14 +336,14 @@
         },
         {
           "id": "F5.4",
-          "description": "Delete bucket (super_admin, empty only)",
+          "description": "Delete bucket (superadmin, empty only)",
           "steps": [
             "Create src/components/buckets/delete-bucket-dialog.tsx",
             "Add delete button with confirmation dialog (type bucket name to confirm)",
             "DELETE /api/s3/buckets/[id] checks bucket is empty",
             "Deactivate in PostgreSQL, delete from S3",
             "Log BUCKET_DELETE in audit trail",
-            "Test only super_admin can delete",
+            "Test only superadmin can delete",
             "Test rejection when bucket has objects"
           ],
           "passes": false
@@ -428,11 +428,11 @@
           "steps": [
             "Create src/components/documents/delete-dialog.tsx for delete confirmation",
             "Soft delete: S3 delete marker placed, hidden in browser, retained via versioning",
-            "Hard delete: super_admin only, remove all versions, confirm by typing document name",
+            "Hard delete: superadmin only, remove all versions, confirm by typing document name",
             "Check regulatory hold before hard delete (HIPAA retention)",
             "Log DOCUMENT_SOFT_DELETE or DOCUMENT_HARD_DELETE",
             "Test soft delete hides document but recoverable",
-            "Test hard delete requires super_admin"
+            "Test hard delete requires superadmin"
           ],
           "passes": false
         },
@@ -797,10 +797,10 @@
           "description": "Role management with hierarchy enforcement",
           "steps": [
             "Create src/components/users/role-select.tsx dropdown",
-            "super_admin can assign any role",
+            "superadmin can assign any role",
             "admin can only assign viewer role",
             "Cannot demote yourself",
-            "Cannot modify another super_admin (only super_admin can)",
+            "Cannot modify another superadmin (only superadmin can)",
             "PUT /api/users/[id] updates Auth0 role + local DB role",
             "Log USER_ROLE_CHANGE in audit",
             "Test hierarchy enforcement for each role level"
@@ -1035,7 +1035,7 @@
             "Generate link → copy → access → download succeeds",
             "Invite user → assign role → verify access level",
             "Audit log → filter → export CSV",
-            "Hard delete document → verify super_admin required",
+            "Hard delete document → verify superadmin required",
             "Disable user → verify cannot log in"
           ],
           "passes": false

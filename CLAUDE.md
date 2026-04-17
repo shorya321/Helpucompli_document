@@ -63,7 +63,7 @@ if (!session) redirect('/auth/login');
 
 // Role guard (API Route)
 const role = session?.user?.['https://docs.helpucompli.com/role'];
-if (role !== 'super_admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+if (role !== 'superadmin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
 // Audit log (every mutation)
 await logAudit({ userId, action: 'DOCUMENT_UPLOAD', targetType: 'document', targetId, metadata: { filename }, ipAddress, userAgent });

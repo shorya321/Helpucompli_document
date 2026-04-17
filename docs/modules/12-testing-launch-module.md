@@ -35,7 +35,7 @@ Comprehensive testing (unit, integration, E2E), performance validation, document
   - [ ] Generate link → copy → access → verify download
   - [ ] Invite user → assign role → verify access level
   - [ ] View audit log → filter → export CSV
-  - [ ] Hard delete document → verify super_admin required
+  - [ ] Hard delete document → verify superadmin required
   - [ ] Disable user → verify cannot log in
 
 ### F12.4 — Performance Testing
