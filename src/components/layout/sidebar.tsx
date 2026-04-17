@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BRAND } from "@/lib/brand";
 import {
@@ -37,7 +38,7 @@ export function Sidebar({ role }: SidebarProps) {
             ? pathname === "/"
             : pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (
-          <a
+          <Link
             key={item.href}
             href={item.href}
             aria-current={isActive ? "page" : undefined}
@@ -52,7 +53,7 @@ export function Sidebar({ role }: SidebarProps) {
             }}
           >
             {item.label}
-          </a>
+          </Link>
         );
       })}
     </nav>

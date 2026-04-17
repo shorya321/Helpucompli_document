@@ -6,7 +6,7 @@ import type { Role } from "@/types";
 
 export interface TopbarUser {
   readonly name: string | null | undefined;
-  readonly email: string;
+  readonly email: string | null | undefined;
 }
 
 interface TopbarProps {
@@ -21,7 +21,12 @@ const ROLE_LABEL: Record<Role, string> = {
 };
 
 export function Topbar({ user, role }: TopbarProps) {
-  const displayName = user.name && user.name.length > 0 ? user.name : user.email;
+  const displayName =
+    user.name && user.name.length > 0
+      ? user.name
+      : user.email && user.email.length > 0
+        ? user.email
+        : "Signed in";
   return (
     <header
       style={{

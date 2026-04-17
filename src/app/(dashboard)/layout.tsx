@@ -23,7 +23,7 @@ export default async function DashboardLayout({ children }: LayoutProps) {
 
   const user = {
     name: (session.user.name as string | null | undefined) ?? null,
-    email: (session.user.email as string | undefined) ?? "",
+    email: (session.user.email as string | null | undefined) ?? null,
   };
 
   return (

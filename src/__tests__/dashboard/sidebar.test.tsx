@@ -34,10 +34,13 @@ describe("Sidebar", () => {
 
   it("marks the link matching the current pathname as active via aria-current", () => {
     const html = renderToString(<Sidebar role="superadmin" />);
-    // usePathname mocked to /buckets
-    expect(html).toMatch(/href="\/buckets"[^>]*aria-current="page"/);
-    // non-active link must not have aria-current
-    expect(html).not.toMatch(/href="\/documents"[^>]*aria-current="page"/);
+    // usePathname mocked to /buckets — next/link may order attrs either way
+    expect(html).toMatch(
+      /<a[^>]*aria-current="page"[^>]*href="\/buckets"|<a[^>]*href="\/buckets"[^>]*aria-current="page"/,
+    );
+    expect(html).not.toMatch(
+      /<a[^>]*aria-current="page"[^>]*href="\/documents"|<a[^>]*href="\/documents"[^>]*aria-current="page"/,
+    );
   });
 
   it("is wrapped in a <nav> landmark", () => {
