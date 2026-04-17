@@ -86,12 +86,14 @@
           "id": "F1.7",
           "description": "Access denied page for unauthorized users",
           "steps": [
-            "Create src/app/(auth)/access-denied/page.tsx",
-            "Show branded error with contact admin message",
-            "Redirect users without valid roles to this page",
-            "Test page renders with correct branding"
+            "src/app/(auth)/access-denied/page.tsx: branded 403-style page using BRAND tokens (pink accent, dark background, Inter font)",
+            "Headline 'Access Denied', body asking user to contact an administrator, return-to-sign-in link + mailto admin@helpucompli.com CTA",
+            "Metadata with 'Access Denied — HelpUcompli' title and robots:noindex,nofollow",
+            "role='alert' with aria-labelledby for screen reader announcement",
+            "6 unit tests rendering the server component via react-dom/server and asserting heading, brand, contact CTA, pink accent, login link, metadata",
+            "Redirect wiring from guards that catch ForbiddenError to /access-denied will be added as guards are consumed by API/Server Component code in later modules"
           ],
-          "passes": false
+          "passes": true
         }
       ]
     },

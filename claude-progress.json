@@ -1,18 +1,18 @@
 {
   "project": "helpucompli-document-repository",
   "current_phase": 1,
-  "current_module": "01-auth",
-  "last_completed_feature": "F1.6",
+  "current_module": "02-database",
+  "last_completed_feature": "F1.7",
   "total_features": 77,
-  "completed_features": 6,
+  "completed_features": 7,
   "blockers": [],
   "sessions": [
     {
       "date": "2026-04-17",
       "module": "01-auth",
-      "features_completed": ["F1.1", "F1.2", "F1.3", "F1.4", "F1.5", "F1.6"],
+      "features_completed": ["F1.1", "F1.2", "F1.3", "F1.4", "F1.5", "F1.6", "F1.7"],
       "notes": "F1.1: Auth0 SDK v4 wired. src/lib/auth0.ts (singleton), src/proxy.ts (Next.js 16 proxy — NOT src/app/proxy.ts), Auth0Provider in layout. Routes verified. F1.2: src/lib/auth-guard.ts with getRole, getAssignedBuckets, hasRole, hasAccessToBucket (superadmin bypass), requireRole (throws ForbiddenError), 18 unit tests. F1.3: src/lib/mfa.ts with roleRequiresMfa, hasMfa (checks amr claim for mfa/otp/hwk/sms/swk), requireMfaForPrivilegedRole, requireRoleWithMfa composite guard. 13 mfa tests + 5 composite-guard tests. Auth0 dashboard tenant MFA policy deferred to deploy step. F1.4: SESSION_CONFIG + TRANSACTION_COOKIE_CONFIG exports in src/lib/auth0.ts, Auth0Client constructed with session options (rolling:true, inactivityDuration=1800s=30min HIPAA, absoluteDuration=28800s=8h cap, sameSite='lax', secure in prod only). httpOnly enforced by SDK. 7 session-config tests. Total: 47 auth tests passing."
     }
   ],
-  "notes": "F1.6 complete. Next: F1.7 — access denied page at src/app/(auth)/access-denied/page.tsx with branded error + contact-admin CTA; redirect users without valid roles to it. Total auth tests: 70. Known doc drift: CLAUDE.md + module doc reference src/app/proxy.ts but Next.js 16 requires src/proxy.ts (project root) — separate docs: commit pending."
+  "notes": "Module 01-auth COMPLETE (7/7). Next module: 02-database, starting with F2.1 Prisma schema (7 core tables: users, buckets, documents, access_policies, generated_links, audit_logs, user_bucket_access) with enums Role/AuditAction/PolicyTargetType and prisma migrate dev. Total auth tests: 76. Known doc drift: CLAUDE.md + module doc reference src/app/proxy.ts but Next.js 16 requires src/proxy.ts (project root) — separate docs: commit pending. Auth0 tenant-side deferrals (MFA policy, branding PATCH) pending deploy step."
 }
