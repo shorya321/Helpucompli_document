@@ -127,7 +127,7 @@
             "Test basic query (prisma.user.findMany())",
             "Verify singleton reuses same client across imports"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F2.3",

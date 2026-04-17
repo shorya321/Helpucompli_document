@@ -2,9 +2,9 @@
   "project": "helpucompli-document-repository",
   "current_phase": 1,
   "current_module": "02-database",
-  "last_completed_feature": "F2.1",
+  "last_completed_feature": "F2.2",
   "total_features": 77,
-  "completed_features": 8,
+  "completed_features": 9,
   "blockers": [],
   "sessions": [
     {
@@ -16,9 +16,9 @@
     {
       "date": "2026-04-17",
       "module": "02-database",
-      "features_completed": ["F2.1"],
+      "features_completed": ["F2.1", "F2.2"],
       "notes": "F2.1: Prisma init migration (20260417100556_init) applied on local Docker Postgres (helpucompli-postgres, postgres:16). Seven tables created: users, buckets, documents, access_policies, generated_links, audit_logs, user_bucket_access. Four enums: Role, AuditAction (21 actions), PolicyTargetType, UserStatus (new — replaces free-text status column per sec-review M2). Unique constraint added on generated_links.presigned_url_hash (sec-review L2 — prevents hash-collision collision serving wrong file). audit_logs append-only enforced at DB layer via PL/pgSQL function audit_logs_reject_mutation() + BEFORE UPDATE/DELETE/TRUNCATE triggers raising ERRCODE insufficient_privilege (sec-review H1 — source-layer sentinel alone was bypassable via $executeRaw / aliased clients / bracket-dispatch). FK retention: audit_logs.user_id=SET NULL, generated_links.document_id=RESTRICT, all other user FKs RESTRICT, documents.deleted_by=SET NULL. No ON DELETE CASCADE anywhere. Tests: 47 schema tests (DMMF-style regex on schema.prisma + migration.sql + 4 bypass-vector source scans) — all hermetic, no live-DB needed. Total repo tests: 131 (was 84). Deferred: sec-review M1 (documents.uploaded_by RESTRICT→SET NULL — will revisit in F10 user-disable flow; HIPAA model is disable-not-delete anyway), sec-review L1 (generated_links.expires_at index — belongs to F2.3). Also fixed env drift: Prisma CLI loads .env by default, not .env.local — ran commands with 'set -a; source .env.local; set +a' for this session; follow-up chore can add dotenv-cli wrapper around db:* scripts. DATABASE_URL updated in .env.local with Docker container creds (helpucompli:helpucompli_dev_2024)."
     }
   ],
-  "notes": "Module 02-database in progress (1/4). F2.1 shipped with DB-enforced audit append-only, UserStatus enum, unique link hash — all directly from sec-review findings. Next: F2.2 Prisma client singleton (src/lib/prisma.ts with globalThis cache pattern, already templated in docs/modules/02-database-module.md §F2.2). Known follow-ups: (a) wrap db:* npm scripts with dotenv-cli for .env.local auto-load; (b) F2.3 will add missing indexes including generated_links.expires_at; (c) F10 user-disable decision — keep RESTRICT FKs and disable via status column only, no user row deletes."
+  "notes": "Module 02-database in progress (2/4). F2.2 Prisma singleton shipped with security hardening (sec-review M2: Prisma error events routed to 'event' emit not stdout to prevent connection-string leakage in CloudWatch/Datadog; L1: deployment assumption comment for long-lived Node vs Lambda; L2: test afterEach calls $disconnect() before dropping globalThis ref). Test #1 instanceof check rewritten as duck-typing ($connect/$disconnect/$transaction) — Prisma v6 proxy triggers vitest serializer stack overflow on toBeInstanceOf; class.name is minified to 'r'. Test 137/137 green. Known follow-ups: (a) sec-review M1 — wire src/lib/prisma.ts to use getConfig() DATABASE_URL for validated boot; requires vitest.setup.ts env stubs (AUTH0_*, AWS_*, DATABASE_URL) since getConfig validates all env at cache-populate. Batch into pre-F3 chore. (b) sec-review INFO — SIGTERM handler flushing $disconnect; belongs in server bootstrap, defer to Module 12. (c) wrap db:* npm scripts with dotenv-cli for .env.local auto-load. (d) F2.3 will add missing indexes including generated_links.expires_at. (e) F10 user-disable — keep RESTRICT FKs, disable via status column only."
 }
