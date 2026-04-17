@@ -171,13 +171,15 @@
           "id": "F3.1",
           "description": "S3 client singleton with SSE-KMS",
           "steps": [
-            "Install @aws-sdk/client-s3 and @aws-sdk/s3-request-presigner",
-            "Create src/lib/s3.ts with S3Client singleton",
-            "Configure SSE-KMS encryption on all operations",
-            "Use IAM role-based auth (env vars for dev)",
-            "Test connection to S3"
+            "src/lib/s3.ts: S3Client singleton (globalThis-cached for HMR in dev, not in production) via getS3Client()",
+            "buildClient() uses loadConfig() (uncached) so tests that mutate env between vi.resetModules() cycles see fresh values; in production env is frozen at boot so equivalent to getConfig()",
+            "sseKmsParams() returns { ServerSideEncryption: 'aws:kms', SSEKMSKeyId: <CMK ARN from config>, BucketKeyEnabled: true } — applied to every PutObject/CopyObject/CreateMultipartUpload in F3.3–F3.5 via withSseKms<T>(input) which spreads KMS params last (caller cannot downgrade to AES256)",
+            "BucketKeyEnabled literal `true` in SseKmsParams interface — type error if caller tries boolean false",
+            "Re-export S3Client type from @/lib/s3 so consumers don't bypass the facade",
+            "Deployment comment: long-lived Node assumption; Lambda/Edge needs per-invocation credential refresh via SDK default provider chain",
+            "9 unit tests covering: singleton identity, globalThis cache behaviour in dev+test+production, credential+region propagation, ConfigError when env incomplete (getS3Client and sseKmsParams paths), SseKmsParams values, withSseKms immutability + merge semantics"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F3.2",
