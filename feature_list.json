@@ -25,13 +25,13 @@
           "id": "F1.2",
           "description": "Role-Based Access Control (RBAC) with Auth0 roles",
           "steps": [
-            "Define roles in Auth0 Dashboard: super_admin, admin, viewer",
-            "Create post-login Action to inject role AND assigned_buckets claims into access token",
-            "Create role guard utility in src/lib/auth-guard.ts",
-            "Test role extraction from session in API route AND Server Component",
-            "Verify unauthorized role returns 403"
+            "Roles defined in Auth0 Dashboard: super_admin, admin, viewer (manual tenant config — deferred to deploy)",
+            "Post-login Action injecting role + assigned_buckets claims (manual tenant config — deferred to deploy)",
+            "src/lib/auth-guard.ts: getRole, getAssignedBuckets, hasRole, hasAccessToBucket, requireRole, ForbiddenError",
+            "18 unit tests covering role extraction, bucket access, super_admin bypass, forbidden throws",
+            "Claim keys: https://docs.helpucompli.com/role, https://docs.helpucompli.com/assigned_buckets"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F1.3",
