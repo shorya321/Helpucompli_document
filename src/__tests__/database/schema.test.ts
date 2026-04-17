@@ -152,6 +152,28 @@ describe("F2.1 — Prisma schema: field types and constraints", () => {
     expect(block).toMatch(/metadata\s+Json\?/);
   });
 
+  it("AuditLog.metadata has a GIN index (JSONB @> queries)", () => {
+    const block = extractModelBlock(schema, "AuditLog");
+    expect(block).toMatch(/@@index\(\[metadata\],\s*type:\s*Gin\)/);
+  });
+
+  it("AccessPolicy.allowedDomains is native String[] (not Json)", () => {
+    const block = extractModelBlock(schema, "AccessPolicy");
+    expect(block).toMatch(/allowedDomains\s+String\[\]/);
+    expect(block).not.toMatch(/allowedDomains\s+Json/);
+  });
+
+  it("AccessPolicy.allowedIpRanges is native String[] (not Json)", () => {
+    const block = extractModelBlock(schema, "AccessPolicy");
+    expect(block).toMatch(/allowedIpRanges\s+String\[\]/);
+    expect(block).not.toMatch(/allowedIpRanges\s+Json/);
+  });
+
+  it("UserBucketAccess has reverse index on bucketId (covers 'who has access to bucket X')", () => {
+    const block = extractModelBlock(schema, "UserBucketAccess");
+    expect(block).toMatch(/@@index\(\[bucketId\]\)/);
+  });
+
   it("AuditLog.ipAddress and userAgent are required strings", () => {
     const block = extractModelBlock(schema, "AuditLog");
     expect(block).toMatch(/ipAddress\s+String\s+@map\("ip_address"\)/);
@@ -248,6 +270,38 @@ describe("F2.1 — init migration: audit_logs append-only trigger", () => {
     expect(sql).toMatch(
       /CREATE TRIGGER audit_logs_no_truncate[\s\S]*?BEFORE TRUNCATE ON "audit_logs"/,
     );
+  });
+});
+
+describe("re-review hardening migration — trigger ENABLE ALWAYS + indexes", () => {
+  function hardeningMigrationSql(): string {
+    const dirs = readdirSync(MIGRATIONS_DIR)
+      .filter((d) => d.endsWith("_rereview_hardening"))
+      .sort();
+    if (dirs.length === 0) throw new Error("no rereview_hardening migration found");
+    const sqlPath = join(MIGRATIONS_DIR, dirs[dirs.length - 1], "migration.sql");
+    return readFileSync(sqlPath, "utf8");
+  }
+
+  const sql = hardeningMigrationSql();
+
+  it("re-creates all three append-only triggers with ENABLE ALWAYS", () => {
+    expect(sql).toMatch(/ENABLE ALWAYS TRIGGER audit_logs_no_update/);
+    expect(sql).toMatch(/ENABLE ALWAYS TRIGGER audit_logs_no_delete/);
+    expect(sql).toMatch(/ENABLE ALWAYS TRIGGER audit_logs_no_truncate/);
+  });
+
+  it("switches allowed_domains and allowed_ip_ranges to TEXT[]", () => {
+    expect(sql).toMatch(/ALTER COLUMN "allowed_domains" TYPE TEXT\[\]/);
+    expect(sql).toMatch(/ALTER COLUMN "allowed_ip_ranges" TYPE TEXT\[\]/);
+  });
+
+  it("adds GIN index on audit_logs.metadata", () => {
+    expect(sql).toMatch(/CREATE INDEX "audit_logs_metadata_gin_idx"[\s\S]*?USING GIN \("metadata"\)/);
+  });
+
+  it("adds reverse bucket_id index on user_bucket_access", () => {
+    expect(sql).toMatch(/CREATE INDEX "user_bucket_access_bucket_id_idx" ON "user_bucket_access" \("bucket_id"\)/);
   });
 });
 

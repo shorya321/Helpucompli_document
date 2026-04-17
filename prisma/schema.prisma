@@ -119,8 +119,10 @@ model AccessPolicy {
   name            String
   targetType      PolicyTargetType @map("target_type")
   targetValue     String           @map("target_value")
-  allowedDomains  Json?            @map("allowed_domains")   // String[]
-  allowedIpRanges Json?            @map("allowed_ip_ranges") // String[]
+  // Native Postgres text[] so the policy engine can use array operators
+  // (@>, unnest, ANY) directly without a JSONB path fragment.
+  allowedDomains  String[]         @map("allowed_domains")
+  allowedIpRanges String[]         @map("allowed_ip_ranges")
   linkTtlSeconds  Int              @default(900) @map("link_ttl_seconds")
   maxDownloads    Int?             @map("max_downloads")
   requireAuth     Boolean          @default(false) @map("require_auth")
@@ -172,6 +174,9 @@ model AuditLog {
   @@index([createdAt])
   @@index([userId])
   @@index([action])
+  // GIN on metadata so `metadata @> '{"bucket":"x"}'::jsonb` avoids
+  // seq-scan on the 6-year retention table.
+  @@index([metadata], type: Gin)
   @@map("audit_logs")
 }
 
@@ -186,5 +191,9 @@ model UserBucketAccess {
   grantedBy User   @relation("GrantedBy", fields: [grantedById], references: [id])
 
   @@id([userId, bucketId])
+  // Composite PK already indexes (user_id, bucket_id) — bucket_id alone
+  // is uncovered, so "who has access to bucket X" seq-scanned without
+  // this reverse index.
+  @@index([bucketId])
   @@map("user_bucket_access")
 }
