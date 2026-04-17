@@ -10,6 +10,7 @@ import {
   hasRole,
   requireRole,
 } from "@/lib/auth-guard";
+import { requireRoleWithMfa } from "@/lib/mfa";
 
 const makeSession = (
   claims: Record<string, unknown> = {},
@@ -123,5 +124,32 @@ describe("requireRole", () => {
 
   it("throws ForbiddenError when session null", () => {
     expect(() => requireRole(null, "admin")).toThrow(ForbiddenError);
+  });
+});
+
+describe("requireRoleWithMfa", () => {
+  it("passes when privileged role has MFA in amr", () => {
+    const s = makeSession({ [ROLE_CLAIM]: "admin", amr: ["pwd", "mfa"] });
+    expect(() => requireRoleWithMfa(s, "admin")).not.toThrow();
+  });
+
+  it("passes when role is viewer without MFA (viewer not privileged)", () => {
+    const s = makeSession({ [ROLE_CLAIM]: "viewer" });
+    expect(() => requireRoleWithMfa(s, ["admin", "viewer"])).not.toThrow();
+  });
+
+  it("throws ForbiddenError when privileged role lacks MFA", () => {
+    const s = makeSession({ [ROLE_CLAIM]: "admin", amr: ["pwd"] });
+    expect(() => requireRoleWithMfa(s, "admin")).toThrow(ForbiddenError);
+  });
+
+  it("throws ForbiddenError when superadmin lacks MFA", () => {
+    const s = makeSession({ [ROLE_CLAIM]: "superadmin" });
+    expect(() => requireRoleWithMfa(s, "superadmin")).toThrow(ForbiddenError);
+  });
+
+  it("throws ForbiddenError when role mismatches (role check runs first)", () => {
+    const s = makeSession({ [ROLE_CLAIM]: "viewer", amr: ["pwd", "mfa"] });
+    expect(() => requireRoleWithMfa(s, "admin")).toThrow(ForbiddenError);
   });
 });

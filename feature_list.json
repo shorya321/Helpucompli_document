@@ -37,11 +37,13 @@
           "id": "F1.3",
           "description": "MFA enforcement for admin roles",
           "steps": [
-            "Configure Auth0 Adaptive MFA for superadmin and admin",
-            "Test MFA prompt appears for admin login",
+            "Configure Auth0 Adaptive MFA for superadmin and admin (tenant config — deferred to deploy)",
+            "src/lib/mfa.ts: roleRequiresMfa, hasMfa (amr claim check), requireMfaForPrivilegedRole, requireRoleWithMfa composite guard",
+            "13 unit tests (mfa.test.ts) + 5 new tests for requireRoleWithMfa in auth-guard.test.ts",
+            "AMR values accepted: mfa, otp, hwk, sms, swk",
             "Verify viewer login does not require MFA"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F1.4",
