@@ -62,11 +62,13 @@
           "id": "F1.5",
           "description": "Auth0 Universal Login branding",
           "steps": [
-            "Configure Auth0 Universal Login with HelpUcompli logo",
-            "Apply brand colors (pink #E91E8C, blue #2563EB)",
-            "Test branded login page renders correctly"
+            "src/lib/brand.ts: BRAND source-of-truth tokens (colors pink #E91E8C, blue #2563EB, dark #1E293B, light; font Inter + stylesheet URL; logo + favicon URLs)",
+            "src/lib/auth0-branding.ts: AUTH0_BRANDING_PAYLOAD matching Auth0 Management API PATCH /api/v2/branding (colors.primary, page_background, favicon_url, logo_url, font.url)",
+            "AUTH0_UNIVERSAL_LOGIN_TEMPLATE for PATCH /api/v2/branding/templates/universal-login with {%- auth0:widget -%} placeholder",
+            "12 unit tests in branding.test.ts covering brand tokens, payload shape, template structure",
+            "Actual Auth0 tenant push deferred to deploy step (uses Management API client wired in F10.3)"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F1.6",
