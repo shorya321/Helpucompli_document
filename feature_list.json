@@ -238,13 +238,19 @@
           "id": "F3.5",
           "description": "Multipart upload support for large files",
           "steps": [
-            "Implement multipart upload for files > 100 MB",
-            "Configure maximum file size 5 GB",
-            "Create multipart presigned URL endpoints",
-            "Handle upload abort and cleanup on failure",
-            "Test multipart upload with large file"
+            "src/lib/s3-multipart.ts: initiateMultipartUpload / presignUploadPart / completeMultipartUpload / abortMultipartUpload + helpers shouldUseMultipart, assertFileSize, planMultipartParts",
+            "Constants: MULTIPART_THRESHOLD_BYTES=100MB (strict >, documented in shouldUseMultipart JSDoc), MAX_FILE_SIZE_BYTES=5GB, MIN_PART_SIZE_BYTES=5MB (S3 hard minimum except last), MAX_PART_NUMBER=10000, TARGET_PART_SIZE_BYTES=10MB",
+            "initiateMultipartUpload bakes sseKmsParams() into CreateMultipartUploadCommand — UploadPart inherits encryption context from the init session so a stolen part presigned URL cannot write unencrypted bytes",
+            "declaredSizeBytes optional input on initiate (sec-review HIGH fix): when supplied, assertFileSize runs BEFORE the UploadId is issued, so the 5 GB HIPAA cap is enforced server-side even if the API route forgets to validate the client-declared size separately",
+            "presignUploadPart: TTL clamped to s3-presign's MAX_PUT_TTL_SECONDS (1 hour) and MIN_TTL_SECONDS (15 min); partNumber validated to [1, 10000] integer",
+            "completeMultipartUpload: ETag format validation via /^\"[0-9a-fA-F]{32}(?:-\\d+)?\"$/ per part (sec-review MEDIUM fix — blocks obviously-fabricated client ETags before S3 round-trip), contiguous 1..N PartNumber sequence check (sec-review MEDIUM fix — rejects gaps like [1,2,5] client-side before InvalidPartOrder from S3), duplicate PartNumber check, non-mutating sort via [...input.parts].sort(), ETag returned as non-optional string in CompleteMultipartResult (code-review LOW — F6.2 can statically rely on it for DB persistence)",
+            "abortMultipartUpload releases uploaded parts' storage. Comment documents the deploy-runbook carry-forward (sec-review MEDIUM M3): every document bucket must have an AbortIncompleteMultipartUpload lifecycle rule (1–7 day window) as the safety net when this function is never reached due to client abandonment",
+            "assertKey aligned with s3-presign + s3-objects siblings (sec-review MEDIUM fix + code-review HIGH): rejects empty, leading '/', '..' segments, empty path segments — prevents API routes from smuggling bad keys past one validator by routing through a different module",
+            "Shared assertContentType exported from s3-presign.ts (code-review HIGH fix) — InvalidResponseOverrideError reused for contentType errors across upload surface; InvalidPresignTargetError reused for bucket/key; InvalidMultipartInputError retained only for multipart-specific fields (uploadId, partNumber, parts, size)",
+            "planMultipartParts: dynamic floor = max(10MB target, ceil(size/10000), 5MB S3 minimum) — documented in code (code-review MEDIUM fix — previous Math.max was dead code; now the clamp is future-proof if MAX_FILE_SIZE_BYTES grows beyond 100GB)",
+            "22 tests: constants export, initiate (SSE-KMS baked, optional contentType omitted path, no UploadId error, declaredSize cap gate, leading-slash rejection, empty/traversal/empty-segment key rejection, malformed contentType), presignUploadPart (URL structure, partNumber bounds + NaN, empty uploadId, TTL cap), complete (sorted parts + return fields, empty array, duplicate PartNumber, malformed ETag, non-contiguous PartNumber sequence), abort (happy + empty uploadId), size helpers (shouldUseMultipart strict-greater semantics, assertFileSize bounds, planMultipartParts exact-multiple + non-multiple-with-remainder)"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F3.6",

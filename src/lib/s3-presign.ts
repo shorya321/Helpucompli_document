@@ -74,7 +74,10 @@ const SAFE_CONTENT_TYPE_RE = /^[a-zA-Z0-9][a-zA-Z0-9!#$&\-^_.+]{0,127}\/[a-zA-Z0
 // punctuation, brackets, parens. Rejects quotes, backslashes, CR/LF.
 const SAFE_FILENAME_RE = /^[\p{L}\p{N} ._\-()[\]]+$/u;
 
-function assertContentType(value: string, fieldName: string): void {
+// Exported so s3-multipart reuses the same RFC 6838 subset and error
+// class (keeps contentType validation semantics identical across the
+// upload surface).
+export function assertContentType(value: string, fieldName: string): void {
   if (!SAFE_CONTENT_TYPE_RE.test(value)) {
     throw new InvalidResponseOverrideError(
       fieldName,
