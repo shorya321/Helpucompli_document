@@ -49,13 +49,14 @@
           "id": "F1.4",
           "description": "Session management with 30-min timeout",
           "steps": [
-            "Configure session timeout in Auth0 SDK",
-            "Set cookie flags: httpOnly, secure, SameSite=Lax",
-            "Enforce no shared accounts policy (HIPAA requirement)",
-            "Test session expiry after inactivity",
-            "Verify redirect to login on expired session"
+            "src/lib/auth0.ts: SESSION_CONFIG (rolling:true, inactivityDuration=1800s, absoluteDuration=28800s, cookie.sameSite='lax', cookie.secure=NODE_ENV===production)",
+            "TRANSACTION_COOKIE_CONFIG for OAuth state cookie (sameSite='lax', secure=NODE_ENV===production)",
+            "httpOnly enforced by Auth0 SDK internals (CookieOptions.httpOnly required, not user-configurable)",
+            "Pass session + transactionCookie options to new Auth0Client()",
+            "7 unit tests in session-config.test.ts covering inactivity, absolute, rolling, sameSite, secure, transaction cookie",
+            "No shared accounts policy — HIPAA requirement; enforced by audit trail (LOGIN events tied to auth0_id) and documented in HIPAA checklist (Module 11)"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F1.5",

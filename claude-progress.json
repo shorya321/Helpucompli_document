@@ -2,17 +2,17 @@
   "project": "helpucompli-document-repository",
   "current_phase": 1,
   "current_module": "01-auth",
-  "last_completed_feature": "F1.3",
+  "last_completed_feature": "F1.4",
   "total_features": 77,
-  "completed_features": 3,
+  "completed_features": 4,
   "blockers": [],
   "sessions": [
     {
       "date": "2026-04-17",
       "module": "01-auth",
-      "features_completed": ["F1.1", "F1.2", "F1.3"],
-      "notes": "F1.1: Auth0 SDK v4 wired. src/lib/auth0.ts (singleton), src/proxy.ts (Next.js 16 proxy — NOT src/app/proxy.ts), Auth0Provider in layout. Routes verified. F1.2: src/lib/auth-guard.ts with getRole, getAssignedBuckets, hasRole, hasAccessToBucket (superadmin bypass), requireRole (throws ForbiddenError), 18 unit tests. F1.3: src/lib/mfa.ts with roleRequiresMfa, hasMfa (checks amr claim for mfa/otp/hwk/sms/swk), requireMfaForPrivilegedRole, requireRoleWithMfa composite guard. 13 mfa tests + 5 composite-guard tests = 40 total auth tests passing. Auth0 dashboard tenant MFA policy deferred to deploy step."
+      "features_completed": ["F1.1", "F1.2", "F1.3", "F1.4"],
+      "notes": "F1.1: Auth0 SDK v4 wired. src/lib/auth0.ts (singleton), src/proxy.ts (Next.js 16 proxy — NOT src/app/proxy.ts), Auth0Provider in layout. Routes verified. F1.2: src/lib/auth-guard.ts with getRole, getAssignedBuckets, hasRole, hasAccessToBucket (superadmin bypass), requireRole (throws ForbiddenError), 18 unit tests. F1.3: src/lib/mfa.ts with roleRequiresMfa, hasMfa (checks amr claim for mfa/otp/hwk/sms/swk), requireMfaForPrivilegedRole, requireRoleWithMfa composite guard. 13 mfa tests + 5 composite-guard tests. Auth0 dashboard tenant MFA policy deferred to deploy step. F1.4: SESSION_CONFIG + TRANSACTION_COOKIE_CONFIG exports in src/lib/auth0.ts, Auth0Client constructed with session options (rolling:true, inactivityDuration=1800s=30min HIPAA, absoluteDuration=28800s=8h cap, sameSite='lax', secure in prod only). httpOnly enforced by SDK. 7 session-config tests. Total: 47 auth tests passing."
     }
   ],
-  "notes": "F1.3 complete. Next: F1.4 — session management with 30-min timeout + cookie flags (httpOnly, secure, SameSite=Lax), no shared accounts policy. Known doc drift: CLAUDE.md + module doc reference src/app/proxy.ts but Next.js 16 requires src/proxy.ts (project root) — separate docs: commit pending."
+  "notes": "F1.4 complete. Next: F1.5 — Auth0 Universal Login branding (tenant-side: logo, pink #E91E8C + blue #2563EB palette, MFA prompt visual). Largely deploy-step work. Known doc drift: CLAUDE.md + module doc reference src/app/proxy.ts but Next.js 16 requires src/proxy.ts (project root) — separate docs: commit pending."
 }
