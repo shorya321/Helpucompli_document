@@ -7,8 +7,10 @@ export const AUTH0_BRANDING_PAYLOAD = {
   },
   favicon_url: BRAND.assets.faviconUrl,
   logo_url: BRAND.assets.logoUrl,
+  // Auth0 Management API requires a WOFF/WOFF2 URL here, NOT a CSS
+  // stylesheet. Passing a css2 URL silently falls back to default fonts.
   font: {
-    url: BRAND.font.stylesheetUrl,
+    url: BRAND.font.woff2Url,
   },
 } as const;
 

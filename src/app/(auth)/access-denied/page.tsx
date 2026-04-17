@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { BRAND } from "@/lib/brand";
 
 export const metadata: Metadata = {
@@ -8,6 +7,11 @@ export const metadata: Metadata = {
     "You do not have permission to view this page. Contact an administrator.",
   robots: { index: false, follow: false },
 };
+
+// Prevent CDN/edge caching of the 403 body — it contains the admin
+// contact email, and a cached response would leak that contact into
+// any downstream caller regardless of session state.
+export const dynamic = "force-dynamic";
 
 export default function AccessDeniedPage() {
   return (
@@ -71,7 +75,13 @@ export default function AccessDeniedPage() {
             flexWrap: "wrap",
           }}
         >
-          <Link
+          {/*
+            Plain anchor — Auth0 v4 requires a full document navigation
+            to /auth/login so the proxy can execute the OAuth flow.
+            next/link would attempt client-side routing and bypass it.
+            Ref: https://github.com/auth0/nextjs-auth0/blob/main/README.md#on-next-js-16
+          */}
+          <a
             href="/auth/login"
             style={{
               background: BRAND.colors.pink,
@@ -83,7 +93,7 @@ export default function AccessDeniedPage() {
             }}
           >
             Return to sign-in
-          </Link>
+          </a>
           <a
             href={`mailto:admin@${BRAND.domain}?subject=Access%20request`}
             style={{

@@ -35,6 +35,11 @@ describe("SESSION_CONFIG (HIPAA 30-min inactivity + cookie flags)", () => {
     const expected = process.env.NODE_ENV === "production";
     expect(SESSION_CONFIG.cookie?.secure).toBe(expected);
   });
+
+  it("sets an explicit cookie name to avoid collision across *.helpucompli.com apps", async () => {
+    const { SESSION_CONFIG } = await import("@/lib/auth0");
+    expect(SESSION_CONFIG.cookie?.name).toBe("helpucompli_doc_session");
+  });
 });
 
 describe("SESSION_CONFIG — secure cookie gated on https origin", () => {

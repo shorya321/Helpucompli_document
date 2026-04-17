@@ -14,7 +14,7 @@ describe("proxy.ts (Next.js 16 proxy entry)", () => {
     expect(typeof mod.proxy).toBe("function");
   });
 
-  it("exports a matcher config that excludes Next static and health", async () => {
+  it("exports a matcher config that excludes Next static, health, and SEO assets", async () => {
     const mod = await import("@/proxy");
     expect(mod.config).toBeDefined();
     expect(Array.isArray(mod.config.matcher)).toBe(true);
@@ -24,5 +24,7 @@ describe("proxy.ts (Next.js 16 proxy entry)", () => {
     expect(pattern).toMatch(/_next\/static/);
     expect(pattern).toMatch(/favicon\.ico/);
     expect(pattern).toMatch(/api\/health/);
+    expect(pattern).toMatch(/robots\.txt/);
+    expect(pattern).toMatch(/sitemap\.xml/);
   });
 });

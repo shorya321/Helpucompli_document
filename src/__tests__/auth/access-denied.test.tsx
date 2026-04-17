@@ -36,4 +36,17 @@ describe("access-denied page", () => {
   it("exports metadata with a 403 / Access Denied title", () => {
     expect(metadata.title).toMatch(/access denied/i);
   });
+
+  it("uses plain <a href> for the login link (not next/link) so Auth0 proxy handles the navigation", async () => {
+    const out = html();
+    // No next/link serialized markers
+    expect(out).not.toMatch(/data-prefetch/i);
+    // Anchor with href attribute targeting /auth/login
+    expect(out).toMatch(/<a[^>]+href="\/auth\/login"/);
+  });
+
+  it("exports dynamic='force-dynamic' so the 403 body (with admin email) is not CDN-cached", async () => {
+    const mod = await import("@/app/(auth)/access-denied/page");
+    expect((mod as { dynamic?: string }).dynamic).toBe("force-dynamic");
+  });
 });

@@ -52,8 +52,10 @@ describe("AUTH0_BRANDING_PAYLOAD (Auth0 Management API /api/v2/branding)", () =>
     expect(AUTH0_BRANDING_PAYLOAD.favicon_url).toBeTruthy();
   });
 
-  it("font.url points to a font stylesheet", () => {
+  it("font.url points to a WOFF/WOFF2 file (not a CSS stylesheet — Auth0 requires direct font URL)", () => {
     expect(AUTH0_BRANDING_PAYLOAD.font.url).toMatch(/^https?:\/\//);
+    expect(AUTH0_BRANDING_PAYLOAD.font.url).toMatch(/\.woff2?(\?.*)?$/);
+    expect(AUTH0_BRANDING_PAYLOAD.font.url).not.toMatch(/fonts\.googleapis\.com\/css/);
   });
 });
 

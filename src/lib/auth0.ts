@@ -13,6 +13,11 @@ export const SESSION_CONFIG = {
   inactivityDuration: 30 * 60,
   absoluteDuration: 8 * 60 * 60,
   cookie: {
+    // Explicit cookie name prevents collision with sibling apps on
+    // `*.helpucompli.com` that may also default to `__session`.
+    // httpOnly is enforced by the Auth0 SDK internally — not user-
+    // configurable (SDK sets it true regardless of this config).
+    name: "helpucompli_doc_session",
     sameSite: "lax" as const,
     secure: SECURE_COOKIE,
   },

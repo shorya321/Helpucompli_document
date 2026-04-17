@@ -54,6 +54,21 @@ describe("hasMfa", () => {
     const s = makeSession({ amr: "mfa" });
     expect(hasMfa(s)).toBe(false);
   });
+
+  it("false when amr contains ONLY 'hwk' (single-factor WebAuthn per RFC 8176)", () => {
+    const s = makeSession({ amr: ["pwd", "hwk"] });
+    expect(hasMfa(s)).toBe(false);
+  });
+
+  it("false when amr contains ONLY 'swk' (single-factor software proof-of-possession)", () => {
+    const s = makeSession({ amr: ["pwd", "swk"] });
+    expect(hasMfa(s)).toBe(false);
+  });
+
+  it("false when amr contains ONLY 'sms' (deprecated for HIPAA-equivalent assurance)", () => {
+    const s = makeSession({ amr: ["pwd", "sms"] });
+    expect(hasMfa(s)).toBe(false);
+  });
 });
 
 describe("requireMfaForPrivilegedRole", () => {

@@ -93,3 +93,11 @@ export function getConfig(): Env {
   if (!cached) cached = loadConfig();
   return cached;
 }
+
+// Test hook: drop the cached validated env so a subsequent `getConfig()`
+// call re-parses `process.env`. Used by vitest `afterEach` blocks that
+// mutate env between test cases. Production code MUST NOT call this —
+// env is frozen at boot.
+export function resetConfigCache(): void {
+  cached = undefined;
+}

@@ -2,7 +2,18 @@ import type { Role } from "@/types";
 import type { SessionData } from "@/lib/auth-guard";
 import { ForbiddenError, getRole, requireRole } from "@/lib/auth-guard";
 
-const MFA_AMR_VALUES: readonly string[] = ["mfa", "otp", "hwk", "sms", "swk"];
+// RFC 8176 amr values. We accept only the two that Auth0 step-up guidance
+// treats as definitive MFA signals:
+//   - "mfa"  : Auth0's aggregate signal (any configured second factor)
+//   - "otp"  : time-based / HOTP / push OTP
+// Explicitly rejected:
+//   - "hwk" / "swk" : single-factor proof-of-possession per RFC 8176
+//     (WebAuthn usernameless can satisfy these WITHOUT a second factor)
+//   - "sms"         : deprecated for AAL2 healthcare / HIPAA-equivalent
+//     assurance (NIST SP 800-63B). Re-add only if a compensating control
+//     lives in the Auth0 Action (e.g., explicit factor-chain check).
+// Ref: https://auth0.com/docs/secure/multi-factor-authentication/step-up-authentication/configure-step-up-authentication-for-web-apps#validate-id-tokens-for-mfa
+export const MFA_AMR_VALUES: readonly string[] = ["mfa", "otp"];
 const PRIVILEGED_ROLES: readonly Role[] = ["superadmin", "admin"];
 
 export function roleRequiresMfa(role: Role | null): boolean {
