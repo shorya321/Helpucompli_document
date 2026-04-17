@@ -256,13 +256,24 @@
           "id": "F3.6",
           "description": "IAM permissions configuration (least privilege)",
           "steps": [
-            "Document IAM role policy for helpucompli-docs-app-role",
-            "Scope s3:GetObject, PutObject, DeleteObject, ListBucket to bucket ARNs",
-            "Scope kms:Decrypt, GenerateDataKey to document encryption CMK",
-            "Ensure no s3:PutBucketPolicy or IAM write permissions on app role",
-            "Test operations work with scoped permissions only"
+            "src/lib/iam-policies.ts: policy documents as runtime TypeScript exports (so tests validate AND deploy tooling can emit verbatim — prevents doc drift). Exports buildAppRolePolicy, buildHipaaBucketPolicy, buildDocumentKmsKeyPolicy, plus BUCKET_ARN_PATTERN / BUCKET_OBJECTS_ARN_PATTERN constants",
+            "IamStatement interface includes optional Principal field (code-review MEDIUM fix — required for resource-based policies: bucket + KMS key policies)",
+            "App role policy (buildAppRolePolicy):",
+            "  Allow — S3ObjectReadWrite scoped to helpucompli-docs-*/*",
+            "  Allow — S3BucketReadAndHipaaProvisioning scoped to helpucompli-docs-* (CreateBucket, DeleteBucket, Put/GetBucketVersioning, Put/GetBucketEncryption, Put/GetBucketLogging, Put/GetPublicAccessBlock, Put/GetBucketOwnershipControls, Put/GetBucketPolicy) — runtime role needs these for F5.2 superadmin flow + F3.2 createHipaaBucket; bounded by app-layer auth + Zod validation + compensating Denies",
+            "  Allow — S3ListAllMyBucketsForAdminUI with Resource:* (AWS only accepts *; F5.1 DB join filters to managed buckets)",
+            "  Allow — KmsDocumentCmkUsage (kms:Decrypt, GenerateDataKey, DescribeKey) scoped to AWS_KMS_KEY_ID ARN",
+            "  Allow — CloudTrailDataEventWiring (GetEventSelectors, PutEventSelectors) scoped to configured trail ARN",
+            "  Deny — DenyLoggingBucketMutation (sec-review HIGH fix — s3:PutBucketLogging, DeleteBucketLogging on the access-logs bucket itself; previously runtime could silently redirect audit trail since helpucompli-docs-access-logs matched the helpucompli-docs-* Allow pattern)",
+            "  Deny — DenyBucketAclMutation (s3:PutBucketAcl + PutObjectAcl defense-in-depth on top of BucketOwnerEnforced)",
+            "  Deny — DenyKmsLifecycle (kms:CreateKey, ScheduleKeyDeletion, CancelKeyDeletion, DisableKey, PutKeyPolicy, CreateGrant, RevokeGrant)",
+            "  Deny — DenyIamAndCloudTrailAdmin narrowed to IAM write surface (sec-review MEDIUM fix — iam:Create*/Delete*/Attach*/Detach*/Put*/Update*/PassRole instead of blanket iam:* which would have blocked implicit iam:GetRole/ListRoles reads from SDK)",
+            "Bucket policy (buildHipaaBucketPolicy): DenyNonHttps with explicit Principal:* (code-review MEDIUM fix — was implicit in runtime s3-buckets.ts but missing from the doc-mirror) + aws:SecureTransport=false condition",
+            "KMS key policy (buildDocumentKmsKeyPolicy): CRITICAL + HIGH security-review fixes — both RootAccountFullControl and AppRoleEncryptDecrypt now use Principal field (AWS-canonical) NOT Condition keys. Root break-glass: Principal: arn:aws:iam::<account>:root (was kms:CallerAccount Condition which grants any identity in the account, not just root). App role: Principal: <roleArn> (was aws:PrincipalArn Condition which does NOT reliably match role sessions assumed from the role — silent non-functional grant risk)",
+            "17 hermetic tests: Version pin, per-Sid resource scoping, action allowlist checks, explicit assertion that no Allow grants s3:*, no Allow grants iam:*, no Allow uses Resource:* outside ListAllMyBuckets, Principal-based KMS grants (no Condition), DenyLoggingBucketMutation scoped correctly, narrowed IAM deny omits blanket iam:*",
+            "docs/IAM-POLICIES.md documents principles, role/policy mapping, bucket-policy + KMS-key-policy rationale, deploy runbook (CMK creation, trail creation, role creation, logs bucket provisioning, account-level BPA, multipart lifecycle rule), and carry-forwards (GuardDuty, Macie, Object Lock, session-credential rotation)"
           ],
-          "passes": false
+          "passes": true
         }
       ]
     },
