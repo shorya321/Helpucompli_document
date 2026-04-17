@@ -37,6 +37,22 @@ HIPAA-compliant document repository at `docs.helpucompli.com`. AWS S3 + Auth0 + 
 
 ---
 
+## Research Stack (MANDATORY before writing code for any external API)
+
+Every feature that touches an external library, SDK, framework API, or security pattern MUST open with a documentation lookup. Query in this order — stop at the first step that answers the question:
+
+1. **Ref MCP** — `mcp__claude_ai_ref__ref_search_documentation` then `mcp__claude_ai_ref__ref_read_url` on the top hit (fastest, token-efficient)
+2. **Context7** — via `/docs <library>` skill or `docs-lookup` agent
+3. **Exa** — via `exa-search` / `deep-research` skill for changelog + release notes
+4. **Firecrawl** — `firecrawl_scrape` on a known URL
+5. **SERP API** — last resort
+
+**Skip ONLY** for doc-only edits or internal refactors with no new dependencies / no new API surface.
+
+**Cite the source** (URL or `package@version`) in the commit body AND in `claude-progress.json` session notes so future sessions can trace which API snapshot the code was written against.
+
+---
+
 ## Agent Routing
 
 | Task | Agent | When |
@@ -105,6 +121,9 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 - Audit logs are append-only — NO update/delete
 - Presigned URLs are bearer tokens — short TTL
 - Conventional commits: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`
+- ALWAYS research latest API via Ref / Context7 / Exa / Firecrawl / SERP before writing code that touches any external library, SDK, framework API, or security pattern
+- Deprecated-API code is a BLOCKING review issue — treat like a security finding
+- Cite the source (URL or `package@version`) in the commit body and `claude-progress.json` session notes
 
 ## Progress Tracking
 

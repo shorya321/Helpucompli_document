@@ -4,14 +4,15 @@
 
 1. Read `feature_list.json` — pick the first feature with `passes: false` in the current module
 2. Read the module doc at `docs/modules/XX-module.md`
-3. Write test FIRST (RED) — file: `src/__tests__/<module>/<feature>.test.ts`
-4. Implement minimal code to pass (GREEN)
-5. Refactor if needed (IMPROVE)
-6. Run tests: `npm run test`
-7. If passing: update `feature_list.json` → set `passes: true`
-8. Git commit: `feat(<module>): <description>`
-9. Update `claude-progress.json` with session state
-10. Move to next feature
+3. **Research latest API (MANDATORY)** — identify every external library, SDK, framework API, or security pattern the feature touches; query Ref MCP first (`mcp__claude_ai_ref__ref_search_documentation` + `ref_read_url`), fall back to Context7 (`/docs`) → Exa (`exa-search` / `deep-research`) → Firecrawl → SERP. Capture source URL or `package@version` for the commit body. Skip ONLY for doc-only edits or internal-only refactors with no new deps.
+4. Write test FIRST (RED) — file: `src/__tests__/<module>/<feature>.test.ts`
+5. Implement minimal code to pass (GREEN)
+6. Refactor if needed (IMPROVE)
+7. Run tests: `npm run test`
+8. If passing: update `feature_list.json` → set `passes: true`
+9. Git commit: `feat(<module>): <description>` — commit body MUST include `Research:` citations for every external API touched
+10. Update `claude-progress.json` with session state (include research sources consulted)
+11. Move to next feature
 
 ## Auth0 Patterns (proxy.ts — SDK v4)
 

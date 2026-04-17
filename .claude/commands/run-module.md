@@ -29,16 +29,22 @@ Follow this EXACT sequence for module `$ARGUMENTS`:
 2. Read `feature_list.json` — filter features for this module, find first `passes: false`
 3. Read `docs/modules/<module_number>-*-module.md` — understand the full spec
 4. For EACH feature (one at a time):
-   a. **Write test FIRST** → `src/__tests__/<module>/<feature>.test.ts`
-   b. **Run test** → it should FAIL (RED)
-   c. **Implement minimal code** to pass (GREEN)
-   d. **Run test** → it should PASS
-   e. **Refactor** if needed (IMPROVE)
-   f. **Run `npm run test`** → verify nothing else broke
-   g. **Git commit** → `feat(<module>): <description>`
-   h. **Update `feature_list.json`** → set `passes: true` for this feature
-   i. **Update `claude-progress.json`** → record session state
-   j. **Move to next feature**
+   a. **Research first (MANDATORY)** — before writing any code:
+      - Identify every external API / SDK / framework / security pattern the feature touches
+      - Query **Ref MCP** (`mcp__claude_ai_ref__ref_search_documentation`) for current API signatures + deprecation notices; follow with `ref_read_url` on the top hit
+      - Fall back to **Context7** (`/docs` skill or `docs-lookup` agent) → **Exa** (`exa-search` / `deep-research`) → **Firecrawl** (`firecrawl_scrape`) → **SERP** in that order — stop at the first step that answers the question
+      - Capture the source (URL or `package@version`) — will be cited in the commit body and `claude-progress.json` session notes
+      - Skip ONLY for doc-only edits or pure internal refactors with no new deps / no new API surface
+   b. **Write test FIRST** → `src/__tests__/<module>/<feature>.test.ts`
+   c. **Run test** → it should FAIL (RED)
+   d. **Implement minimal code** to pass (GREEN)
+   e. **Run test** → it should PASS
+   f. **Refactor** if needed (IMPROVE)
+   g. **Run `npm run test`** → verify nothing else broke
+   h. **Git commit** → `feat(<module>): <description>` — commit body MUST include `Research:` citations (URL or `package@version`) for each external API touched
+   i. **Update `feature_list.json`** → set `passes: true` for this feature
+   j. **Update `claude-progress.json`** → record session state AND research sources consulted
+   k. **Move to next feature**
 
 ## Agent Routing
 
@@ -52,6 +58,9 @@ Follow this EXACT sequence for module `$ARGUMENTS`:
 ## Rules
 
 - ONE feature at a time — do NOT batch multiple features
+- **Research MUST precede code** for any feature touching an external library, SDK, framework API, or security pattern — Ref → Context7 → Exa → Firecrawl → SERP, stop at first answer
+- **Cite the Ref/Context7/Exa URL or `library@version`** in the commit message body and in `claude-progress.json` session notes
+- Skip research ONLY for doc-only edits or internal refactors with no new deps
 - Test MUST pass before marking feature done
 - Conventional commits: `feat(<module>): <description>`
 - Validate all API input with Zod
