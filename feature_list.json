@@ -221,14 +221,18 @@
           "id": "F3.4",
           "description": "S3 object operations (list, copy, delete)",
           "steps": [
-            "Implement ListObjectsV2 with prefix browsing",
-            "Implement HeadObject for metadata checking",
-            "Implement CopyObject for move/copy",
-            "Implement DeleteObject (soft delete via versioning)",
-            "Implement DeleteObjects for bulk operations",
-            "Test listing, copying, deleting objects"
+            "src/lib/s3-objects.ts: listObjects (ListObjectsV2) with configurable delimiter (default '/' for folder view, empty string for flat recursive — code-review MEDIUM fix to avoid F6 listing regressions), prefix + continuation pagination, maxKeys clamp [1..1000], normalized result shape (contents/commonPrefixes/nextContinuationToken/isTruncated)",
+            "listObjectVersions (ListObjectVersions) exposing Versions + DeleteMarkers merged into a single [{key,versionId,isLatest,isDeleteMarker,size,lastModified}] array — added for F6.5 superadmin hard-delete UX (code-review LOW fix — avoids future API route reaching past the facade)",
+            "headObject returns ObjectMetadata with allowlisted userMetadata (sec-review MEDIUM fix — ALLOWED_USER_METADATA_KEYS = {uploader, filename, tenant-id, content-type} drops every other x-amz-meta-* key as defense-in-depth against PHI leaking through the read path even if upload route validator fails)",
+            "copyObject: URL-encodes CopySource per-segment (preserves '/' separators, encodes spaces + non-ASCII), MetadataDirective: 'COPY' + sseKmsParams() — confirmed orthogonal per AWS docs, re-encrypts destination with OUR CMK regardless of source encryption",
+            "moveObject = copyObject then DeleteObject on source; copy failure leaves source untouched. If process crashes between copy and delete, both objects exist — accepted degraded state (no data loss, ops reconciles via versioning) documented in code comment",
+            "softDeleteObject vs hardDeleteObjectVersion split (sec-review MEDIUM fix — previously single deleteObject accepted optional versionId; footgun risk of accidental hard-delete from lower-privilege route). softDeleteObject omits VersionId (places delete marker). hardDeleteObjectVersion requires non-empty versionId (validated), named explicitly to signal superadmin-only intent so accidental import is impossible",
+            "deleteObjects bulk: input key validation, 1000-key batch cap (S3 API limit), Promise.all parallelization across batches (code-review HIGH fix — was sequential; 2500 keys now 1 round-trip instead of 3). Aggregates Deleted + Errors across all batches",
+            "Key validation (assertKey) rejects: empty, '..' segments, '/' leading, trailing, or consecutive (empty-segment guard — code-review MEDIUM fix for encodeCopySource edge case with folder-marker keys like 'folder/')",
+            "InvalidObjectTargetError custom class with {bucket|key|prefix|keys} target union for consistent error surface",
+            "19 tests: listObjects folder + flat + prefix/continuation + maxKeys clamp + invalid-prefix, listObjectVersions merge + pagination, headObject allowlist filter (verifies phi-ssn + unauthorized-key dropped) + 5 invalid-key variants, copyObject URL encoding + SSE-KMS on dest + invalid-target rejection (empty / traversal / empty-segment), moveObject ordering + no-delete-on-copy-failure, softDeleteObject + hardDeleteObjectVersion separation + versionId requirement, deleteObjects 3-key batch + 2500-key parallel batching + Deleted/Errors aggregation + empty-array + traversal rejection"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F3.5",
