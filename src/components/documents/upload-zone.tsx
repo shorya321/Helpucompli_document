@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useDropzone, type FileRejection } from "react-dropzone";
 import { BRAND } from "@/lib/brand";
 import {
@@ -82,6 +83,7 @@ export function UploadZone({
   folderPrefix,
   onComplete,
 }: UploadZoneProps) {
+  const router = useRouter();
   const [status, setStatus] = useState<UploadStatus>({ phase: "idle" });
 
   const uploadOne = useCallback(
@@ -232,9 +234,12 @@ export function UploadZone({
           return;
         }
       }
+      // Refresh server component data so the new file appears in
+      // FileList + FileTree without a manual browser reload.
+      router.refresh();
       onComplete?.();
     },
-    [uploadOne, onComplete],
+    [uploadOne, onComplete, router],
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
