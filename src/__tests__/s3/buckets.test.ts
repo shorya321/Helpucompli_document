@@ -4,6 +4,7 @@ import {
   ListBucketsCommand,
   ListMultipartUploadsCommand,
   ListObjectsV2Command,
+  PutBucketCorsCommand,
   PutBucketEncryptionCommand,
   PutBucketLoggingCommand,
   PutBucketOwnershipControlsCommand,
@@ -217,6 +218,48 @@ describe("F3.2 — createHipaaBucket auto-config", () => {
     expect(deny.Effect).toBe("Deny");
     expect(deny.Principal).toBe("*");
     expect(deny.Condition.NumericLessThan["s3:TlsVersion"]).toBe("1.2");
+  });
+
+  it("applies CORS policy allowing APP_BASE_URL + SSE-KMS headers + ETag exposure", async () => {
+    stubAll();
+    const { createHipaaBucket, s3Send } = await importBucketsWithMocks();
+    await createHipaaBucket({ name: "helpucompli-docs-acme" });
+    const [call] = commandCalls(s3Send, PutBucketCorsCommand);
+    expect(call).toBeDefined();
+    const cfg = call.input.CORSConfiguration as {
+      CORSRules: Array<{
+        AllowedOrigins: string[];
+        AllowedMethods: string[];
+        AllowedHeaders: string[];
+        ExposeHeaders: string[];
+        MaxAgeSeconds: number;
+      }>;
+    };
+    expect(cfg.CORSRules).toHaveLength(1);
+    const r = cfg.CORSRules[0]!;
+    expect(r.AllowedOrigins).toEqual(["http://localhost:3000"]);
+    expect(r.AllowedMethods).toEqual(expect.arrayContaining(["PUT", "GET", "HEAD"]));
+    expect(r.AllowedHeaders).toEqual(
+      expect.arrayContaining([
+        "content-type",
+        "x-amz-server-side-encryption",
+        "x-amz-server-side-encryption-aws-kms-key-id",
+        "x-amz-server-side-encryption-bucket-key-enabled",
+      ]),
+    );
+    expect(r.ExposeHeaders).toEqual(expect.arrayContaining(["ETag"]));
+    expect(r.MaxAgeSeconds).toBeGreaterThan(0);
+  });
+
+  it("CORS AllowedOrigins never wildcards '*' (HIPAA origin scoping)", async () => {
+    stubAll();
+    const { createHipaaBucket, s3Send } = await importBucketsWithMocks();
+    await createHipaaBucket({ name: "helpucompli-docs-acme" });
+    const [call] = commandCalls(s3Send, PutBucketCorsCommand);
+    const cfg = call.input.CORSConfiguration as {
+      CORSRules: Array<{ AllowedOrigins: string[] }>;
+    };
+    expect(cfg.CORSRules[0]!.AllowedOrigins).not.toContain("*");
   });
 
   it("applies AbortIncompleteMultipartUpload lifecycle rule (7 days)", async () => {

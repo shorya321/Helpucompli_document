@@ -95,6 +95,11 @@ export function buildAppRolePolicy(args: {
           "s3:GetLifecycleConfiguration",
           "s3:PutBucketTagging",
           "s3:GetBucketTagging",
+          // CORS is required by the browser direct-PUT upload flow (F6.2)
+          // — without PutBucketCORS the bucket rejects preflight and
+          // uploads fail with XHR "Network error".
+          "s3:PutBucketCORS",
+          "s3:GetBucketCORS",
         ],
         Resource: BUCKET_ARN_PATTERN,
       },

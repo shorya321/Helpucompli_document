@@ -1,10 +1,12 @@
 import {
   type BucketLocationConstraint,
+  type CORSConfiguration,
   CreateBucketCommand,
   DeleteBucketCommand,
   ListBucketsCommand,
   ListMultipartUploadsCommand,
   ListObjectsV2Command,
+  PutBucketCorsCommand,
   PutBucketEncryptionCommand,
   PutBucketLifecycleConfigurationCommand,
   PutBucketLoggingCommand,
@@ -70,6 +72,46 @@ export interface CreateHipaaBucketResult {
 }
 
 export const HIPAA_LOG_PREFIX = "s3-access-logs/";
+
+// CORS configuration shared by createHipaaBucket + the retrofit script +
+// the compliance verifier. Kept as a pure builder so every surface agrees
+// on the exact rule set — drift between provisioning and drift-check
+// would produce false-positive "drift" reports.
+//
+// Browser upload flow signs SSE-KMS headers via presignPutUrl, so the
+// CORS rule MUST allow those headers on preflight or the PUT never
+// leaves the browser (XHR.onerror fires as "Network error during
+// upload"). ExposeHeaders=ETag is required for multipart upload parts
+// to report their ETag back to the client for CompleteMultipartUpload.
+// AllowedOrigins is pinned to APP_BASE_URL — never '*' because the
+// bucket holds PHI and the browser-credentials model relies on origin
+// scoping.
+export function buildHipaaCorsConfiguration(appBaseUrl: string): CORSConfiguration {
+  return {
+    CORSRules: [
+      {
+        AllowedOrigins: [appBaseUrl],
+        AllowedMethods: ["PUT", "GET", "HEAD"],
+        AllowedHeaders: [
+          "content-type",
+          "authorization",
+          "x-amz-content-sha256",
+          "x-amz-date",
+          "x-amz-server-side-encryption",
+          "x-amz-server-side-encryption-aws-kms-key-id",
+          "x-amz-server-side-encryption-bucket-key-enabled",
+          "x-amz-user-agent",
+          "x-amz-checksum-crc32",
+          "x-amz-checksum-crc32c",
+          "x-amz-checksum-sha1",
+          "x-amz-checksum-sha256",
+        ],
+        ExposeHeaders: ["ETag", "x-amz-version-id"],
+        MaxAgeSeconds: 3000,
+      },
+    ],
+  };
+}
 
 // AbortIncompleteMultipartUpload lifecycle rule — safety net for F3.5
 // abandoned multipart uploads (client disconnects, server crashes). 7 days
@@ -144,7 +186,11 @@ export function buildHipaaDataEventSelectors(): AdvancedEventSelector[] {
 //   7. PutBucketPolicy — deny non-HTTPS + deny TLS < 1.2.
 //   8. PutBucketLifecycleConfiguration — AbortIncompleteMultipartUpload
 //      safety net for F3.5 abandoned uploads.
-//   9. CloudTrail: PutEventSelectorsCommand with AdvancedEventSelectors
+//   9. PutBucketCors — allow browser direct-PUT uploads from
+//      APP_BASE_URL with SSE-KMS headers + content-type signed. Without
+//      this the browser preflight fails and uploads error as
+//      "Network error" (F6.2 bug fix).
+//  10. CloudTrail: PutEventSelectorsCommand with AdvancedEventSelectors
 //      covering the entire helpucompli-docs-* prefix — idempotent across
 //      bucket creations (no per-bucket merge needed).
 //
@@ -255,6 +301,16 @@ export async function createHipaaBucket(
             },
           ],
         },
+      }),
+    );
+
+    // F6.2 fix: browser direct-PUT uploads rely on S3 CORS. Preflight
+    // for PUT with SSE-KMS headers and content-type MUST be allowed
+    // from APP_BASE_URL or the upload fails with XHR "Network error".
+    await s3.send(
+      new PutBucketCorsCommand({
+        Bucket,
+        CORSConfiguration: buildHipaaCorsConfiguration(cfg.APP_BASE_URL),
       }),
     );
   } catch (err) {
