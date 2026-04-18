@@ -358,7 +358,7 @@
             "Filter by region, status",
             "Viewer sees only assigned buckets"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F5.2",
