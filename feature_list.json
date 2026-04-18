@@ -383,7 +383,7 @@
             "Show access policies applied to this bucket",
             "Show recent documents in this bucket"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F5.4",
