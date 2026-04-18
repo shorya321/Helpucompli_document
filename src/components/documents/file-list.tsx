@@ -3,10 +3,8 @@ import { BRAND } from "@/lib/brand";
 import { formatStorage } from "@/components/buckets/bucket-card";
 import { buildBreadcrumb } from "@/lib/documents-browse";
 import { DownloadButton } from "@/components/documents/download-button";
-import {
-  ContextMenu,
-  buildDocumentMenu,
-} from "@/components/documents/context-menu";
+import { ContextMenu } from "@/components/documents/context-menu";
+import { buildDocumentMenu } from "@/components/documents/context-menu-items";
 
 export type FileListEntry =
   | {

@@ -1,10 +1,8 @@
 /** @vitest-environment node */
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
-import {
-  ContextMenu,
-  buildDocumentMenu,
-} from "@/components/documents/context-menu";
+import { ContextMenu } from "@/components/documents/context-menu";
+import { buildDocumentMenu } from "@/components/documents/context-menu-items";
 
 describe("buildDocumentMenu", () => {
   it("produces the standard action set", () => {
