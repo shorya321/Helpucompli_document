@@ -485,7 +485,7 @@
             "Test soft delete hides document but recoverable",
             "Test hard delete requires superadmin"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F6.6",
