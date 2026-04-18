@@ -447,7 +447,7 @@
             "Maximum file size 5 GB enforced",
             "Log DOCUMENT_UPLOAD in audit trail"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F6.3",

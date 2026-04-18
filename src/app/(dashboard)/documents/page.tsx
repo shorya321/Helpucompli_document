@@ -17,6 +17,7 @@ import {
   FileList,
   type FileListEntry,
 } from "@/components/documents/file-list";
+import { UploadZone } from "@/components/documents/upload-zone";
 
 export const dynamic = "force-dynamic";
 
@@ -180,12 +181,20 @@ export default async function DocumentsPage({ searchParams }: PageProps) {
         ) : listError ? (
           <EmptyPanel message="Unable to load this folder. Please try again." />
         ) : (
-          <FileList
-            bucket={inScope.name}
-            prefix={q.prefix}
-            entries={entries}
-            view={q.view}
-          />
+          <>
+            {role === "superadmin" || role === "admin" ? (
+              <UploadZone
+                bucketId={inScope.id}
+                folderPrefix={q.prefix}
+              />
+            ) : null}
+            <FileList
+              bucket={inScope.name}
+              prefix={q.prefix}
+              entries={entries}
+              view={q.view}
+            />
+          </>
         )}
       </div>
     </section>
