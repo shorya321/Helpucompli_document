@@ -10,11 +10,14 @@ import {
 } from "@/lib/document-upload";
 import { presignPutUrl } from "@/lib/s3-presign";
 import {
+  abortMultipartUpload,
   initiateMultipartUpload,
   planMultipartParts,
   presignUploadPart,
 } from "@/lib/s3-multipart";
 import { createRateLimiter } from "@/lib/rate-limit";
+import { issueUploadReceipt } from "@/lib/upload-receipt";
+import { ensureUser } from "@/lib/ensure-user";
 import type { ApiResponse } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +37,7 @@ type UploadUrlResponse =
       readonly mode: "simple";
       readonly s3Key: string;
       readonly url: string;
+      readonly receipt: string;
       readonly expiresIn: number;
     }
   | {
@@ -41,8 +45,25 @@ type UploadUrlResponse =
       readonly s3Key: string;
       readonly uploadId: string;
       readonly parts: ReadonlyArray<{ readonly partNumber: number; readonly url: string }>;
+      readonly receipt: string;
       readonly expiresIn: number;
     };
+
+// Access check for non-superadmin roles. Admins are scoped per-bucket via
+// UserBucketAccess — an admin without an access row for bucketId MUST
+// NOT be able to upload to it. Superadmin is tenant-wide by design.
+async function canWriteBucket(
+  role: "superadmin" | "admin",
+  userId: string,
+  bucketId: string,
+): Promise<boolean> {
+  if (role === "superadmin") return true;
+  const access = await prisma.userBucketAccess.findFirst({
+    where: { userId, bucketId },
+    select: { userId: true },
+  });
+  return access !== null;
+}
 
 function json(body: ApiResponse<UploadUrlResponse | null>, status: number, extra?: Record<string, string>) {
   return NextResponse.json(body, {
@@ -103,6 +124,18 @@ export async function POST(req: NextRequest) {
     return json({ data: null, error: "Bucket is inactive" }, 409);
   }
 
+  // Per-bucket access check. Admin MUST have a UserBucketAccess row for
+  // this bucket — without this an admin of tenant A could upload into
+  // tenant B's bucket. Superadmin is tenant-wide by design.
+  const dbUser = await ensureUser(prisma, {
+    session,
+    role: role === "superadmin" ? "superadmin" : "admin",
+  });
+  const allowed = await canWriteBucket(role, dbUser.id, bucket.id);
+  if (!allowed) {
+    return json({ data: null, error: "Forbidden" }, 403);
+  }
+
   // UUID-prefixed key prevents overwrite collisions when the same
   // filename is uploaded twice. Filename is sanitized before being
   // embedded in the key to avoid traversal + control-char issues.
@@ -123,9 +156,13 @@ export async function POST(req: NextRequest) {
         contentType: input.contentType,
         ttlSeconds: expiresIn,
       });
+      const receipt = issueUploadReceipt(
+        { sub, bucketId: bucket.id, s3Key },
+        expiresIn,
+      );
       return json(
         {
-          data: { mode: "simple", s3Key, url, expiresIn },
+          data: { mode: "simple", s3Key, url, receipt, expiresIn },
           error: null,
         },
         200,
@@ -139,17 +176,36 @@ export async function POST(req: NextRequest) {
       declaredSizeBytes: input.sizeBytes,
     });
     const plan = planMultipartParts(input.sizeBytes);
-    const parts = await Promise.all(
-      plan.parts.map(async (p) => ({
-        partNumber: p.partNumber,
-        url: await presignUploadPart({
-          bucket: bucket.name,
-          key: s3Key,
-          uploadId: init.uploadId,
+    let parts: ReadonlyArray<{ partNumber: number; url: string }>;
+    try {
+      parts = await Promise.all(
+        plan.parts.map(async (p) => ({
           partNumber: p.partNumber,
-          ttlSeconds: expiresIn,
-        }),
-      })),
+          url: await presignUploadPart({
+            bucket: bucket.name,
+            key: s3Key,
+            uploadId: init.uploadId,
+            partNumber: p.partNumber,
+            ttlSeconds: expiresIn,
+          }),
+        })),
+      );
+    } catch (err) {
+      // Part signing failed AFTER CreateMultipartUpload — abort
+      // immediately so the pending parts don't accrue storage until
+      // the 7-day lifecycle rule sweeps them.
+      await abortMultipartUpload({
+        bucket: bucket.name,
+        key: s3Key,
+        uploadId: init.uploadId,
+      }).catch(() => {
+        /* best-effort — 7-day lifecycle sweeps the remainder */
+      });
+      throw err;
+    }
+    const receipt = issueUploadReceipt(
+      { sub, bucketId: bucket.id, s3Key, uploadId: init.uploadId },
+      expiresIn,
     );
     return json(
       {
@@ -158,6 +214,7 @@ export async function POST(req: NextRequest) {
           s3Key,
           uploadId: init.uploadId,
           parts,
+          receipt,
           expiresIn,
         },
         error: null,

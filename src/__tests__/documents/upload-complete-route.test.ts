@@ -4,11 +4,13 @@ const mocks = vi.hoisted(() => ({
   getSession: vi.fn(),
   findUniqueBucket: vi.fn(),
   upsertUser: vi.fn(),
+  findFirstBucketAccess: vi.fn(),
   transaction: vi.fn(),
   completeMultipartUpload: vi.fn(),
   headObject: vi.fn(),
   documentCreate: vi.fn(),
   auditLogCreate: vi.fn(),
+  verifyReceipt: vi.fn(),
 }));
 
 vi.mock("@/lib/auth0", () => ({
@@ -19,9 +21,21 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     bucket: { findUnique: mocks.findUniqueBucket },
     user: { upsert: mocks.upsertUser },
+    userBucketAccess: { findFirst: mocks.findFirstBucketAccess },
     $transaction: mocks.transaction,
   },
 }));
+
+vi.mock("@/lib/upload-receipt", async () => {
+  const actual =
+    await vi.importActual<typeof import("@/lib/upload-receipt")>(
+      "@/lib/upload-receipt",
+    );
+  return {
+    ...actual,
+    verifyUploadReceipt: mocks.verifyReceipt,
+  };
+});
 
 vi.mock("@/lib/s3-multipart", async () => {
   const actual =
@@ -76,6 +90,7 @@ const validBody = {
   filename: "report.pdf",
   contentType: "application/pdf",
   sizeBytes: 2048,
+  receipt: "stub-payload.stub-sig",
 };
 
 function req(payload: unknown, headers?: Record<string, string>) {
@@ -99,6 +114,11 @@ function txStub() {
       auditLog: { create: mocks.auditLogCreate },
     });
   });
+}
+
+function okDefaults() {
+  mocks.verifyReceipt.mockReturnValue(true);
+  mocks.findFirstBucketAccess.mockResolvedValue({ userId: "user-1" });
 }
 
 describe("POST /api/s3/upload-complete", () => {
@@ -126,8 +146,19 @@ describe("POST /api/s3/upload-complete", () => {
     expect(res.status).toBe(400);
   });
 
+  it("401 when receipt is missing/invalid", async () => {
+    mocks.getSession.mockResolvedValue(admin());
+    mocks.verifyReceipt.mockImplementation(() => {
+      const { InvalidUploadReceiptError } = require("@/lib/upload-receipt");
+      throw new InvalidUploadReceiptError("signature mismatch");
+    });
+    const res = await POST(req(validBody));
+    expect(res.status).toBe(401);
+  });
+
   it("404 when bucket not found", async () => {
     mocks.getSession.mockResolvedValue(admin());
+    okDefaults();
     mocks.findUniqueBucket.mockResolvedValue(null);
     const res = await POST(req(validBody));
     expect(res.status).toBe(404);
@@ -135,6 +166,7 @@ describe("POST /api/s3/upload-complete", () => {
 
   it("409 when bucket inactive", async () => {
     mocks.getSession.mockResolvedValue(admin());
+    okDefaults();
     mocks.findUniqueBucket.mockResolvedValue({
       id: BUCKET_ID,
       name: "helpucompli-docs-acme",
@@ -144,15 +176,29 @@ describe("POST /api/s3/upload-complete", () => {
     expect(res.status).toBe(409);
   });
 
-  it("422 when S3 has no object at key (upload failed/aborted)", async () => {
+  it("403 when admin lost UserBucketAccess", async () => {
     mocks.getSession.mockResolvedValue(admin());
+    mocks.verifyReceipt.mockReturnValue(true);
+    mocks.findFirstBucketAccess.mockResolvedValue(null);
     mocks.findUniqueBucket.mockResolvedValue({
       id: BUCKET_ID,
       name: "helpucompli-docs-acme",
       isActive: true,
     });
     mocks.upsertUser.mockResolvedValue({ id: "user-1" });
-    // headObject throws (S3 returns NotFound)
+    const res = await POST(req(validBody));
+    expect(res.status).toBe(403);
+  });
+
+  it("422 when S3 has no object at key (upload failed/aborted)", async () => {
+    mocks.getSession.mockResolvedValue(admin());
+    okDefaults();
+    mocks.findUniqueBucket.mockResolvedValue({
+      id: BUCKET_ID,
+      name: "helpucompli-docs-acme",
+      isActive: true,
+    });
+    mocks.upsertUser.mockResolvedValue({ id: "user-1" });
     mocks.headObject.mockRejectedValue(
       Object.assign(new Error("NotFound"), { name: "NotFound" }),
     );
@@ -160,8 +206,23 @@ describe("POST /api/s3/upload-complete", () => {
     expect(res.status).toBe(422);
   });
 
+  it("422 when S3 headObject has no contentLength (fail closed)", async () => {
+    mocks.getSession.mockResolvedValue(admin());
+    okDefaults();
+    mocks.findUniqueBucket.mockResolvedValue({
+      id: BUCKET_ID,
+      name: "helpucompli-docs-acme",
+      isActive: true,
+    });
+    mocks.upsertUser.mockResolvedValue({ id: "user-1" });
+    mocks.headObject.mockResolvedValue({ contentLength: undefined });
+    const res = await POST(req(validBody));
+    expect(res.status).toBe(422);
+  });
+
   it("201 writes Document + audit in a transaction (simple upload)", async () => {
     mocks.getSession.mockResolvedValue(admin());
+    okDefaults();
     mocks.findUniqueBucket.mockResolvedValue({
       id: BUCKET_ID,
       name: "helpucompli-docs-acme",
@@ -187,6 +248,7 @@ describe("POST /api/s3/upload-complete", () => {
 
   it("400 when sizeBytes mismatches S3 headObject contentLength", async () => {
     mocks.getSession.mockResolvedValue(admin());
+    okDefaults();
     mocks.findUniqueBucket.mockResolvedValue({
       id: BUCKET_ID,
       name: "helpucompli-docs-acme",
@@ -200,6 +262,7 @@ describe("POST /api/s3/upload-complete", () => {
 
   it("calls completeMultipartUpload first when multipart payload given", async () => {
     mocks.getSession.mockResolvedValue(admin());
+    okDefaults();
     mocks.findUniqueBucket.mockResolvedValue({
       id: BUCKET_ID,
       name: "helpucompli-docs-acme",
@@ -232,6 +295,7 @@ describe("POST /api/s3/upload-complete", () => {
 
   it("500 generic when DB throws", async () => {
     mocks.getSession.mockResolvedValue(admin());
+    okDefaults();
     mocks.findUniqueBucket.mockResolvedValue({
       id: BUCKET_ID,
       name: "helpucompli-docs-acme",

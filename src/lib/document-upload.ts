@@ -125,6 +125,11 @@ export const uploadCompleteRequestSchema = z.object({
   filename: z.string().min(1).max(MAX_FILENAME_LENGTH),
   contentType: z.string().regex(SAFE_CONTENT_TYPE_RE, "invalid contentType"),
   sizeBytes: z.number().int().positive().max(MAX_FILE_SIZE_BYTES),
+  // HMAC receipt issued by /api/s3/upload-url. Binds the caller sub +
+  // bucketId + s3Key + optional uploadId so the complete route cannot
+  // be abused to register an arbitrary existing S3 object as a new
+  // document. See src/lib/upload-receipt.ts.
+  receipt: z.string().min(1).max(4096),
   multipart: z
     .object({
       uploadId: z.string().min(1).max(1024),
@@ -138,6 +143,13 @@ export const uploadCompleteRequestSchema = z.object({
         .min(1),
     })
     .optional(),
+});
+
+export const uploadAbortRequestSchema = z.object({
+  bucketId: z.string().uuid(),
+  s3Key: s3KeySchema,
+  uploadId: z.string().min(1).max(1024),
+  receipt: z.string().min(1).max(4096),
 });
 
 export type UploadCompleteRequest = z.infer<typeof uploadCompleteRequestSchema>;

@@ -3,11 +3,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getSession: vi.fn(),
   findUniqueBucket: vi.fn(),
-  findUniqueUser: vi.fn(),
+  upsertUser: vi.fn(),
   findFirstBucketAccess: vi.fn(),
   presignPutUrl: vi.fn(),
   initiateMultipartUpload: vi.fn(),
   presignUploadPart: vi.fn(),
+  abortMultipartUpload: vi.fn(),
 }));
 
 vi.mock("@/lib/auth0", () => ({
@@ -17,7 +18,7 @@ vi.mock("@/lib/auth0", () => ({
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     bucket: { findUnique: mocks.findUniqueBucket },
-    user: { findUnique: mocks.findUniqueUser },
+    user: { upsert: mocks.upsertUser },
     userBucketAccess: { findFirst: mocks.findFirstBucketAccess },
   },
 }));
@@ -38,8 +39,15 @@ vi.mock("@/lib/s3-multipart", async () => {
     ...actual,
     initiateMultipartUpload: mocks.initiateMultipartUpload,
     presignUploadPart: mocks.presignUploadPart,
+    abortMultipartUpload: mocks.abortMultipartUpload,
   };
 });
+
+vi.mock("@/lib/upload-receipt", () => ({
+  issueUploadReceipt: vi.fn(() => "stub-payload.stub-sig"),
+  verifyUploadReceipt: vi.fn(() => true),
+  InvalidUploadReceiptError: class extends Error {},
+}));
 
 import { POST } from "@/app/api/s3/upload-url/route";
 import { NextRequest } from "next/server";
@@ -150,6 +158,7 @@ describe("POST /api/s3/upload-url", () => {
       name: "helpucompli-docs-acme",
       isActive: true,
     });
+    mocks.upsertUser.mockResolvedValue({ id: "user-su" });
     mocks.presignPutUrl.mockResolvedValue("https://s3/signed-put");
     const res = await POST(req(validBody));
     expect(res.status).toBe(200);
@@ -157,6 +166,35 @@ describe("POST /api/s3/upload-url", () => {
     expect(body.data.mode).toBe("simple");
     expect(body.data.url).toBe("https://s3/signed-put");
     expect(body.data.s3Key).toMatch(/-report\.pdf$/);
+    expect(body.data.receipt).toMatch(/\./);
+  });
+
+  it("403 when admin lacks UserBucketAccess for the target bucket", async () => {
+    mocks.getSession.mockResolvedValue(admin());
+    mocks.findUniqueBucket.mockResolvedValue({
+      id: BUCKET_ID,
+      name: "helpucompli-docs-foreign",
+      isActive: true,
+    });
+    mocks.upsertUser.mockResolvedValue({ id: "user-admin" });
+    mocks.findFirstBucketAccess.mockResolvedValue(null);
+    const res = await POST(req(validBody));
+    expect(res.status).toBe(403);
+    expect(mocks.presignPutUrl).not.toHaveBeenCalled();
+  });
+
+  it("200 when admin HAS UserBucketAccess for the target bucket", async () => {
+    mocks.getSession.mockResolvedValue(admin());
+    mocks.findUniqueBucket.mockResolvedValue({
+      id: BUCKET_ID,
+      name: "helpucompli-docs-acme",
+      isActive: true,
+    });
+    mocks.upsertUser.mockResolvedValue({ id: "user-admin" });
+    mocks.findFirstBucketAccess.mockResolvedValue({ userId: "user-admin" });
+    mocks.presignPutUrl.mockResolvedValue("https://s3/signed");
+    const res = await POST(req(validBody));
+    expect(res.status).toBe(200);
   });
 
   it("returns multipart plan for files > 100 MB", async () => {
@@ -166,6 +204,7 @@ describe("POST /api/s3/upload-url", () => {
       name: "helpucompli-docs-acme",
       isActive: true,
     });
+    mocks.upsertUser.mockResolvedValue({ id: "user-su" });
     mocks.initiateMultipartUpload.mockResolvedValue({ uploadId: "uid-1" });
     mocks.presignUploadPart.mockImplementation((args: { partNumber: number }) =>
       Promise.resolve(`https://s3/part-${args.partNumber}`),
@@ -186,13 +225,15 @@ describe("POST /api/s3/upload-url", () => {
     expect(body.data.parts[0]).toEqual({ partNumber: 1, url: "https://s3/part-1" });
   });
 
-  it("admin is allowed", async () => {
+  it("admin with bucket access is allowed", async () => {
     mocks.getSession.mockResolvedValue(admin());
     mocks.findUniqueBucket.mockResolvedValue({
       id: BUCKET_ID,
       name: "helpucompli-docs-acme",
       isActive: true,
     });
+    mocks.upsertUser.mockResolvedValue({ id: "user-admin" });
+    mocks.findFirstBucketAccess.mockResolvedValue({ userId: "user-admin" });
     mocks.presignPutUrl.mockResolvedValue("https://s3/signed");
     const res = await POST(req(validBody));
     expect(res.status).toBe(200);
@@ -205,6 +246,7 @@ describe("POST /api/s3/upload-url", () => {
       name: "helpucompli-docs-acme",
       isActive: true,
     });
+    mocks.upsertUser.mockResolvedValue({ id: "user-su" });
     mocks.presignPutUrl.mockRejectedValue(
       new Error("engine://secret/DATABASE_URL leak"),
     );
@@ -222,6 +264,7 @@ describe("POST /api/s3/upload-url", () => {
       name: "helpucompli-docs-acme",
       isActive: true,
     });
+    mocks.upsertUser.mockResolvedValue({ id: "user-su" });
     mocks.presignPutUrl.mockResolvedValue("https://s3/signed");
     const r1 = await POST(req(validBody));
     const r2 = await POST(req(validBody));

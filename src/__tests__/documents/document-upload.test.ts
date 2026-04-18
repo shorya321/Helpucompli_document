@@ -175,6 +175,7 @@ describe("uploadCompleteRequestSchema", () => {
     filename: "report.pdf",
     contentType: "application/pdf",
     sizeBytes: 2048,
+    receipt: "stub-payload.stub-sig",
   };
 
   it("accepts a well-formed simple-upload payload", () => {

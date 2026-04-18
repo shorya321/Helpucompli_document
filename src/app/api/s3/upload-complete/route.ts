@@ -7,6 +7,10 @@ import { uploadCompleteRequestSchema } from "@/lib/document-upload";
 import { completeMultipartUpload } from "@/lib/s3-multipart";
 import { headObject } from "@/lib/s3-objects";
 import { createRateLimiter } from "@/lib/rate-limit";
+import {
+  InvalidUploadReceiptError,
+  verifyUploadReceipt,
+} from "@/lib/upload-receipt";
 import type { ApiResponse } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -86,6 +90,25 @@ export async function POST(req: NextRequest) {
   }
   const input = parsed.data;
 
+  // Verify the HMAC receipt BEFORE touching the DB or S3. Binds this
+  // complete call to a prior /api/s3/upload-url for (sub, bucketId,
+  // s3Key, uploadId?). Forged s3Keys and replayed tokens are rejected
+  // here — closes the "upload-complete without prior upload-url" hole
+  // (C2 in F6.2 security review).
+  try {
+    verifyUploadReceipt(input.receipt, {
+      sub,
+      bucketId: input.bucketId,
+      s3Key: input.s3Key,
+      uploadId: input.multipart?.uploadId,
+    });
+  } catch (err) {
+    if (err instanceof InvalidUploadReceiptError) {
+      return json({ data: null, error: "Invalid upload receipt" }, 401);
+    }
+    return json({ data: null, error: "Invalid upload receipt" }, 401);
+  }
+
   const bucket = await prisma.bucket.findUnique({
     where: { id: input.bucketId },
     select: { id: true, name: true, isActive: true },
@@ -99,6 +122,17 @@ export async function POST(req: NextRequest) {
     session,
     role: role === "superadmin" ? "superadmin" : "admin",
   });
+
+  // Per-bucket access check. Receipt already bound this call to the
+  // issuing user, but we re-check here in case the user's access was
+  // revoked between upload-url and upload-complete.
+  if (role !== "superadmin") {
+    const access = await prisma.userBucketAccess.findFirst({
+      where: { userId: dbUser.id, bucketId: bucket.id },
+      select: { userId: true },
+    });
+    if (!access) return json({ data: null, error: "Forbidden" }, 403);
+  }
 
   // Close out the multipart session FIRST. S3 rejects malformed parts
   // here (wrong order / wrong ETags) so we fail the request before
@@ -139,13 +173,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Declared size MUST match the byte count S3 observed. A mismatch
-  // means the client sent a forged or truncated payload; reject rather
-  // than store a misleading sizeBytes.
-  if (
-    typeof headContentLength === "number" &&
-    headContentLength !== input.sizeBytes
-  ) {
+  // Declared size MUST match the byte count S3 observed. Fail closed if
+  // S3 did not return ContentLength (the SDK / object type can omit it)
+  // — absence means we cannot prove integrity and HIPAA 164.312(c)(1)
+  // demands we reject rather than trust the client value.
+  if (typeof headContentLength !== "number") {
+    return json(
+      { data: null, error: "S3 did not return object size" },
+      422,
+    );
+  }
+  if (headContentLength !== input.sizeBytes) {
     return json(
       { data: null, error: "Size mismatch between client claim and S3 object" },
       400,

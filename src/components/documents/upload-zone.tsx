@@ -26,6 +26,7 @@ interface UploadUrlResponse {
         readonly mode: "simple";
         readonly s3Key: string;
         readonly url: string;
+        readonly receipt: string;
         readonly expiresIn: number;
       }
     | {
@@ -33,6 +34,7 @@ interface UploadUrlResponse {
         readonly s3Key: string;
         readonly uploadId: string;
         readonly parts: ReadonlyArray<{ readonly partNumber: number; readonly url: string }>;
+        readonly receipt: string;
         readonly expiresIn: number;
       }
     | null;
@@ -111,33 +113,57 @@ export function UploadZone({
           filename: file.name,
           contentType: file.type || "application/octet-stream",
           sizeBytes: file.size,
+          receipt: data.receipt,
         };
       } else {
         const totalParts = data.parts.length;
         const partSize = Math.ceil(file.size / totalParts);
         const partResults: Array<{ partNumber: number; etag: string }> = [];
-        for (const p of data.parts) {
-          const start = (p.partNumber - 1) * partSize;
-          const end = Math.min(start + partSize, file.size);
-          const slice = file.slice(start, end);
-          // Per-part Content-Type is not set — S3 requires no
-          // content-type on UploadPart; only CreateMultipartUpload carries
-          // it. Sending it here would cause a SignatureDoesNotMatch.
-          const { etag } = await uploadWithProgress(
-            p.url,
-            slice,
-            "",
-            (partPct) => {
-              const overall =
-                ((p.partNumber - 1 + partPct / 100) / totalParts) * 100;
-              setStatus({
-                phase: "uploading",
-                filename: file.name,
-                pct: overall,
-              });
-            },
-          );
-          partResults.push({ partNumber: p.partNumber, etag });
+        try {
+          for (const p of data.parts) {
+            const start = (p.partNumber - 1) * partSize;
+            const end = Math.min(start + partSize, file.size);
+            const slice = file.slice(start, end);
+            // Per-part Content-Type is not set — S3 requires no
+            // content-type on UploadPart; only CreateMultipartUpload carries
+            // it. Sending it here would cause a SignatureDoesNotMatch.
+            const { etag } = await uploadWithProgress(
+              p.url,
+              slice,
+              "",
+              (partPct) => {
+                const overall =
+                  ((p.partNumber - 1 + partPct / 100) / totalParts) * 100;
+                setStatus({
+                  phase: "uploading",
+                  filename: file.name,
+                  pct: overall,
+                });
+              },
+            );
+            if (!etag) {
+              throw new Error(
+                "S3 did not return ETag (check bucket CORS ExposeHeaders includes 'ETag')",
+              );
+            }
+            partResults.push({ partNumber: p.partNumber, etag });
+          }
+        } catch (partErr) {
+          // Best-effort abort so orphaned parts don't accrue storage
+          // until the 7-day lifecycle rule sweeps them.
+          await fetch("/api/s3/upload-abort", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              bucketId,
+              s3Key: data.s3Key,
+              uploadId: data.uploadId,
+              receipt: data.receipt,
+            }),
+          }).catch(() => {
+            /* best-effort — lifecycle fallback */
+          });
+          throw partErr;
         }
         completePayload = {
           bucketId,
@@ -145,6 +171,7 @@ export function UploadZone({
           filename: file.name,
           contentType: file.type || "application/octet-stream",
           sizeBytes: file.size,
+          receipt: data.receipt,
           multipart: {
             uploadId: data.uploadId,
             parts: partResults,
