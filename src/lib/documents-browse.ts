@@ -30,15 +30,33 @@ function firstValue(v: string | string[] | undefined): string | undefined {
 // Normalise a URL-supplied prefix. Returns "" for any unsafe input so
 // the browser cannot be tricked into issuing an S3 list against a
 // traversal-style key path.
+//
+// Next.js delivers `searchParams` already URL-decoded, but this function
+// is shaped as a general sanitizer — so we also reject any %2e%2e-style
+// traversal survivor from an un-decoded caller. Anything that decodes
+// DIFFERENTLY from the literal form (i.e. was percent-encoded) is
+// collapsed to "" so the traversal check is applied against the post-
+// decode string. Defense-in-depth for future call sites that pass raw
+// query bytes.
 function sanitizePrefix(raw: string | undefined): string {
   if (!raw) return "";
-  if (raw.startsWith("/")) return "";
-  const segments = raw.split("/");
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    return "";
+  }
+  // If percent-decoding produced a different string the caller sent an
+  // encoded form; evaluate the sanitization rules against the decoded
+  // string to catch %2e%2e, %2E%2E, mixed-case, etc.
+  const target = decoded !== raw ? decoded : raw;
+  if (target.startsWith("/")) return "";
+  const segments = target.split("/");
   if (segments.some((s) => s === "..")) return "";
   // Collapse consecutive slashes — "a//b/" → invalid.
   if (segments.some((s, i) => s === "" && i !== segments.length - 1)) return "";
   // Always end in "/" for folder-style listing via S3 delimiter="/".
-  return raw.endsWith("/") ? raw : `${raw}/`;
+  return target.endsWith("/") ? target : `${target}/`;
 }
 
 function sanitizeBucket(raw: string | undefined): string | undefined {

@@ -56,6 +56,15 @@ describe("parseBrowseQuery", () => {
     expect(q.prefix).toBe("");
   });
 
+  it("rejects percent-encoded traversal (%2e%2e)", () => {
+    expect(parseBrowseQuery({ prefix: "%2e%2e/b/" }).prefix).toBe("");
+    expect(parseBrowseQuery({ prefix: "a/%2E%2E/b/" }).prefix).toBe("");
+  });
+
+  it("rejects malformed percent-encoded prefix", () => {
+    expect(parseBrowseQuery({ prefix: "a/%ZZ/b/" }).prefix).toBe("");
+  });
+
   it("strips missing trailing slash from prefix", () => {
     const q = parseBrowseQuery({ prefix: "folder/sub" });
     expect(q.prefix).toBe("folder/sub/");

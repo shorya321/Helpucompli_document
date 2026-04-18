@@ -44,6 +44,10 @@ export default async function DocumentsPage({ searchParams }: PageProps) {
   }
 
   const sub = session?.user.sub as string | undefined;
+  // Empty-sub gate runs BEFORE pageLimiter (sub is the quota key — a
+  // missing sub would collide all misconfigured tokens into one bucket).
+  // Differs from buckets/page.tsx which treats no-sub as a soft failure;
+  // here we hard-deny so the rate-limit contract is always valid.
   if (!sub) {
     return <EmptyPage message="You do not have access to documents." />;
   }
@@ -96,10 +100,17 @@ export default async function DocumentsPage({ searchParams }: PageProps) {
 
   if (inScope) {
     try {
+      // MVP cap. listObjects defaults to 1000 keys, which is enough for
+      // the F6.1 scaffolding — a folder with >LIST_PAGE keys would
+      // truncate the view. F6.8 will wire pagination + search before
+      // real tenants hit this ceiling; until then the view is
+      // intentionally bounded.
+      const LIST_PAGE = 200;
       const res = await listObjects({
         bucket: inScope.name,
         prefix: q.prefix === "" ? undefined : q.prefix,
         delimiter: "/",
+        maxKeys: LIST_PAGE,
       });
       const folders: FileListEntry[] = res.commonPrefixes.map((p) => ({
         kind: "folder",
