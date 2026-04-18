@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth0 } from "@/lib/auth0";
-import { getRole } from "@/lib/auth-guard";
+import { resolveRole } from "@/lib/auth-guard";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { BRAND } from "@/lib/brand";
@@ -16,7 +16,7 @@ export default async function DashboardLayout({ children }: LayoutProps) {
   if (!session) {
     redirect("/auth/login");
   }
-  const role = getRole(session);
+  const role = await resolveRole(session);
   if (!role) {
     redirect("/access-denied");
   }

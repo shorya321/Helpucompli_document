@@ -20,6 +20,14 @@ const envSchema = z.object({
       "APP_BASE_URL must use http or https scheme (javascript:, data:, file: are rejected)",
     ),
   AUTH0_DOMAIN: nonEmpty("AUTH0_DOMAIN"),
+  // Raw tenant domain (e.g. dev-xxx.us.auth0.com). Only needed when
+  // AUTH0_DOMAIN is a custom domain and the Management API audience
+  // must still point at the underlying tenant. Falls back to
+  // AUTH0_DOMAIN when unset.
+  AUTH0_TENANT_DOMAIN: z
+    .string()
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined)),
   AUTH0_CLIENT_ID: nonEmpty("AUTH0_CLIENT_ID"),
   AUTH0_CLIENT_SECRET: nonEmpty("AUTH0_CLIENT_SECRET"),
   AUTH0_MGMT_CLIENT_ID: nonEmpty("AUTH0_MGMT_CLIENT_ID"),

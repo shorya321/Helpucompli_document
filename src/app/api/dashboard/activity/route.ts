@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
-import { hasRole } from "@/lib/auth-guard";
+import { resolveHasRole } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
 import {
   activityFeedPayloadSchema,
@@ -42,7 +42,7 @@ export async function GET() {
     );
   }
   // Recent audit-log feed spans the whole tenant — admin+ only.
-  if (!hasRole(session, ["superadmin", "admin"])) {
+  if (!(await resolveHasRole(session, ["superadmin", "admin"]))) {
     return json<readonly ActivityEntry[]>(
       { data: null, error: "Forbidden" },
       403,

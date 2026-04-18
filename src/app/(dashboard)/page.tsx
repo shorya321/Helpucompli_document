@@ -1,5 +1,5 @@
 import { auth0 } from "@/lib/auth0";
-import { getRole, hasRole } from "@/lib/auth-guard";
+import { resolveHasRole, resolveRole } from "@/lib/auth-guard";
 import { BRAND } from "@/lib/brand";
 import { prisma } from "@/lib/prisma";
 import { asStatsPrisma, getDashboardStats } from "@/lib/dashboard-stats";
@@ -17,8 +17,11 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardHomePage() {
   const session = await auth0.getSession();
-  const role = getRole(session ?? null);
-  const canSeeAggregate = hasRole(session ?? null, ["superadmin", "admin"]);
+  const role = await resolveRole(session ?? null);
+  const canSeeAggregate = await resolveHasRole(session ?? null, [
+    "superadmin",
+    "admin",
+  ]);
 
   let stats: DashboardStats | null = null;
   let activity: readonly ActivityEntry[] = [];

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
-import { hasRole } from "@/lib/auth-guard";
+import { resolveHasRole } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
 import {
   asStatsPrisma,
@@ -40,7 +40,7 @@ export async function GET() {
   // Aggregate dashboard stats include total document + bucket + user
   // counts across the tenant — viewer must not receive this. Viewer-
   // scoped dashboard home renders without calling this endpoint.
-  if (!hasRole(session, ["superadmin", "admin"])) {
+  if (!(await resolveHasRole(session, ["superadmin", "admin"]))) {
     return json<DashboardStats>({ data: null, error: "Forbidden" }, 403);
   }
 
