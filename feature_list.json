@@ -428,7 +428,7 @@
             "Support grid and list view modes via Tabs toggle",
             "Test navigation between buckets and folders"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F6.2",
