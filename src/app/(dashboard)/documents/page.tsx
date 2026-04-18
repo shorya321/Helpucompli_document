@@ -18,6 +18,7 @@ import {
   type FileListEntry,
 } from "@/components/documents/file-list";
 import { UploadZone } from "@/components/documents/upload-zone";
+import { CreateFolderDialog } from "@/components/documents/create-folder-dialog";
 
 export const dynamic = "force-dynamic";
 
@@ -162,11 +163,34 @@ export default async function DocumentsPage({ searchParams }: PageProps) {
             Documents
           </h1>
           {inScope ? (
-            <ViewToggle
-              bucket={inScope.name}
-              prefix={q.prefix}
-              current={q.view}
-            />
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              {role === "superadmin" || role === "admin" ? (
+                <Link
+                  href={`/documents?bucket=${encodeURIComponent(inScope.name)}${
+                    q.prefix ? `&prefix=${encodeURIComponent(q.prefix)}` : ""
+                  }&newFolder=1`}
+                  style={{
+                    padding: "0.3125rem 0.75rem",
+                    borderRadius: "999px",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.06em",
+                    textDecoration: "none",
+                    color: BRAND.colors.blue,
+                    background: `${BRAND.colors.blue}14`,
+                    border: `1px solid ${BRAND.colors.blue}33`,
+                  }}
+                >
+                  + New folder
+                </Link>
+              ) : null}
+              <ViewToggle
+                bucket={inScope.name}
+                prefix={q.prefix}
+                current={q.view}
+              />
+            </div>
           ) : null}
         </header>
 
@@ -195,6 +219,16 @@ export default async function DocumentsPage({ searchParams }: PageProps) {
               entries={entries}
               view={q.view}
             />
+            {params.newFolder === "1" &&
+            (role === "superadmin" || role === "admin") ? (
+              <CreateFolderDialog
+                bucketId={inScope.id}
+                parentPrefix={q.prefix}
+                closeHref={`/documents?bucket=${encodeURIComponent(
+                  inScope.name,
+                )}${q.prefix ? `&prefix=${encodeURIComponent(q.prefix)}` : ""}`}
+              />
+            ) : null}
           </>
         )}
       </div>
