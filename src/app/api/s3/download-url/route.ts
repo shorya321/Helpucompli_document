@@ -27,6 +27,10 @@ const schema = z.object({
     .max(1024)
     .refine((k) => !k.startsWith("/"), "must not start with '/'")
     .refine((k) => !k.split("/").includes(".."), "must not contain '..'"),
+  // Preview vs attachment. Inline embeds the bytes in a browser tab
+  // (PDF iframe, image tag). Attachment triggers the native download
+  // flow. Audit row is identical for both — bytes transmit either way.
+  disposition: z.enum(["attachment", "inline"]).default("attachment"),
 });
 
 type DownloadResponse = { readonly url: string; readonly expiresIn: number };
@@ -158,7 +162,7 @@ export async function POST(req: NextRequest) {
       bucket: bucket.name,
       key: input.s3Key,
       ttlSeconds: expiresIn,
-      responseContentDisposition: `attachment; filename="${filenameSafe}"`,
+      responseContentDisposition: `${input.disposition}; filename="${filenameSafe}"`,
       ...(doc.contentType
         ? { responseContentType: doc.contentType }
         : {}),

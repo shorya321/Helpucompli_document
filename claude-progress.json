@@ -2,11 +2,17 @@
   "project": "helpucompli-document-repository",
   "current_phase": 1,
   "current_module": "06-documents",
-  "last_completed_feature": "F6.5",
+  "last_completed_feature": "F6.6",
   "total_features": 77,
-  "completed_features": 31,
+  "completed_features": 32,
   "blockers": [],
   "sessions": [
+    {
+      "date": "2026-04-18",
+      "module": "06-documents",
+      "features_completed": ["F6.6"],
+      "notes": "F6.6 Document preview (PDF + images + metadata fallback). Extended /api/s3/download-url schema with optional disposition: z.enum(['attachment','inline']).default('attachment'). Preview path pins responseContentDisposition={disposition}; filename='...' on the presigned GET URL; audit row (DOCUMENT_DOWNLOAD) identical for both dispositions — bytes transmit either way. No separate AuditAction needed per HIPAA accountability (F2.1 enum retains symmetric actions). NEW src/components/documents/document-preview.tsx: 'use client', useEffect → fetch /api/s3/download-url {disposition:'inline'} on mount, sets url state. Branch on contentType: application/pdf → <iframe src={url} title={filename}> 75vh height; image/{jpeg,png,gif,webp} → <img src={url} alt={filename}> with max-height 75vh + object-fit:contain; ELSE → <dl> metadata panel (Type, Size, Uploaded, By, 'No inline preview available' italic caption). INLINE_IMAGE_TYPES Set restricts to raster images — image/svg+xml deliberately excluded (stored-XSS via inline SVG). contentType pinned via responseContentType at presign (F6.3) so S3 sends exactly stored-type regardless of S3 object metadata — prevents MIME-sniffing-promotion attack where a PDF upload later serves as text/html. Error surface inline via role='alert'. TESTS: 713→722 (+9): download-url-route +3 (disposition default attachment, disposition=inline, 400 unknown value); document-preview 6 (filename+size always rendered, PDF path skips fallback, unsupported-type renders metadata panel + contentType + ISO date, XSS filename escape, uploadedByName fallback render, contentType=null → unsupported fallback). Full suite 722/722 green, typecheck clean. Research skipped: presignGetUrl + assertContentDisposition already validate inline+attachment syntax (F3.3); no new external API surface. Carry-forward to F6.7+: (a) F6.7 right-click context menu wraps DownloadButton + preview link + move/copy + delete in DropdownMenu pattern; (b) image/svg+xml inline preview deliberately blocked — ops request must be handled out-of-band with explicit review; if product needs inline SVG rendering later, wrap in sandboxed <iframe sandbox> without allow-scripts; (c) PDF iframe — browsers may show download fallback when pdf.js/plugin disabled; acceptable for MVP, could ship pdf.js bundle later for deterministic render; (d) DocumentPreview currently SSR-renders without URL (useEffect fetches on mount); cannot SSR the actual iframe/img without leaking the presigned bearer URL into HTML — server-rendering the URL would put it into __NEXT_DATA__ JSON and make it harvestable from logs; current client-side fetch is the correct HIPAA posture; (e) preview needs wiring into file-list modal/drawer (route guard: /documents/[bucketId]/[s3Key] OR query param ?preview=<key>). MVP leaves standalone component mountable; page wire can follow in F6.7."
+    },
     {
       "date": "2026-04-18",
       "module": "06-documents",

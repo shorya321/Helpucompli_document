@@ -497,7 +497,7 @@
             "Show metadata for unsupported types (name, type, size, upload date, uploader)",
             "Test preview renders correctly"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F6.7",

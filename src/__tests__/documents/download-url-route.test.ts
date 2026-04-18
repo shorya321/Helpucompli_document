@@ -228,6 +228,50 @@ describe("POST /api/s3/download-url", () => {
     expect(callArg.responseContentDisposition).not.toContain('"weird"');
   });
 
+  it("disposition defaults to attachment", async () => {
+    mocks.getSession.mockResolvedValue(superadmin());
+    mocks.findUniqueBucket.mockResolvedValue({
+      id: BUCKET_ID,
+      name: "helpucompli-docs-acme",
+      isActive: true,
+    });
+    mocks.findFirstDocument.mockResolvedValue(docRow);
+    mocks.upsertUser.mockResolvedValue({ id: "user-su" });
+    mocks.presignGetUrl.mockResolvedValue("https://s3/signed");
+    mocks.auditLogCreate.mockResolvedValue({});
+    const res = await POST(req(validBody));
+    expect(res.status).toBe(200);
+    const callArg = mocks.presignGetUrl.mock.calls[0]![0] as {
+      responseContentDisposition?: string;
+    };
+    expect(callArg.responseContentDisposition).toMatch(/^attachment;/);
+  });
+
+  it("disposition=inline produces inline Content-Disposition", async () => {
+    mocks.getSession.mockResolvedValue(superadmin());
+    mocks.findUniqueBucket.mockResolvedValue({
+      id: BUCKET_ID,
+      name: "helpucompli-docs-acme",
+      isActive: true,
+    });
+    mocks.findFirstDocument.mockResolvedValue(docRow);
+    mocks.upsertUser.mockResolvedValue({ id: "user-su" });
+    mocks.presignGetUrl.mockResolvedValue("https://s3/signed");
+    mocks.auditLogCreate.mockResolvedValue({});
+    const res = await POST(req({ ...validBody, disposition: "inline" }));
+    expect(res.status).toBe(200);
+    const callArg = mocks.presignGetUrl.mock.calls[0]![0] as {
+      responseContentDisposition?: string;
+    };
+    expect(callArg.responseContentDisposition).toMatch(/^inline;/);
+  });
+
+  it("400 on unknown disposition value", async () => {
+    mocks.getSession.mockResolvedValue(admin());
+    const res = await POST(req({ ...validBody, disposition: "preview" }));
+    expect(res.status).toBe(400);
+  });
+
   it("500 generic on presign error (no engine leak)", async () => {
     mocks.getSession.mockResolvedValue(superadmin());
     mocks.findUniqueBucket.mockResolvedValue({
