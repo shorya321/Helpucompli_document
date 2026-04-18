@@ -2,11 +2,17 @@
   "project": "helpucompli-document-repository",
   "current_phase": 1,
   "current_module": "06-documents",
-  "last_completed_feature": "F6.2",
+  "last_completed_feature": "F6.3",
   "total_features": 77,
-  "completed_features": 28,
+  "completed_features": 29,
   "blockers": [],
   "sessions": [
+    {
+      "date": "2026-04-18",
+      "module": "06-documents",
+      "features_completed": ["F6.3"],
+      "notes": "F6.3 Document download via presigned GET URL. NEW POST /api/s3/download-url: session 401 → resolveRole null→403 → empty-sub 401 → 415 non-JSON → rate-limit 60/60s @helpucompli/s3-download-url (viewers pull many docs per session; audit captures each) → Zod schema {bucketId UUID, s3Key ≤1024, no-leading-slash, no-traversal} → bucket.findUnique 404 → prisma.document.findFirst({bucketId, s3Key}) 404 if missing (orphaned S3 objects without Document rows are unreachable by design — prevents pulling bytes that bypassed upload-complete size/integrity gates) → 410 Gone when isDeleted (soft-delete-via-versioning; undelete lives in F6.5 / ops tooling) → ensureUser upsert → UserBucketAccess check for non-superadmin (admins tenant-scoped same as viewers, same C1 enforcement as F6.2) → 403 without access. presignGetUrl called with responseContentDisposition='attachment; filename=...' via safeDispositionFilename (strips anything outside \\p{L}\\p{N} ._-()[] matching s3-presign's assertContentDisposition validator — quote/backslash-quote rejected upstream). Also forwards document.contentType as responseContentType when present (prevents MIME sniffing). auditLog.create DOCUMENT_UPLOAD targetType=document targetId=doc.id metadata{bucketId, bucketName, s3Key, filename, contentType} + ipAddress (x-real-ip preferred) + UA(512-trunc). 500 generic on error (AWS SDK errors can embed KMS ARN + DATABASE_URL). F8 AccessPolicy hook documented as TODO — engine arrives in Module 08 (policy_engine), until then every in-scope caller is permitted. NEW src/components/documents/download-button.tsx: 'use client' button posts to /api/s3/download-url and redirects via window.location.href (NOT <a href> — avoids keeping bearer URL in DOM for entire link lifetime). Busy state + error state. MOD src/components/documents/file-list.tsx: takes optional bucketId prop; renders DownloadButton beside size in list-view. Backward-compatible for callers without bucketId. MOD /documents/page.tsx: passes inScope.id as bucketId to FileList. TESTS: 675→686 (+11): download-url-route 11 (401/400/404-bucket/404-doc/410-deleted/403-viewer-no-access/403-admin-no-access/200-superadmin+audit/200-viewer-with-access/disposition-sanitize/500-leak). Full suite 686/686 green, typecheck clean. Smoke: /api/s3/download-url = 401 unauth as expected. Research skipped: presignGetUrl already in-tree (F3.3) with assertContentDisposition validator; no new external API surface. Carry-forward to F6.4–F6.8: (a) F6.4 move/copy — copyObject + moveObject already in s3-objects.ts (F3.x); new /api/s3/move route + DOCUMENT_MOVE/COPY audit + UserBucketAccess check on BOTH source + destination; (b) F6.5 delete — softDeleteObject (versioning delete marker) + hardDeleteObjectVersion (superadmin + regulatory hold check — new AccessPolicy?.regulatoryHold field may be needed for Module 08 or can be a Document.isHeld bool added now); (c) F6.6 preview — presignGetUrl with responseContentType='application/pdf' for iframe-embedded PDF, inline images; reuse download-url route with ?inline=1 query or new /preview-url route; (d) F6.7 right-click context menu — uses existing download-button pattern; (e) F8 policy engine — download-url currently permits any in-scope caller; F8 adds domain/IP/TTL checks before presignGetUrl."
+    },
     {
       "date": "2026-04-18",
       "module": "06-documents",

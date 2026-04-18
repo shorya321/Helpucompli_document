@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BRAND } from "@/lib/brand";
 import { formatStorage } from "@/components/buckets/bucket-card";
 import { buildBreadcrumb } from "@/lib/documents-browse";
+import { DownloadButton } from "@/components/documents/download-button";
 
 export type FileListEntry =
   | {
@@ -18,6 +19,7 @@ export type FileListEntry =
 
 interface FileListProps {
   readonly bucket: string;
+  readonly bucketId?: string;
   readonly prefix: string;
   readonly entries: ReadonlyArray<FileListEntry>;
   readonly view: "grid" | "list";
@@ -34,7 +36,13 @@ function filenameFromKey(key: string): string {
   return parts[parts.length - 1] ?? key;
 }
 
-export function FileList({ bucket, prefix, entries, view }: FileListProps) {
+export function FileList({
+  bucket,
+  bucketId,
+  prefix,
+  entries,
+  view,
+}: FileListProps) {
   const crumbs = buildBreadcrumb(bucket, prefix);
 
   return (
@@ -188,12 +196,23 @@ export function FileList({ bucket, prefix, entries, view }: FileListProps) {
                 </span>
                 <span
                   style={{
-                    color: "rgba(30,41,59,0.72)",
-                    fontSize: "0.75rem",
-                    fontVariantNumeric: "tabular-nums",
+                    display: "inline-flex",
+                    alignItems: "baseline",
+                    gap: "0.75rem",
                   }}
                 >
-                  {formatStorage(e.size)}
+                  <span
+                    style={{
+                      color: "rgba(30,41,59,0.72)",
+                      fontSize: "0.75rem",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {formatStorage(e.size)}
+                  </span>
+                  {bucketId ? (
+                    <DownloadButton bucketId={bucketId} s3Key={e.key} />
+                  ) : null}
                 </span>
               </li>
             ),

@@ -190,6 +190,7 @@ export default async function DocumentsPage({ searchParams }: PageProps) {
             ) : null}
             <FileList
               bucket={inScope.name}
+              bucketId={inScope.id}
               prefix={q.prefix}
               entries={entries}
               view={q.view}
