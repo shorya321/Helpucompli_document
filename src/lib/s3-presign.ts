@@ -1,6 +1,6 @@
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { getS3Client, withSseKms } from "./s3";
+import { getS3Client } from "./s3";
 
 // Presigned URLs are bearer tokens — anyone holding the URL within the TTL
 // can execute the signed request. HIPAA §164.312 minimum-necessary + auto-
@@ -117,37 +117,29 @@ export interface PresignPutInput {
 // one-time-use semantics). Mitigations:
 //   - never log the URL; return it once to the authenticated caller
 //   - keep ttlSeconds as short as the upload UX tolerates
-//   - SSE-KMS headers are signed in so unencrypted bytes are rejected 403
-//   - ContentType (when supplied) is hoisted into the signed URL so the
-//     uploader cannot swap it post-signature
+//   - SSE-KMS is enforced by bucket default encryption (F3.2
+//     PutBucketEncryption) — every PUT to the bucket encrypts at rest
+//     with the tenant KMS key REGARDLESS of what the client sends. We
+//     therefore do NOT sign SSE-KMS headers into the presigned URL:
+//     signing them forces the browser XHR to echo them back verbatim,
+//     which it cannot do, and would fail every upload with
+//     SignatureDoesNotMatch (CORS-masked as "Network error").
+//   - ContentType (when supplied) is signed so the uploader cannot swap
+//     it post-signature.
 export async function presignPutUrl(input: PresignPutInput): Promise<string> {
   const ttl = input.ttlSeconds ?? DEFAULT_TTL_SECONDS;
   assertTargets(input.bucket, input.key);
   assertTtl(ttl, MAX_PUT_TTL_SECONDS);
   if (input.contentType) assertContentType(input.contentType, "contentType");
 
-  const cmd = new PutObjectCommand(
-    withSseKms({
-      Bucket: input.bucket,
-      Key: input.key,
-      ...(input.contentType ? { ContentType: input.contentType } : {}),
-    }),
-  );
-
-  // Pin SSE-KMS headers to SignedHeaders (never moved to query string)
-  // so the uploader MUST resend them verbatim. A stolen presigned URL
-  // cannot drop these headers and land unencrypted bytes — S3 would
-  // reject the request with SignatureDoesNotMatch.
-  // Ref: https://docs.aws.amazon.com/AmazonS3/latest/userguide/PresignedUrlUploadObject.html
-  const unhoistableHeaders = new Set([
-    "x-amz-server-side-encryption",
-    "x-amz-server-side-encryption-aws-kms-key-id",
-    "x-amz-server-side-encryption-bucket-key-enabled",
-  ]);
+  const cmd = new PutObjectCommand({
+    Bucket: input.bucket,
+    Key: input.key,
+    ...(input.contentType ? { ContentType: input.contentType } : {}),
+  });
 
   return getSignedUrl(getS3Client(), cmd, {
     expiresIn: ttl,
-    unhoistableHeaders,
     ...(input.contentType ? { signableHeaders: new Set(["content-type"]) } : {}),
   });
 }

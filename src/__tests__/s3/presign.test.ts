@@ -50,24 +50,23 @@ describe("F3.3 — presignPutUrl", () => {
     expect(url).toContain("2026/04/letter.pdf");
   });
 
-  it("pins SSE-KMS headers to X-Amz-SignedHeaders via unhoistableHeaders (upload client MUST resend)", async () => {
+  it("does NOT sign SSE-KMS headers (bucket default-encryption enforces at rest)", async () => {
     stubAll();
     const { presignPutUrl } = await importPresign();
-    const url = await presignPutUrl({
-      bucket: "b",
-      key: "k",
-    });
-    // Parse SignedHeaders query param directly — asserts that the three
-    // SSE-KMS headers are in the signature, not hoisted to the query
-    // string where a stolen URL could drop them.
-    const signedHeadersMatch = decodeURIComponent(url)
-      .toLowerCase()
-      .match(/x-amz-signedheaders=([^&]+)/);
-    expect(signedHeadersMatch).not.toBeNull();
-    const signed = signedHeadersMatch![1].split(";");
-    expect(signed).toContain("x-amz-server-side-encryption");
-    expect(signed).toContain("x-amz-server-side-encryption-aws-kms-key-id");
-    expect(signed).toContain("x-amz-server-side-encryption-bucket-key-enabled");
+    const url = await presignPutUrl({ bucket: "b", key: "k" });
+    const decoded = decodeURIComponent(url).toLowerCase();
+    // Browser XHR only sends Content-Type. Signing SSE-KMS headers
+    // would force the uploader to re-send them verbatim; it cannot.
+    // F3.2 PutBucketEncryption applies SSE-KMS to every upload
+    // server-side regardless — so the URL stays lean and browser
+    // uploads succeed.
+    const signed =
+      decoded.match(/x-amz-signedheaders=([^&]+)/)?.[1].split(";") ?? [];
+    expect(signed).not.toContain("x-amz-server-side-encryption");
+    expect(signed).not.toContain("x-amz-server-side-encryption-aws-kms-key-id");
+    expect(signed).not.toContain(
+      "x-amz-server-side-encryption-bucket-key-enabled",
+    );
   });
 
   it("uses 900s (15 min) as default TTL", async () => {
