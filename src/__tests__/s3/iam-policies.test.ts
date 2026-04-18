@@ -46,9 +46,9 @@ describe("F3.6 — app role policy (helpucompli-docs-app-role)", () => {
     const a = actions(s);
     expect(a).toContain("s3:ListBucket");
     expect(a).toContain("s3:GetBucketLocation");
-    expect(a).toContain("s3:PutBucketEncryption");
+    expect(a).toContain("s3:PutEncryptionConfiguration");
     expect(a).toContain("s3:PutBucketVersioning");
-    expect(a).toContain("s3:PutPublicAccessBlock");
+    expect(a).toContain("s3:PutBucketPublicAccessBlock");
     expect(a).toContain("s3:PutBucketOwnershipControls");
     expect(a).toContain("s3:PutBucketPolicy");
     expect(a).toContain("s3:PutBucketLogging");
@@ -116,8 +116,11 @@ describe("F3.6 — app role policy (helpucompli-docs-app-role)", () => {
     expect(s.Effect).toBe("Deny");
     expect(s.Resource).toBe("arn:aws:s3:::helpucompli-docs-access-logs");
     const a = actions(s);
+    // Single action — s3:PutBucketLogging covers enable + disable
+    // (disable = PutBucketLogging with empty config). There is no
+    // s3:DeleteBucketLogging IAM action in the S3 authorization surface.
     expect(a).toContain("s3:PutBucketLogging");
-    expect(a).toContain("s3:DeleteBucketLogging");
+    expect(a).not.toContain("s3:DeleteBucketLogging");
   });
 
   it("does NOT grant any Allow action outside the scoped resources", () => {

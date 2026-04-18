@@ -76,12 +76,17 @@ export function buildAppRolePolicy(args: {
           "s3:GetBucketLocation",
           "s3:GetBucketVersioning",
           "s3:PutBucketVersioning",
-          "s3:GetBucketEncryption",
-          "s3:PutBucketEncryption",
+          // NOTE: S3 IAM action names diverge from SDK command names —
+          // PutBucketEncryption API → s3:PutEncryptionConfiguration
+          // PutPublicAccessBlock API → s3:PutBucketPublicAccessBlock
+          // Ref: AWS S3 Service Authorization Reference
+          // https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazons3.html
+          "s3:GetEncryptionConfiguration",
+          "s3:PutEncryptionConfiguration",
           "s3:GetBucketLogging",
           "s3:PutBucketLogging",
-          "s3:GetPublicAccessBlock",
-          "s3:PutPublicAccessBlock",
+          "s3:GetBucketPublicAccessBlock",
+          "s3:PutBucketPublicAccessBlock",
           "s3:GetBucketOwnershipControls",
           "s3:PutBucketOwnershipControls",
           "s3:PutBucketPolicy",
@@ -126,7 +131,10 @@ export function buildAppRolePolicy(args: {
         // ever reconfiguring that bucket's own logging destination —
         // otherwise a compromised runtime could silently redirect the
         // audit trail to an attacker-controlled bucket.
-        Action: ["s3:PutBucketLogging", "s3:DeleteBucketLogging"],
+        // s3:PutBucketLogging covers both enable AND disable (disable is
+        // PutBucketLogging with empty config). No separate
+        // s3:DeleteBucketLogging action exists in the S3 IAM surface.
+        Action: "s3:PutBucketLogging",
         Resource: "arn:aws:s3:::helpucompli-docs-access-logs",
       },
       {
