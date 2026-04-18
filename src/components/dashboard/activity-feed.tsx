@@ -22,11 +22,26 @@ const TONE_COLORS: Record<BadgeTone, { bg: string; fg: string }> = {
   danger: { bg: BRAND.colors.pink, fg: BRAND.colors.light },
 };
 
+class ActivityFetchError extends Error {
+  public readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+    this.name = "ActivityFetchError";
+  }
+}
+
 async function fetchActivity(): Promise<readonly ActivityEntry[]> {
   const res = await fetch("/api/dashboard/activity", { cache: "no-store" });
+  if (!res.ok) {
+    // Don't swallow 401/403/500 — surface via useQuery.isError so the
+    // UI can flag session-expiry vs. empty state. Body is ignored
+    // because `error` is always a generic string (API redaction).
+    throw new ActivityFetchError(res.status, `HTTP ${res.status}`);
+  }
   const body = (await res.json()) as ApiResponse<readonly ActivityEntry[]>;
-  // Coerce createdAt strings back to Date across the wire.
   const raw = body.data ?? [];
+  // Wire-format: createdAt is serialised as ISO string, coerce back.
   return raw.map((e) => ({
     ...e,
     createdAt: new Date(e.createdAt as unknown as string),
@@ -44,14 +59,35 @@ function formatRelative(when: Date, now: Date = new Date()): string {
 }
 
 export function ActivityFeed({ initial }: ActivityFeedProps) {
-  const { data } = useQuery({
+  const { data, isError } = useQuery({
     queryKey: ["dashboard", "activity"],
     queryFn: fetchActivity,
     initialData: initial,
     refetchInterval: REFETCH_INTERVAL_MS,
     staleTime: REFETCH_INTERVAL_MS / 2,
+    // Don't retry 4xx — 401/403 won't succeed on the 2nd/3rd attempt.
+    retry: (failureCount, error) => {
+      if (error instanceof ActivityFetchError && error.status < 500) {
+        return false;
+      }
+      return failureCount < 2;
+    },
   });
   const entries = (data ?? initial) as readonly ActivityEntry[];
+
+  if (isError && entries.length === 0) {
+    return (
+      <p
+        role="alert"
+        style={{
+          color: BRAND.colors.pink,
+          fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
+        }}
+      >
+        Unable to refresh activity. Your session may have expired.
+      </p>
+    );
+  }
 
   if (entries.length === 0) {
     return (

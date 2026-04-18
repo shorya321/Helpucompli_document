@@ -1,5 +1,5 @@
 import { auth0 } from "@/lib/auth0";
-import { hasRole } from "@/lib/auth-guard";
+import { getRole, hasRole } from "@/lib/auth-guard";
 import { BRAND } from "@/lib/brand";
 import { prisma } from "@/lib/prisma";
 import { asStatsPrisma, getDashboardStats } from "@/lib/dashboard-stats";
@@ -11,11 +11,13 @@ import {
 } from "@/lib/activity-feed";
 import { SummaryCards } from "@/components/dashboard/summary-cards";
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
+import { QuickActions } from "@/components/dashboard/quick-actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardHomePage() {
   const session = await auth0.getSession();
+  const role = getRole(session ?? null);
   const canSeeAggregate = hasRole(session ?? null, ["superadmin", "admin"]);
 
   let stats: DashboardStats | null = null;
@@ -53,6 +55,7 @@ export default async function DashboardHomePage() {
             : "Welcome back. Use the sidebar to browse the documents and links you can access."}
         </p>
       </header>
+      {role ? <QuickActions role={role} /> : null}
       {canSeeAggregate && stats ? <SummaryCards stats={stats} /> : null}
       {canSeeAggregate && loadError ? (
         <p role="alert" style={{ color: BRAND.colors.pink }}>

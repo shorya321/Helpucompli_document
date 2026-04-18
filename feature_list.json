@@ -329,14 +329,14 @@
           "id": "F4.4",
           "description": "Quick action buttons",
           "steps": [
-            "Create src/components/dashboard/quick-actions.tsx",
-            "Add Upload Document button (links to document browser)",
-            "Add Create Bucket button (superadmin only, hidden for others)",
-            "Add Generate Link button",
-            "Add View Audit Log button",
-            "Test role-based button visibility"
+            "src/lib/dashboard-quick-actions.ts: pure data mirroring dashboard-nav.ts pattern. DASHBOARD_QUICK_ACTIONS = 4 entries [upload→/documents?upload=1 (ALL, primary pink), createBucket→/buckets?new=1 (SUPER_ONLY, secondary), generateLink→/links?new=1 (ADMIN_UP, secondary), viewAudit→/audit (ADMIN_UP, secondary)]. QuickActionId literal union, QuickActionTone = 'primary'|'secondary'. filterQuickActionsForRole same contract as filterNavForRole (null role → [], no mutation)",
+            "src/components/dashboard/quick-actions.tsx: server component, <ul role='list' aria-label='Quick actions'> of <Link>-wrapped button-styled anchors (next/link per F4.1 review — HIPAA Referer carry-forward avoids leaking current dashboard URL on outbound click). Primary tone = pink fill, secondary = white card with blue border. Empty filtered list renders null (viewer with only 1 action still renders single button; hasRole(null)=false covers unauthed path in layout)",
+            "src/app/(dashboard)/page.tsx: QuickActions rendered above SummaryCards for every authenticated role — viewer sees upload-only, admin sees 3, superadmin sees 4. role pulled via getRole(session) beside the existing hasRole() aggregate gate",
+            "12 tests across 2 files: quick-actions.test.ts (7 — ids present, labels+hrefs non-empty, uniqueness, roles populated, Create Bucket is SUPER_ONLY, role filtering 3 roles + null, immutability); quick-actions-component.test.tsx (5 — superadmin sees 4, admin hides Create Bucket, viewer sees only Upload, each entry is an anchor with href, list landmark)",
+            "F4.3 CODE REVIEW CARRY-FIX (same commit window): src/components/dashboard/activity-feed.tsx fetchActivity now throws ActivityFetchError on !res.ok (HIGH 1 — no more silent empty state on 401/403/500). useQuery retry callback returns false for 4xx, limits 5xx to 2 retries (MEDIUM 2 — stops pointless 3x retry on auth failure). isError + entries.length===0 renders 'session may have expired' alert. HIGH 2 (email fallback as PII) is accepted product decision — admins legitimately need user identity for audit-trail context, email is already visible on Users page; masking breaks attribution. MEDIUM 1 (Zod payload validation) deferred to F11.3 global Zod rollout",
+            "Full suite 377/377, typecheck clean"
           ],
-          "passes": false
+          "passes": true
         }
       ]
     },
