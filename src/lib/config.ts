@@ -50,9 +50,22 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => (v && v.length > 0 ? v : undefined)),
-  UPSTASH_REDIS_REST_URL: z.string().url().optional(),
-  UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
-  SENTRY_DSN: z.string().optional(),
+  // Empty string in .env.local must be treated as unset — Zod's
+  // `.url().optional()` otherwise runs the url check on "" and errors
+  // ("Invalid url"). Same idiom as AUTH0_TENANT_DOMAIN and
+  // AWS_CLOUDTRAIL_NAME above.
+  UPSTASH_REDIS_REST_URL: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.string().url().optional(),
+  ),
+  UPSTASH_REDIS_REST_TOKEN: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.string().optional(),
+  ),
+  SENTRY_DSN: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.string().optional(),
+  ),
 });
 
 export type Env = z.infer<typeof envSchema>;

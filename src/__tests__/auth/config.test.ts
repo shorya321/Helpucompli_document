@@ -127,4 +127,46 @@ describe("loadConfig — optional vars tolerated", () => {
     const parsed = loadConfig(env);
     expect(parsed.NODE_ENV).toBe("production");
   });
+
+  // Regression — blank UPSTASH vars in .env.local used to fail with
+  // 'UPSTASH_REDIS_REST_URL: Invalid url' because Zod's .url().optional()
+  // runs the URL check on empty strings. Preprocess turns blank into
+  // undefined first.
+  it("treats blank UPSTASH_REDIS_REST_URL as unset", () => {
+    const env = { ...validEnv(), UPSTASH_REDIS_REST_URL: "" };
+    expect(() => loadConfig(env)).not.toThrow();
+    const parsed = loadConfig(env);
+    expect(parsed.UPSTASH_REDIS_REST_URL).toBeUndefined();
+  });
+
+  it("treats whitespace-only UPSTASH_REDIS_REST_URL as unset", () => {
+    const env = { ...validEnv(), UPSTASH_REDIS_REST_URL: "   " };
+    expect(() => loadConfig(env)).not.toThrow();
+  });
+
+  it("still rejects a malformed UPSTASH_REDIS_REST_URL that isn't blank", () => {
+    const env = { ...validEnv(), UPSTASH_REDIS_REST_URL: "not-a-url" };
+    expect(() => loadConfig(env)).toThrow(/UPSTASH_REDIS_REST_URL/);
+  });
+
+  it("treats blank UPSTASH_REDIS_REST_TOKEN as unset", () => {
+    const env = { ...validEnv(), UPSTASH_REDIS_REST_TOKEN: "" };
+    expect(() => loadConfig(env)).not.toThrow();
+    const parsed = loadConfig(env);
+    expect(parsed.UPSTASH_REDIS_REST_TOKEN).toBeUndefined();
+  });
+
+  it("treats blank SENTRY_DSN as unset", () => {
+    const env = { ...validEnv(), SENTRY_DSN: "" };
+    expect(() => loadConfig(env)).not.toThrow();
+    const parsed = loadConfig(env);
+    expect(parsed.SENTRY_DSN).toBeUndefined();
+  });
+
+  it("treats blank AUTH0_TENANT_DOMAIN as unset", () => {
+    const env = { ...validEnv(), AUTH0_TENANT_DOMAIN: "" };
+    expect(() => loadConfig(env)).not.toThrow();
+    const parsed = loadConfig(env);
+    expect(parsed.AUTH0_TENANT_DOMAIN).toBeUndefined();
+  });
 });
