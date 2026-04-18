@@ -522,7 +522,7 @@
             "Sort by name, date, size",
             "Test search and filter results"
           ],
-          "passes": false
+          "passes": true
         }
       ]
     },
