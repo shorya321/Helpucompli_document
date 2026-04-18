@@ -371,7 +371,7 @@
             "Log BUCKET_CREATE in audit trail",
             "Test only superadmin can create"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F5.3",

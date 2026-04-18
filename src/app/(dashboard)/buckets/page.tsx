@@ -12,6 +12,7 @@ import {
 } from "@/lib/bucket-list";
 import { createRateLimiter } from "@/lib/rate-limit";
 import { BucketCard } from "@/components/buckets/bucket-card";
+import { CreateBucketDialog } from "@/components/buckets/create-bucket-dialog";
 
 export const dynamic = "force-dynamic";
 
@@ -85,13 +86,18 @@ export default async function BucketsPage({ searchParams }: PageProps) {
     loadError = true;
   }
 
+  const dialogOpen = role === "superadmin" && params.new === "1";
+
   return (
-    <BucketsView
-      role={role}
-      buckets={list}
-      options={options}
-      loadError={loadError}
-    />
+    <>
+      <BucketsView
+        role={role}
+        buckets={list}
+        options={options}
+        loadError={loadError}
+      />
+      {dialogOpen ? <CreateBucketDialog closeHref="/buckets" /> : null}
+    </>
   );
 }
 
