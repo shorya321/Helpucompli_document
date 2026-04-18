@@ -4,7 +4,13 @@ import { BRAND } from "@/lib/brand";
 import { prisma } from "@/lib/prisma";
 import { asStatsPrisma, getDashboardStats } from "@/lib/dashboard-stats";
 import type { DashboardStats } from "@/lib/dashboard-stats";
+import {
+  asActivityPrisma,
+  getRecentActivity,
+  type ActivityEntry,
+} from "@/lib/activity-feed";
 import { SummaryCards } from "@/components/dashboard/summary-cards";
+import { ActivityFeed } from "@/components/dashboard/activity-feed";
 
 export const dynamic = "force-dynamic";
 
@@ -13,10 +19,14 @@ export default async function DashboardHomePage() {
   const canSeeAggregate = hasRole(session ?? null, ["superadmin", "admin"]);
 
   let stats: DashboardStats | null = null;
+  let activity: readonly ActivityEntry[] = [];
   let loadError = false;
   if (canSeeAggregate) {
     try {
-      stats = await getDashboardStats(asStatsPrisma(prisma));
+      [stats, activity] = await Promise.all([
+        getDashboardStats(asStatsPrisma(prisma)),
+        getRecentActivity(asActivityPrisma(prisma)),
+      ]);
     } catch {
       // Engine-level errors can embed DATABASE_URL. Do NOT surface.
       loadError = true;
@@ -48,6 +58,20 @@ export default async function DashboardHomePage() {
         <p role="alert" style={{ color: BRAND.colors.pink }}>
           Unable to load dashboard metrics. Please try again.
         </p>
+      ) : null}
+      {canSeeAggregate && !loadError ? (
+        <section>
+          <h2
+            style={{
+              margin: "0 0 0.75rem",
+              fontSize: "1.125rem",
+              fontWeight: 600,
+            }}
+          >
+            Recent activity
+          </h2>
+          <ActivityFeed initial={activity} />
+        </section>
       ) : null}
     </section>
   );

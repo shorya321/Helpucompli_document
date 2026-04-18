@@ -313,13 +313,17 @@
           "id": "F4.3",
           "description": "Recent activity feed",
           "steps": [
-            "Create src/components/dashboard/activity-feed.tsx",
-            "Query last 20 audit_logs entries",
-            "Display timestamp, user name, action badge, target document/bucket name",
-            "Add auto-refresh every 30 seconds via React Query refetch",
-            "Test feed shows recent actions"
+            "src/lib/activity-feed.ts: ACTIVITY_FEED_LIMIT=20, ActivityEntry shape, ActivityFeedPrisma narrow DI interface, getRecentActivity(prisma, limit) with [1, 200] clamp, asActivityPrisma single cast point, actionBadgeTone(action): 'info'|'success'|'warning'|'danger' exhaustive over all 21 AuditAction values. findMany selects only {id, createdAt, action, targetType, targetId, user:{name, email}} — no metadata or ipAddress reaches the client (HIPAA defense-in-depth: network fields stay server-side). userName fallback name→email→null (null preserves audit_logs.user_id SET NULL retention path)",
+            "src/app/api/dashboard/activity/route.ts: GET — 401 no session, 403 invalid role, 403 viewer (tenant-wide audit scope is admin+ only — same HIPAA reasoning as F4.2 stats), 200 ApiResponse<readonly ActivityEntry[]>, 500 generic 'Failed to load activity feed' (raw engine errors can embed DATABASE_URL — F2.2 sec-review M2 mitigation)",
+            "src/components/dashboard/activity-feed.tsx: client component ('use client'), useQuery({ queryKey:['dashboard','activity'], initialData:props.initial, refetchInterval:30_000, staleTime:15_000 }) — first paint is SSR-rendered from server-prefetched data (no request waterfall), subsequent 30s polls via browser fetch. Intl.RelativeTimeFormat for timestamps (no new deps). Wire-format fix: createdAt JSON-round-trips to string so fetch coerces back to Date. Badge tone color-coded: info blue, success green, warning amber, danger pink. Empty state 'No recent activity to show.' Null userName → 'System' label",
+            "src/app/providers.tsx: new QueryClientProvider wrapper with per-client-boot QueryClient (React state — avoids shared cache across concurrent SSR streams). refetchOnWindowFocus=false, default staleTime 30s",
+            "src/app/layout.tsx: Providers mounted between Auth0Provider and children — global so dashboard and future modules can useQuery without re-mounting",
+            "src/app/(dashboard)/page.tsx: admin+ branch now Promise.all's stats + recent activity, passes activity[] as initial prop so ActivityFeed hydrates first paint from server-fetched data. Viewer branch unchanged (no fetches)",
+            "18 new tests: activity-feed.test.ts (14 — ACTIVITY_FEED_LIMIT=20, take propagation + default, [1,200] clamp, orderBy+select shape, name/email/null userName fallback, actionBadgeTone 15-case mapping + exhaustive enumeration over all 21 actions), activity-route.test.ts (5 — 401/403 no-role/403 viewer/200/500 redacted), activity-feed-component.test.tsx (6 — list landmark, one li per entry, user display fallback, badge action text, target ref, empty state)",
+            "Research: @tanstack/react-query@5.62.0 useQuery options refetchInterval + initialData via Ref MCP (github.com/TanStack/query/docs/framework/react/reference/useQuery.md)",
+            "Full suite 362/362, typecheck clean"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F4.4",
