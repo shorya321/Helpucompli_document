@@ -18,6 +18,7 @@ import {
 } from "@/lib/bucket-create";
 import { createRateLimiter } from "@/lib/rate-limit";
 import { toJsonSafe, type JsonValue } from "@/lib/bigint";
+import { ensureUser } from "@/lib/ensure-user";
 import type { ApiResponse } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -174,14 +175,12 @@ export async function POST(req: NextRequest) {
     return json({ data: null, error: "Invalid input" }, 400);
   }
 
-  // Map Auth0 sub → internal User.id. Cannot write a bucket row
-  // without a valid createdBy FK. First-time superadmins must be
-  // provisioned before creating buckets.
-  const dbUser = await prisma.user.findUnique({
-    where: { auth0Id: sub },
-    select: { id: true },
-  });
-  if (!dbUser) return json({ data: null, error: "Unauthorized" }, 401);
+  // Map Auth0 sub → internal User.id. First-time superadmins are
+  // auto-provisioned here: they are already authenticated by Auth0 and
+  // authorized as superadmin by resolveRole() above, so it is safe to
+  // create the row on demand rather than require an out-of-band
+  // provisioning step (Module 10 will own ongoing user management).
+  const dbUser = await ensureUser(prisma, { session, role: "superadmin" });
 
   try {
     const created = await createBucketForTenant(

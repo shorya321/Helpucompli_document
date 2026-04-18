@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getSession: vi.fn(),
   createBucketForTenant: vi.fn(),
-  findUniqueUser: vi.fn(),
+  upsertUser: vi.fn(),
 }));
 
 vi.mock("@/lib/auth0", () => ({
@@ -12,7 +12,7 @@ vi.mock("@/lib/auth0", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    user: { findUnique: mocks.findUniqueUser },
+    user: { upsert: mocks.upsertUser },
   },
 }));
 
@@ -33,7 +33,7 @@ import { NextRequest } from "next/server";
 afterEach(() => {
   mocks.getSession.mockReset();
   mocks.createBucketForTenant.mockReset();
-  mocks.findUniqueUser.mockReset();
+  mocks.upsertUser.mockReset();
 });
 
 function superadminSession(sub = "auth0|su") {
@@ -108,7 +108,7 @@ describe("POST /api/s3/buckets", () => {
 
   it("415 when Content-Type is not application/json", async () => {
     mocks.getSession.mockResolvedValueOnce(superadminSession("auth0|ct"));
-    mocks.findUniqueUser.mockResolvedValueOnce({ id: "u-42" });
+    mocks.upsertUser.mockResolvedValueOnce({ id: "u-42" });
     const req = new NextRequest("http://x/api/s3/buckets", {
       method: "POST",
       headers: { "content-type": "text/plain" },
@@ -121,7 +121,7 @@ describe("POST /api/s3/buckets", () => {
 
   it("400 when body is not valid JSON", async () => {
     mocks.getSession.mockResolvedValueOnce(superadminSession("auth0|jb"));
-    mocks.findUniqueUser.mockResolvedValueOnce({ id: "u-42" });
+    mocks.upsertUser.mockResolvedValueOnce({ id: "u-42" });
     const req = new NextRequest("http://x/api/s3/buckets", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -133,23 +133,39 @@ describe("POST /api/s3/buckets", () => {
 
   it("400 when input fails Zod validation (bad bucket name)", async () => {
     mocks.getSession.mockResolvedValueOnce(superadminSession("auth0|bn"));
-    mocks.findUniqueUser.mockResolvedValueOnce({ id: "u-42" });
+    mocks.upsertUser.mockResolvedValueOnce({ id: "u-42" });
     const res = await POST(body({ ...VALID, name: "nope-no-prefix" }));
     expect(res.status).toBe(400);
     expect(mocks.createBucketForTenant).not.toHaveBeenCalled();
   });
 
-  it("401 when superadmin has no provisioned DB user row (cannot attribute createdBy)", async () => {
+  it("auto-provisions a User row on first superadmin create (no separate bootstrap step)", async () => {
     mocks.getSession.mockResolvedValueOnce(superadminSession("auth0|new"));
-    mocks.findUniqueUser.mockResolvedValueOnce(null);
+    // upsert returns the freshly-created row's id
+    mocks.upsertUser.mockResolvedValueOnce({ id: "u-fresh" });
+    mocks.createBucketForTenant.mockResolvedValueOnce({
+      id: "b-fresh",
+      name: VALID.name,
+      region: "us-east-1",
+    });
     const res = await POST(body(VALID));
-    expect(res.status).toBe(401);
-    expect(mocks.createBucketForTenant).not.toHaveBeenCalled();
+    expect(res.status).toBe(201);
+    // upsert keyed by auth0Id from the session
+    const arg = mocks.upsertUser.mock.calls[0]?.[0];
+    expect(arg.where).toEqual({ auth0Id: "auth0|new" });
+    expect(arg.create).toMatchObject({
+      auth0Id: "auth0|new",
+      email: "s@x.com",
+      role: "superadmin",
+    });
+    // createdBy threaded from the upsert-returned id
+    const [, , , ctx] = mocks.createBucketForTenant.mock.calls[0] ?? [];
+    expect(ctx.createdById).toBe("u-fresh");
   });
 
   it("201 + payload on success", async () => {
     mocks.getSession.mockResolvedValueOnce(superadminSession("auth0|ok"));
-    mocks.findUniqueUser.mockResolvedValueOnce({ id: "u-42" });
+    mocks.upsertUser.mockResolvedValueOnce({ id: "u-42" });
     mocks.createBucketForTenant.mockResolvedValueOnce({
       id: "b-new",
       name: VALID.name,
@@ -170,7 +186,7 @@ describe("POST /api/s3/buckets", () => {
 
   it("forwards ipAddress + userAgent from headers into the ctx", async () => {
     mocks.getSession.mockResolvedValueOnce(superadminSession("auth0|hdr"));
-    mocks.findUniqueUser.mockResolvedValueOnce({ id: "u-42" });
+    mocks.upsertUser.mockResolvedValueOnce({ id: "u-42" });
     mocks.createBucketForTenant.mockResolvedValueOnce({
       id: "b-1",
       name: VALID.name,
@@ -193,7 +209,7 @@ describe("POST /api/s3/buckets", () => {
 
   it("falls back to 'unknown' when ip/ua headers are absent", async () => {
     mocks.getSession.mockResolvedValueOnce(superadminSession("auth0|noip"));
-    mocks.findUniqueUser.mockResolvedValueOnce({ id: "u-42" });
+    mocks.upsertUser.mockResolvedValueOnce({ id: "u-42" });
     mocks.createBucketForTenant.mockResolvedValueOnce({
       id: "b-1",
       name: VALID.name,
@@ -213,7 +229,7 @@ describe("POST /api/s3/buckets", () => {
 
   it("409 + specific error when DuplicateBucketNameError thrown", async () => {
     mocks.getSession.mockResolvedValueOnce(superadminSession("auth0|dup"));
-    mocks.findUniqueUser.mockResolvedValueOnce({ id: "u-42" });
+    mocks.upsertUser.mockResolvedValueOnce({ id: "u-42" });
     const { DuplicateBucketNameError } = await import("@/lib/bucket-create");
     mocks.createBucketForTenant.mockRejectedValueOnce(
       new DuplicateBucketNameError(VALID.name),
@@ -226,7 +242,7 @@ describe("POST /api/s3/buckets", () => {
 
   it("500 + generic error on unknown failure; never leaks the raw error message", async () => {
     mocks.getSession.mockResolvedValueOnce(superadminSession("auth0|err"));
-    mocks.findUniqueUser.mockResolvedValueOnce({ id: "u-42" });
+    mocks.upsertUser.mockResolvedValueOnce({ id: "u-42" });
     mocks.createBucketForTenant.mockRejectedValueOnce(
       new Error("postgres://user:secret@host/db connection refused"),
     );
@@ -241,7 +257,7 @@ describe("POST /api/s3/buckets", () => {
     const sub = "auth0|rate-post";
     for (let i = 0; i < 5; i++) {
       mocks.getSession.mockResolvedValueOnce(superadminSession(sub));
-      mocks.findUniqueUser.mockResolvedValueOnce({ id: "u-1" });
+      mocks.upsertUser.mockResolvedValueOnce({ id: "u-1" });
       mocks.createBucketForTenant.mockResolvedValueOnce({
         id: `b-${i}`,
         name: `${VALID.name}-${i}`,
