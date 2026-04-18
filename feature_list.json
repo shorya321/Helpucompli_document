@@ -471,7 +471,7 @@
             "Log DOCUMENT_MOVE or DOCUMENT_COPY in audit",
             "Test move and copy work correctly"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F6.5",
