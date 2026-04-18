@@ -508,7 +508,7 @@
             "Implement right-click event handler on file items",
             "Test context menu appears and actions work"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F6.8",

@@ -3,6 +3,10 @@ import { BRAND } from "@/lib/brand";
 import { formatStorage } from "@/components/buckets/bucket-card";
 import { buildBreadcrumb } from "@/lib/documents-browse";
 import { DownloadButton } from "@/components/documents/download-button";
+import {
+  ContextMenu,
+  buildDocumentMenu,
+} from "@/components/documents/context-menu";
 
 export type FileListEntry =
   | {
@@ -20,9 +24,91 @@ export type FileListEntry =
 interface FileListProps {
   readonly bucket: string;
   readonly bucketId?: string;
+  readonly canHardDelete?: boolean;
   readonly prefix: string;
   readonly entries: ReadonlyArray<FileListEntry>;
   readonly view: "grid" | "list";
+}
+
+interface FileRowProps {
+  readonly entry: Extract<FileListEntry, { kind: "file" }>;
+  readonly view: "grid" | "list";
+  readonly bucketId?: string;
+  readonly canHardDelete: boolean;
+}
+
+function FileRow({ entry, view, bucketId, canHardDelete }: FileRowProps) {
+  const rowStyle: React.CSSProperties = {
+    padding: "0.625rem 0.875rem",
+    borderBottom:
+      view === "list" ? `1px solid ${BRAND.colors.dark}0D` : "none",
+    background: view === "grid" ? "#FFFFFF" : "transparent",
+    border: view === "grid" ? `1px solid ${BRAND.colors.dark}1A` : undefined,
+    borderRadius: view === "grid" ? "0.5rem" : undefined,
+    display: "flex",
+    gap: "0.75rem",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    flexWrap: "wrap",
+    fontSize: "0.875rem",
+  };
+
+  const inner = (
+    <>
+      <span style={{ wordBreak: "break-all", fontWeight: 500 }}>
+        {filenameFromKey(entry.key)}
+      </span>
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "baseline",
+          gap: "0.75rem",
+        }}
+      >
+        <span
+          style={{
+            color: "rgba(30,41,59,0.72)",
+            fontSize: "0.75rem",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {formatStorage(entry.size)}
+        </span>
+        {bucketId ? (
+          <DownloadButton bucketId={bucketId} s3Key={entry.key} />
+        ) : null}
+      </span>
+    </>
+  );
+
+  if (!bucketId) {
+    return <li style={rowStyle}>{inner}</li>;
+  }
+
+  return (
+    <li style={rowStyle}>
+      <ContextMenu
+        items={buildDocumentMenu({
+          bucketId,
+          s3Key: entry.key,
+          canHardDelete,
+        })}
+      >
+        <span
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: "0.75rem",
+            width: "100%",
+            flexWrap: "wrap",
+            alignItems: "baseline",
+          }}
+        >
+          {inner}
+        </span>
+      </ContextMenu>
+    </li>
+  );
 }
 
 function hrefForFolder(bucket: string, prefix: string): string {
@@ -39,6 +125,7 @@ function filenameFromKey(key: string): string {
 export function FileList({
   bucket,
   bucketId,
+  canHardDelete = false,
   prefix,
   entries,
   view,
@@ -171,50 +258,13 @@ export function FileList({
                 </Link>
               </li>
             ) : (
-              <li
+              <FileRow
                 key={`file:${e.key}`}
-                style={{
-                  padding: "0.625rem 0.875rem",
-                  borderBottom:
-                    view === "list" ? `1px solid ${BRAND.colors.dark}0D` : "none",
-                  background: view === "grid" ? "#FFFFFF" : "transparent",
-                  border:
-                    view === "grid"
-                      ? `1px solid ${BRAND.colors.dark}1A`
-                      : undefined,
-                  borderRadius: view === "grid" ? "0.5rem" : undefined,
-                  display: "flex",
-                  gap: "0.75rem",
-                  justifyContent: "space-between",
-                  alignItems: "baseline",
-                  flexWrap: "wrap",
-                  fontSize: "0.875rem",
-                }}
-              >
-                <span style={{ wordBreak: "break-all", fontWeight: 500 }}>
-                  {filenameFromKey(e.key)}
-                </span>
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "baseline",
-                    gap: "0.75rem",
-                  }}
-                >
-                  <span
-                    style={{
-                      color: "rgba(30,41,59,0.72)",
-                      fontSize: "0.75rem",
-                      fontVariantNumeric: "tabular-nums",
-                    }}
-                  >
-                    {formatStorage(e.size)}
-                  </span>
-                  {bucketId ? (
-                    <DownloadButton bucketId={bucketId} s3Key={e.key} />
-                  ) : null}
-                </span>
-              </li>
+                entry={e}
+                view={view}
+                bucketId={bucketId}
+                canHardDelete={canHardDelete}
+              />
             ),
           )}
         </ul>

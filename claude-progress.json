@@ -2,11 +2,17 @@
   "project": "helpucompli-document-repository",
   "current_phase": 1,
   "current_module": "06-documents",
-  "last_completed_feature": "F6.6",
+  "last_completed_feature": "F6.7",
   "total_features": 77,
-  "completed_features": 32,
+  "completed_features": 33,
   "blockers": [],
   "sessions": [
+    {
+      "date": "2026-04-18",
+      "module": "06-documents",
+      "features_completed": ["F6.7"],
+      "notes": "F6.7 Right-click context menu. NEW src/components/documents/context-menu.tsx: 'use client' ContextMenu{items, children} — wraps child, onContextMenu opens cursor-position-anchored <ul role='menu'> at {clientX, clientY} with position:fixed + zIndex:50. Close on Escape / outside mousedown (document listener registered in useEffect, cleaned up on unmount). Items: {key, label, href?, onSelect?, disabled?, danger?}. href variant renders <a role='menuitem'> — disabled anchors preventDefault on click. Non-href variant renders <button role='menuitem'>. Danger flag paints pink (BRAND). buildDocumentMenu({bucketId, s3Key, canHardDelete, basePath='/documents'}) — central action list: preview, download, move, copy, link (disabled — F9), delete (danger), optional hard-delete when canHardDelete. Hrefs encode bucketId + s3Key via encodeURIComponent. MOD src/components/documents/file-list.tsx: extracted FileRow sub-component wrapping each file <li> with ContextMenu that receives buildDocumentMenu(...) items. Accepts new canHardDelete prop (default false). If bucketId absent (legacy callers), row renders without menu. TESTS: 722→728 (+6): context-menu (buildDocumentMenu returns 6 base items; canHardDelete appends hard-delete; link disabled flag; URL encoding; delete+hard-delete danger flags; ContextMenu SSR renders child without menu DOM). Full suite 728/728 green, typecheck clean. Research skipped: DOM event API native — no external library (react-contextmenu etc. not introduced; building our own keeps bundle lean + isolates to Module 06). Carry-forward: (a) page.tsx handler for ?op=<action>&bucketId=&s3Key= query params — currently menu items produce URLs that /documents page doesn't yet interpret; F6.4/F6.5 dialogs exist but aren't wired to query-param mount. Next pass can add a switch-on-op render block in page.tsx OR per-op route (/documents/preview/[bucketId]/[s3Key]). (b) Keyboard nav — menu has role='menu' but no roving tabindex; screen-reader access via Tab is basic-only. A11y enhancement deferred to Module 11 hardening. (c) Touch/mobile long-press to open menu not implemented — MVP desktop; mobile UX lands in Module 11/12. (d) Generate-link item currently disabled — unlock when F9 link engine lands."
+    },
     {
       "date": "2026-04-18",
       "module": "06-documents",
