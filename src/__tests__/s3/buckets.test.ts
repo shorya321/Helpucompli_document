@@ -2,6 +2,7 @@ import {
   CreateBucketCommand,
   DeleteBucketCommand,
   ListBucketsCommand,
+  ListMultipartUploadsCommand,
   ListObjectsV2Command,
   PutBucketEncryptionCommand,
   PutBucketLoggingCommand,
@@ -533,6 +534,21 @@ describe("F3.2 — deleteEmptyHipaaBucket", () => {
     await deleteEmptyHipaaBucket("empty-bucket");
     const [call] = commandCalls(s3Send, DeleteBucketCommand);
     expect(call.input.Bucket).toBe("empty-bucket");
+  });
+
+  it("refuses to delete when in-flight multipart uploads exist (sec-review F5.4 H2)", async () => {
+    stubAll();
+    const send = vi.fn().mockImplementation((cmd: unknown) => {
+      if (cmd instanceof ListObjectsV2Command) return Promise.resolve({ KeyCount: 0 });
+      if (cmd instanceof ListMultipartUploadsCommand)
+        return Promise.resolve({ Uploads: [{ UploadId: "u-1", Key: "x" }] });
+      return Promise.resolve({});
+    });
+    const { deleteEmptyHipaaBucket, BucketNotEmptyError } =
+      await importBucketsWithMocks({ s3Send: send });
+    await expect(deleteEmptyHipaaBucket("mpu-pending")).rejects.toBeInstanceOf(
+      BucketNotEmptyError,
+    );
   });
 
   it("rewraps AWS BucketNotEmpty (TOCTOU race) as BucketNotEmptyError", async () => {

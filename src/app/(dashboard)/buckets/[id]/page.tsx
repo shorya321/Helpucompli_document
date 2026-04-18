@@ -14,6 +14,7 @@ import {
   type BucketDetailsScope,
 } from "@/lib/bucket-details";
 import { formatStorage } from "@/components/buckets/bucket-card";
+import { DeleteBucketDialog } from "@/components/buckets/delete-bucket-dialog";
 import { createRateLimiter } from "@/lib/rate-limit";
 
 const idSchema = z.string().min(1).max(64);
@@ -28,10 +29,17 @@ const pageLimiter = createRateLimiter({
 
 interface PageProps {
   readonly params: Promise<{ id: string }>;
+  readonly searchParams: Promise<
+    Record<string, string | string[] | undefined>
+  >;
 }
 
-export default async function BucketDetailsPage({ params }: PageProps) {
+export default async function BucketDetailsPage({
+  params,
+  searchParams,
+}: PageProps) {
   const { id: rawId } = await params;
+  const sp = await searchParams;
   const parsedId = idSchema.safeParse(rawId);
   if (!parsedId.success) notFound();
   const id = parsedId.data;
@@ -91,10 +99,31 @@ export default async function BucketDetailsPage({ params }: PageProps) {
     );
   }
 
-  return <DetailsView details={details} />;
+  const canDelete = role === "superadmin";
+  const dialogOpen = canDelete && sp.delete === "1";
+
+  return (
+    <>
+      <DetailsView details={details} canDelete={canDelete} />
+      {dialogOpen ? (
+        <DeleteBucketDialog
+          bucketId={details.id}
+          bucketName={details.name}
+          closeHref={`/buckets/${details.id}`}
+          onSuccessHref="/buckets"
+        />
+      ) : null}
+    </>
+  );
 }
 
-function DetailsView({ details }: { readonly details: BucketDetails }) {
+function DetailsView({
+  details,
+  canDelete,
+}: {
+  readonly details: BucketDetails;
+  readonly canDelete: boolean;
+}) {
   return (
     <Shell>
       <nav style={{ marginBottom: "1rem", fontSize: "0.875rem" }}>
@@ -129,7 +158,27 @@ function DetailsView({ details }: { readonly details: BucketDetails }) {
             {details.region}
           </p>
         </div>
-        <StatusBadge isActive={details.isActive} />
+        <div
+          style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}
+        >
+          <StatusBadge isActive={details.isActive} />
+          {canDelete && details.isActive ? (
+            <a
+              href={`/buckets/${details.id}?delete=1`}
+              style={{
+                fontSize: "0.75rem",
+                fontWeight: 600,
+                padding: "0.375rem 0.75rem",
+                borderRadius: "0.5rem",
+                border: `1px solid ${BRAND.colors.pink}`,
+                color: BRAND.colors.pink,
+                textDecoration: "none",
+              }}
+            >
+              Delete bucket
+            </a>
+          ) : null}
+        </div>
       </header>
 
       {details.description ? (

@@ -397,7 +397,7 @@
             "Test only superadmin can delete",
             "Test rejection when bucket has objects"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F5.5",

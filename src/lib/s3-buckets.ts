@@ -3,6 +3,7 @@ import {
   CreateBucketCommand,
   DeleteBucketCommand,
   ListBucketsCommand,
+  ListMultipartUploadsCommand,
   ListObjectsV2Command,
   PutBucketEncryptionCommand,
   PutBucketLifecycleConfigurationCommand,
@@ -327,6 +328,16 @@ export async function deleteEmptyHipaaBucket(name: string): Promise<void> {
     new ListObjectsV2Command({ Bucket: name, MaxKeys: 1 }),
   );
   if ((listing.KeyCount ?? 0) > 0) {
+    throw new BucketNotEmptyError(name);
+  }
+  // Multipart uploads initiated but not completed do NOT surface in
+  // ListObjectsV2 — deleting a bucket with live multipart uploads
+  // orphans the parts and can produce orphaned storage charges.
+  // (sec-review F5.4 H2)
+  const multipart = await s3.send(
+    new ListMultipartUploadsCommand({ Bucket: name, MaxUploads: 1 }),
+  );
+  if ((multipart.Uploads ?? []).length > 0) {
     throw new BucketNotEmptyError(name);
   }
   // TOCTOU: concurrent writer may race between ListObjectsV2 and
