@@ -408,7 +408,7 @@
             "Cannot modify security settings (enforced by design)",
             "Test settings display matches actual S3 configuration"
           ],
-          "passes": false
+          "passes": true
         }
       ]
     },

@@ -14,6 +14,7 @@ import {
   type BucketDetailsScope,
 } from "@/lib/bucket-details";
 import { formatStorage } from "@/components/buckets/bucket-card";
+import { ComplianceVerifier } from "@/components/buckets/compliance-verifier";
 import { DeleteBucketDialog } from "@/components/buckets/delete-bucket-dialog";
 import { createRateLimiter } from "@/lib/rate-limit";
 
@@ -100,11 +101,16 @@ export default async function BucketDetailsPage({
   }
 
   const canDelete = role === "superadmin";
+  const canVerify = role === "superadmin" || role === "admin";
   const dialogOpen = canDelete && sp.delete === "1";
 
   return (
     <>
-      <DetailsView details={details} canDelete={canDelete} />
+      <DetailsView
+        details={details}
+        canDelete={canDelete}
+        canVerify={canVerify}
+      />
       {dialogOpen ? (
         <DeleteBucketDialog
           bucketId={details.id}
@@ -120,9 +126,11 @@ export default async function BucketDetailsPage({
 function DetailsView({
   details,
   canDelete,
+  canVerify,
 }: {
   readonly details: BucketDetails;
   readonly canDelete: boolean;
+  readonly canVerify: boolean;
 }) {
   return (
     <Shell>
@@ -199,6 +207,11 @@ function DetailsView({
       <MetricsGrid details={details} />
       <Section title="HIPAA compliance (enforced by design)">
         <ComplianceList compliance={details.hipaaCompliance} />
+        {canVerify ? (
+          <div style={{ marginTop: "0.75rem" }}>
+            <ComplianceVerifier bucketId={details.id} />
+          </div>
+        ) : null}
       </Section>
       <Section
         title={`Access policies (${details.accessPolicies.length})`}
