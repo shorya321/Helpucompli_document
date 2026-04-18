@@ -3,6 +3,21 @@ import type { NextConfig } from "next";
 const isProd = process.env.NODE_ENV === "production";
 const auth0Domain = process.env.AUTH0_DOMAIN?.trim();
 const auth0Origin = auth0Domain ? `https://${auth0Domain}` : "";
+const awsRegion = process.env.AWS_REGION?.trim() ?? "us-east-1";
+
+// Browser direct-PUT upload flow targets:
+//   https://<bucket>.s3.<region>.amazonaws.com/<key>
+// CSP connect-src MUST include this origin wildcard or the F6.2 XHR
+// upload is blocked silently (onerror "Network error"). Scoped to the
+// deployment's AWS_REGION so we don't allow buckets in other regions.
+const s3UploadOrigin = `https://*.s3.${awsRegion}.amazonaws.com`;
+
+// img-src + frame-src must ALSO include the same origin so document
+// previews (F6.6 <iframe src> for PDF, <img src> for images) can load
+// presigned GET URLs from S3. img-src already permits https: so images
+// work, but frame-src defaults to 'none' — PDF preview fails without
+// this.
+const s3ReadOrigin = s3UploadOrigin;
 
 // Build CSP once at config time. Script-src intentionally allows
 // 'unsafe-inline' for Next.js App Router boot scripts (no nonce pipeline
@@ -18,9 +33,13 @@ function buildCsp(): string {
     "style-src": ["'self'", "'unsafe-inline'"],
     "img-src": ["'self'", "data:", "blob:", "https:"],
     "font-src": ["'self'", "data:"],
-    "connect-src": ["'self'", ...(auth0Origin ? [auth0Origin] : [])],
+    "connect-src": [
+      "'self'",
+      ...(auth0Origin ? [auth0Origin] : []),
+      s3UploadOrigin,
+    ],
     "frame-ancestors": ["'none'"],
-    "frame-src": ["'none'"],
+    "frame-src": ["'self'", s3ReadOrigin],
     "base-uri": ["'self'"],
     "form-action": ["'self'", ...(auth0Origin ? [auth0Origin] : [])],
     "object-src": ["'none'"],

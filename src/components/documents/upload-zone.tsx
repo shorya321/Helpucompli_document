@@ -50,19 +50,29 @@ async function uploadWithProgress(
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url, true);
-    xhr.setRequestHeader("Content-Type", contentType);
+    if (contentType) xhr.setRequestHeader("Content-Type", contentType);
     xhr.upload.onprogress = (ev) => {
       if (ev.lengthComputable) onProgress((ev.loaded / ev.total) * 100);
     };
     xhr.onload = () => {
       if (xhr.status < 200 || xhr.status >= 300) {
-        reject(new Error(`S3 PUT failed (HTTP ${xhr.status})`));
+        reject(
+          new Error(
+            `S3 PUT failed (HTTP ${xhr.status}) — ${xhr.responseText.slice(0, 200)}`,
+          ),
+        );
         return;
       }
       const etag = xhr.getResponseHeader("ETag") ?? "";
       resolve({ etag });
     };
-    xhr.onerror = () => reject(new Error("Network error during upload"));
+    xhr.onerror = () =>
+      reject(
+        new Error(
+          `Upload blocked by browser (CORS or network). status=${xhr.status}. Check S3 bucket CORS, or browser devtools Network tab for the failed PUT request.`,
+        ),
+      );
+    xhr.ontimeout = () => reject(new Error("Upload timed out"));
     xhr.send(blob);
   });
 }
