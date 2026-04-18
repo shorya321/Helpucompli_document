@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { BRAND } from "@/lib/brand";
 import {
@@ -59,10 +60,14 @@ function formatRelative(when: Date, now: Date = new Date()): string {
 }
 
 export function ActivityFeed({ initial }: ActivityFeedProps) {
-  const { data, isError } = useQuery({
+  // Lock initialDataUpdatedAt to mount time so the first refetch waits
+  // staleTime ms instead of firing immediately on hydration.
+  const [initialUpdatedAt] = useState(() => Date.now());
+  const { data, dataUpdatedAt, isError } = useQuery({
     queryKey: ["dashboard", "activity"],
     queryFn: fetchActivity,
     initialData: initial,
+    initialDataUpdatedAt: initialUpdatedAt,
     refetchInterval: REFETCH_INTERVAL_MS,
     staleTime: REFETCH_INTERVAL_MS / 2,
     // Don't retry 4xx — 401/403 won't succeed on the 2nd/3rd attempt.
@@ -74,6 +79,12 @@ export function ActivityFeed({ initial }: ActivityFeedProps) {
     },
   });
   const entries = (data ?? initial) as readonly ActivityEntry[];
+  // Pin `now` per data snapshot — prevents SSR/client hydration drift
+  // from `new Date()` being called at two different instants.
+  const now = useMemo(
+    () => new Date(dataUpdatedAt || initialUpdatedAt),
+    [dataUpdatedAt, initialUpdatedAt],
+  );
 
   if (isError && entries.length === 0) {
     return (
@@ -158,7 +169,7 @@ export function ActivityFeed({ initial }: ActivityFeedProps) {
               }}
               title={entry.createdAt.toISOString()}
             >
-              {formatRelative(entry.createdAt)}
+              {formatRelative(entry.createdAt, now)}
             </span>
           </li>
         );

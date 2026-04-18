@@ -54,12 +54,30 @@ export async function getDashboardStats(
   };
 }
 
+// Structural witness that the caller actually looks like a Prisma
+// client (or a hand-rolled test stub). Each model surface we touch MUST
+// expose a `count` method returning Promise<number>. If a future Prisma
+// bump drops one of these models, or renames `count`, the assignment
+// at call sites fails to compile — catching drift that an unchecked
+// `client as DashboardStatsPrisma` would silently allow.
+// Method syntax (not arrow) makes the `args` parameter bivariant, which
+// is what we need to accept both Prisma's generic <T extends DocumentCountArgs>
+// signature AND the simpler stub shapes used in tests.
+interface CountCapable {
+  count(args?: unknown): Promise<number>;
+}
+interface StatsPrismaLike {
+  readonly document: CountCapable;
+  readonly bucket: CountCapable;
+  readonly generatedLink: CountCapable;
+  readonly user: CountCapable;
+}
+
 // Adapter: the full PrismaClient has wider overloads than
 // DashboardStatsPrisma requires (where-clauses are Prisma.*CountArgs,
-// not Record<string, unknown>). Rather than widen the narrow test-
-// friendly interface, narrow the client here once. This is the single
-// cast point — every consumer calls getDashboardStats with the narrow
-// shape.
-export function asStatsPrisma(client: unknown): DashboardStatsPrisma {
-  return client as DashboardStatsPrisma;
+// not Record<string, unknown>), so a direct assignment is still
+// contravariantly incompatible. The `as unknown as` is unavoidable,
+// but input is now structurally checked — see StatsPrismaLike.
+export function asStatsPrisma(client: StatsPrismaLike): DashboardStatsPrisma {
+  return client as unknown as DashboardStatsPrisma;
 }

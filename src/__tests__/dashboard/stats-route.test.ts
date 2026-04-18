@@ -86,6 +86,59 @@ describe("GET /api/dashboard/stats", () => {
     expect(body.error).toBeNull();
   });
 
+  it("returns 429 after 10 requests in 30s for the same user (rate limit)", async () => {
+    // 10 allowed, 11th must 429. Unique sub so state does not bleed
+    // into other tests sharing the module-level in-memory limiter.
+    for (let i = 0; i < 10; i++) {
+      mocks.getSession.mockResolvedValueOnce({
+        user: {
+          sub: "auth0|rate-stats",
+          email: "r@x.com",
+          "https://docs.helpucompli.com/role": "admin",
+        },
+      });
+      mocks.getDashboardStats.mockResolvedValueOnce({
+        totalDocuments: 0,
+        totalBuckets: 0,
+        recentUploads: 0,
+        recentLinks: 0,
+        activeUsers: 0,
+      });
+      const ok = await GET();
+      expect(ok.status).toBe(200);
+    }
+    mocks.getSession.mockResolvedValueOnce({
+      user: {
+        sub: "auth0|rate-stats",
+        email: "r@x.com",
+        "https://docs.helpucompli.com/role": "admin",
+      },
+    });
+    const res = await GET();
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toMatch(/^\d+$/);
+    expect(mocks.getDashboardStats).toHaveBeenCalledTimes(10);
+  });
+
+  it("sets Cache-Control no-store, private on 200 responses", async () => {
+    mocks.getSession.mockResolvedValueOnce({
+      user: {
+        sub: "auth0|cache-stats",
+        email: "c@x.com",
+        "https://docs.helpucompli.com/role": "admin",
+      },
+    });
+    mocks.getDashboardStats.mockResolvedValueOnce({
+      totalDocuments: 0,
+      totalBuckets: 0,
+      recentUploads: 0,
+      recentLinks: 0,
+      activeUsers: 0,
+    });
+    const res = await GET();
+    expect(res.headers.get("Cache-Control")).toBe("no-store, private");
+  });
+
   it("returns 500 + generic error when the stats fetch throws (no leak of db internals)", async () => {
     mocks.getSession.mockResolvedValueOnce({
       user: {

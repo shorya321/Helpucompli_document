@@ -42,7 +42,7 @@ describe("getRecentActivity", () => {
     expect(call?.orderBy).toEqual({ createdAt: "desc" });
   });
 
-  it("selects only {id, createdAt, action, targetType, targetId, user:{name,email}}", async () => {
+  it("selects only {id, createdAt, action, targetType, targetId, user:{name}} — HIPAA minimum-necessary, email excluded", async () => {
     const stub = makeStub([]);
     await getRecentActivity(stub.client);
     const select = stub.calls[0]?.select as Record<string, unknown>;
@@ -52,8 +52,25 @@ describe("getRecentActivity", () => {
       action: true,
       targetType: true,
       targetId: true,
-      user: { select: { name: true, email: true } },
+      user: { select: { name: true } },
     });
+  });
+
+  it("never fetches email — even if a stub row contains it, userName does not leak it", async () => {
+    const stub = makeStub([
+      {
+        id: "a1",
+        createdAt: new Date(),
+        action: "LOGIN",
+        targetType: "user",
+        targetId: "u1",
+        // Simulate a stray email field on the row — the function must
+        // NOT use it as a fallback (unlike prior F4.3 behaviour).
+        user: { name: null, email: "leak@x.com" },
+      },
+    ]);
+    const out = await getRecentActivity(stub.client);
+    expect(out[0]?.userName).toBeNull();
   });
 
   it("accepts a custom limit override", async () => {
@@ -96,7 +113,7 @@ describe("getRecentActivity", () => {
     expect(out).toEqual([expected]);
   });
 
-  it("falls back to email when name is empty", async () => {
+  it("returns null userName when name is null — no email fallback (HIPAA min-necessary)", async () => {
     const stub = makeStub([
       {
         id: "a2",
@@ -104,11 +121,11 @@ describe("getRecentActivity", () => {
         action: "LOGIN",
         targetType: "user",
         targetId: "u-1",
-        user: { name: null, email: "b@x.com" },
+        user: { name: null },
       },
     ]);
     const out = await getRecentActivity(stub.client);
-    expect(out[0]?.userName).toBe("b@x.com");
+    expect(out[0]?.userName).toBeNull();
   });
 
   it("userName is null when the whole user row is null (HIPAA: audit_logs.user_id SET NULL on user delete)", async () => {

@@ -91,6 +91,72 @@ describe("GET /api/dashboard/activity", () => {
     expect(body.error).toBeNull();
   });
 
+  it("429 after 10 requests in 30s for the same user (rate limit)", async () => {
+    for (let i = 0; i < 10; i++) {
+      mocks.getSession.mockResolvedValueOnce({
+        user: {
+          sub: "auth0|rate-act",
+          email: "r@x.com",
+          "https://docs.helpucompli.com/role": "admin",
+        },
+      });
+      mocks.getRecentActivity.mockResolvedValueOnce([]);
+      const ok = await GET();
+      expect(ok.status).toBe(200);
+    }
+    mocks.getSession.mockResolvedValueOnce({
+      user: {
+        sub: "auth0|rate-act",
+        email: "r@x.com",
+        "https://docs.helpucompli.com/role": "admin",
+      },
+    });
+    const res = await GET();
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toMatch(/^\d+$/);
+    expect(mocks.getRecentActivity).toHaveBeenCalledTimes(10);
+  });
+
+  it("sets Cache-Control no-store, private on 200 responses", async () => {
+    mocks.getSession.mockResolvedValueOnce({
+      user: {
+        sub: "auth0|cache-act",
+        email: "c@x.com",
+        "https://docs.helpucompli.com/role": "admin",
+      },
+    });
+    mocks.getRecentActivity.mockResolvedValueOnce([]);
+    const res = await GET();
+    expect(res.headers.get("Cache-Control")).toBe("no-store, private");
+  });
+
+  it("500 when payload fails Zod validation (oversize targetId from buggy writer)", async () => {
+    mocks.getSession.mockResolvedValueOnce({
+      user: {
+        sub: "auth0|a",
+        email: "a@x.com",
+        "https://docs.helpucompli.com/role": "admin",
+      },
+    });
+    // targetId above 128 chars — must be rejected at the boundary.
+    mocks.getRecentActivity.mockResolvedValueOnce([
+      {
+        id: "x",
+        createdAt: new Date("2026-04-17T10:00:00Z"),
+        action: "DOCUMENT_UPLOAD",
+        userName: "Alice",
+        targetType: "document",
+        targetId: "a".repeat(200),
+      },
+    ]);
+    const res = await GET();
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as { data: null; error: string };
+    expect(body.data).toBeNull();
+    // Generic error — never surfaces zod issue details.
+    expect(body.error).toBe("Failed to load activity feed");
+  });
+
   it("500 + generic error; never leaks DATABASE_URL from raw err.message", async () => {
     mocks.getSession.mockResolvedValueOnce({
       user: {

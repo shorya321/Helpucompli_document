@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { BRAND } from "@/lib/brand";
 
 interface BrandLogoProps {
@@ -6,7 +7,7 @@ interface BrandLogoProps {
 
 export function BrandLogo({ href = "/" }: BrandLogoProps) {
   return (
-    <a
+    <Link
       href={href}
       aria-label={`${BRAND.name} — ${BRAND.productName}`}
       style={{
@@ -32,6 +33,6 @@ export function BrandLogo({ href = "/" }: BrandLogoProps) {
       <span style={{ fontSize: "1.125rem", letterSpacing: "-0.01em" }}>
         {BRAND.name}
       </span>
-    </a>
+    </Link>
   );
 }

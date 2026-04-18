@@ -7,12 +7,29 @@ import {
   getDashboardStats,
   type DashboardStats,
 } from "@/lib/dashboard-stats";
+import { createRateLimiter } from "@/lib/rate-limit";
 import type { ApiResponse } from "@/types";
 
 export const dynamic = "force-dynamic";
 
-function json<T>(body: ApiResponse<T>, status: number) {
-  return NextResponse.json(body, { status });
+// 10 requests / 30s per authenticated user. Covers the dashboard
+// summary card mount + a few manual refreshes without throttling
+// normal use. Blocks amplification from stolen tokens or runaway tabs.
+const limiter = createRateLimiter({
+  max: 10,
+  windowMs: 30_000,
+  prefix: "@helpucompli/dashboard-stats",
+});
+
+function json<T>(
+  body: ApiResponse<T>,
+  status: number,
+  extraHeaders?: Record<string, string>,
+) {
+  return NextResponse.json(body, {
+    status,
+    headers: { "Cache-Control": "no-store, private", ...extraHeaders },
+  });
 }
 
 export async function GET() {
@@ -25,6 +42,18 @@ export async function GET() {
   // scoped dashboard home renders without calling this endpoint.
   if (!hasRole(session, ["superadmin", "admin"])) {
     return json<DashboardStats>({ data: null, error: "Forbidden" }, 403);
+  }
+
+  const sub = session.user.sub as string | undefined;
+  const identifier = `stats:${sub ?? "anon"}`;
+  const quota = await limiter.limit(identifier);
+  if (!quota.success) {
+    const retrySec = Math.max(1, Math.ceil((quota.reset - Date.now()) / 1000));
+    return json<DashboardStats>(
+      { data: null, error: "Too Many Requests" },
+      429,
+      { "Retry-After": String(retrySec) },
+    );
   }
 
   try {

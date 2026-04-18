@@ -20,6 +20,11 @@ export default async function DashboardLayout({ children }: LayoutProps) {
   if (!role) {
     redirect("/access-denied");
   }
+  // redirect() returns `never` (typed by next/navigation), so role is
+  // correctly narrowed from `Role | null` to `Role` at this point.
+  // Asserting here makes the guarantee explicit and guards against a
+  // future next.js type regression that relaxes redirect's return type.
+  if (!role) throw new Error("unreachable: role narrowed by redirect");
 
   const user = {
     name: (session.user.name as string | null | undefined) ?? null,
