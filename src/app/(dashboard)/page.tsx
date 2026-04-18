@@ -1,17 +1,27 @@
+import { auth0 } from "@/lib/auth0";
+import { hasRole } from "@/lib/auth-guard";
 import { BRAND } from "@/lib/brand";
 import { prisma } from "@/lib/prisma";
-import {
-  getDashboardStats,
-  type DashboardStatsPrisma,
-} from "@/lib/dashboard-stats";
+import { asStatsPrisma, getDashboardStats } from "@/lib/dashboard-stats";
+import type { DashboardStats } from "@/lib/dashboard-stats";
 import { SummaryCards } from "@/components/dashboard/summary-cards";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardHomePage() {
-  const stats = await getDashboardStats(
-    prisma as unknown as DashboardStatsPrisma,
-  );
+  const session = await auth0.getSession();
+  const canSeeAggregate = hasRole(session ?? null, ["superadmin", "admin"]);
+
+  let stats: DashboardStats | null = null;
+  let loadError = false;
+  if (canSeeAggregate) {
+    try {
+      stats = await getDashboardStats(asStatsPrisma(prisma));
+    } catch {
+      // Engine-level errors can embed DATABASE_URL. Do NOT surface.
+      loadError = true;
+    }
+  }
 
   return (
     <section
@@ -28,10 +38,17 @@ export default async function DashboardHomePage() {
           Dashboard
         </h1>
         <p style={{ marginTop: "0.25rem", color: "rgba(30,41,59,0.72)" }}>
-          Activity summary for the last 7 days.
+          {canSeeAggregate
+            ? "Activity summary for the last 7 days."
+            : "Welcome back. Use the sidebar to browse the documents and links you can access."}
         </p>
       </header>
-      <SummaryCards stats={stats} />
+      {canSeeAggregate && stats ? <SummaryCards stats={stats} /> : null}
+      {canSeeAggregate && loadError ? (
+        <p role="alert" style={{ color: BRAND.colors.pink }}>
+          Unable to load dashboard metrics. Please try again.
+        </p>
+      ) : null}
     </section>
   );
 }

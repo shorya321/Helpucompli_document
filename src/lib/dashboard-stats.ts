@@ -1,5 +1,3 @@
-import type { PrismaClient } from "@prisma/client";
-
 export const RECENT_WINDOW_DAYS = 7 as const;
 const DAY_MS = 86_400_000;
 
@@ -56,13 +54,12 @@ export async function getDashboardStats(
   };
 }
 
-// Convenience adapter for code paths that already hold the real client.
-export async function getDashboardStatsFromClient(
-  prisma: PrismaClient,
-  now: Date = new Date(),
-): Promise<DashboardStats> {
-  return getDashboardStats(
-    prisma as unknown as DashboardStatsPrisma,
-    now,
-  );
+// Adapter: the full PrismaClient has wider overloads than
+// DashboardStatsPrisma requires (where-clauses are Prisma.*CountArgs,
+// not Record<string, unknown>). Rather than widen the narrow test-
+// friendly interface, narrow the client here once. This is the single
+// cast point — every consumer calls getDashboardStats with the narrow
+// shape.
+export function asStatsPrisma(client: unknown): DashboardStatsPrisma {
+  return client as DashboardStatsPrisma;
 }

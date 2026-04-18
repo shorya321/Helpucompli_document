@@ -48,6 +48,19 @@ describe("GET /api/dashboard/stats", () => {
     expect(mocks.getDashboardStats).not.toHaveBeenCalled();
   });
 
+  it("returns 403 for a viewer (aggregate tenant data is admin+ only)", async () => {
+    mocks.getSession.mockResolvedValueOnce({
+      user: {
+        sub: "auth0|v",
+        email: "v@x.com",
+        "https://docs.helpucompli.com/role": "viewer",
+      },
+    });
+    const res = await GET();
+    expect(res.status).toBe(403);
+    expect(mocks.getDashboardStats).not.toHaveBeenCalled();
+  });
+
   it("returns 200 + stats payload for an authed+roled user", async () => {
     mocks.getSession.mockResolvedValueOnce({
       user: {

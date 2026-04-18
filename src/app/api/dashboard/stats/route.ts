@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
-import { getRole } from "@/lib/auth-guard";
+import { hasRole } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
 import {
+  asStatsPrisma,
   getDashboardStats,
   type DashboardStats,
 } from "@/lib/dashboard-stats";
@@ -19,15 +20,15 @@ export async function GET() {
   if (!session) {
     return json<DashboardStats>({ data: null, error: "Unauthorized" }, 401);
   }
-  const role = getRole(session);
-  if (!role) {
+  // Aggregate dashboard stats include total document + bucket + user
+  // counts across the tenant — viewer must not receive this. Viewer-
+  // scoped dashboard home renders without calling this endpoint.
+  if (!hasRole(session, ["superadmin", "admin"])) {
     return json<DashboardStats>({ data: null, error: "Forbidden" }, 403);
   }
 
   try {
-    const stats = await getDashboardStats(
-      prisma as unknown as Parameters<typeof getDashboardStats>[0],
-    );
+    const stats = await getDashboardStats(asStatsPrisma(prisma));
     return json<DashboardStats>({ data: stats, error: null }, 200);
   } catch {
     // NEVER pass raw error into the response — engine errors can
