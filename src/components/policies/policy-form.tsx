@@ -142,7 +142,7 @@ export function PolicyForm({ initial, buckets, mode }: PolicyFormProps) {
         />
 
         <label style={labelStyle}>
-          Allowed domains (referrer)
+          Allowed domains (optional, referrer)
           <DomainInput
             value={policy.allowedDomains}
             onChange={(allowedDomains) =>
@@ -153,7 +153,7 @@ export function PolicyForm({ initial, buckets, mode }: PolicyFormProps) {
         </label>
 
         <label style={labelStyle}>
-          Allowed IP ranges (CIDR)
+          Allowed IP ranges (optional, CIDR)
           <IpRangeInput
             value={policy.allowedIpRanges}
             onChange={(allowedIpRanges) =>
