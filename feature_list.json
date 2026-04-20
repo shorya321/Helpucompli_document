@@ -893,7 +893,7 @@
             "Show document access history",
             "Test details page renders correctly"
           ],
-          "passes": false
+          "passes": true
         }
       ]
     },
