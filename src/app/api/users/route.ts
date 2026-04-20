@@ -148,12 +148,17 @@ export async function POST(req: NextRequest) {
   const dbUser = await ensureUser(prisma, { session, role });
 
   try {
+    const inviterName =
+      (session.user as { name?: string }).name ??
+      (session.user as { email?: string }).email ??
+      null;
     const created = await inviteUser(prisma, {
       input: parsed.data,
       actor: {
         userId: dbUser.id,
         ipAddress: extractIp(req),
         userAgent: extractUserAgent(req),
+        displayName: inviterName,
       },
     });
     return json({ data: created, error: null }, 201);

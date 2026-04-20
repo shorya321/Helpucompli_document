@@ -238,6 +238,7 @@ describe("POST /api/users", () => {
       name: "Invitee",
       role: "viewer",
       ticket: "https://auth.helpucompli.com/lo/reset?ticket=abc",
+      emailSent: true,
     });
     const res = await POST(jsonReq(VALID_INVITE));
     expect(res.status).toBe(201);

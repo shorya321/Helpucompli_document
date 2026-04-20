@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   createAuth0User: vi.fn(),
   assignAuth0RoleByName: vi.fn(),
   createPasswordChangeTicket: vi.fn(),
+  sendInviteEmail: vi.fn(),
   logAudit: vi.fn(),
 }));
 
@@ -19,6 +20,7 @@ vi.mock("@/lib/auth0-management", async () => {
     createPasswordChangeTicket: mocks.createPasswordChangeTicket,
   };
 });
+vi.mock("@/lib/email", () => ({ sendInviteEmail: mocks.sendInviteEmail }));
 vi.mock("@/lib/audit", () => ({ logAudit: mocks.logAudit }));
 
 import {
@@ -104,6 +106,7 @@ describe("inviteUser", () => {
     mocks.createPasswordChangeTicket.mockResolvedValueOnce(
       "https://auth.helpucompli.com/lo/reset?ticket=abc",
     );
+    mocks.sendInviteEmail.mockResolvedValueOnce({ sent: true, id: "em-1" });
     mocks.logAudit.mockResolvedValueOnce(undefined);
 
     const prisma = stubPrisma();
@@ -111,11 +114,22 @@ describe("inviteUser", () => {
       prisma as unknown as Parameters<typeof inviteUser>[0],
       {
         input: { email: "new@x.com", name: "New User", role: "viewer" },
-        actor: { userId: "db-actor", ipAddress: "1.2.3.4", userAgent: "UA" },
+        actor: {
+          userId: "db-actor",
+          ipAddress: "1.2.3.4",
+          userAgent: "UA",
+          displayName: "Inviter",
+        },
       },
     );
 
     expect(result.auth0Id).toBe("auth0|new");
+    expect(result.emailSent).toBe(true);
+    expect(mocks.sendInviteEmail).toHaveBeenCalledWith({
+      to: "new@x.com",
+      activationUrl: "https://auth.helpucompli.com/lo/reset?ticket=abc",
+      inviterName: "Inviter",
+    });
     expect(mocks.createAuth0User).toHaveBeenCalledWith({
       email: "new@x.com",
       name: "New User",
@@ -140,13 +154,50 @@ describe("inviteUser", () => {
     expect(auditArg.metadata).toMatchObject({ email: "new@x.com", role: "viewer" });
   });
 
+  it("still succeeds when sendInviteEmail returns {sent:false} — emailSent:false surfaced", async () => {
+    mocks.createAuth0User.mockResolvedValueOnce({
+      userId: "auth0|new",
+      email: "new@x.com",
+    });
+    mocks.assignAuth0RoleByName.mockResolvedValueOnce(undefined);
+    mocks.createPasswordChangeTicket.mockResolvedValueOnce(
+      "https://auth.helpucompli.com/lo/reset?ticket=abc",
+    );
+    mocks.sendInviteEmail.mockResolvedValueOnce({
+      sent: false,
+      reason: "RESEND_API_KEY not configured",
+    });
+    mocks.logAudit.mockResolvedValueOnce(undefined);
+    const prisma = stubPrisma();
+    const result = await inviteUser(
+      prisma as unknown as Parameters<typeof inviteUser>[0],
+      {
+        input: { email: "new@x.com", name: "New User", role: "viewer" },
+        actor: {
+          userId: "db-actor",
+          ipAddress: "1.2.3.4",
+          userAgent: "UA",
+          displayName: "Inviter",
+        },
+      },
+    );
+    expect(result.emailSent).toBe(false);
+    expect(result.ticket).toMatch(/ticket=abc$/);
+    expect(mocks.logAudit).toHaveBeenCalledTimes(1);
+  });
+
   it("propagates Auth0ConflictError on duplicate email without touching DB or audit", async () => {
     mocks.createAuth0User.mockRejectedValueOnce(new Auth0ConflictError());
     const prisma = stubPrisma();
     await expect(
       inviteUser(prisma as unknown as Parameters<typeof inviteUser>[0], {
         input: { email: "dup@x.com", name: null, role: "viewer" },
-        actor: { userId: "db-actor", ipAddress: "1.2.3.4", userAgent: "UA" },
+        actor: {
+          userId: "db-actor",
+          ipAddress: "1.2.3.4",
+          userAgent: "UA",
+          displayName: "Inviter",
+        },
       }),
     ).rejects.toBeInstanceOf(Auth0ConflictError);
     expect(prisma.user.upsert).not.toHaveBeenCalled();

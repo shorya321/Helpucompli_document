@@ -16,6 +16,7 @@ type FormState =
       readonly kind: "ok";
       readonly email: string;
       readonly ticket: string;
+      readonly emailSent: boolean;
     }
   | { readonly kind: "error"; readonly message: string };
 
@@ -57,7 +58,11 @@ export function InviteUserDialog({ canInviteAdmin }: InviteUserDialogProps) {
         }),
       });
       const body = (await res.json()) as {
-        data?: { email: string; ticket: string } | null;
+        data?: {
+          email: string;
+          ticket: string;
+          emailSent?: boolean;
+        } | null;
         error?: string | null;
       };
       if (!res.ok || !body.data) {
@@ -71,6 +76,7 @@ export function InviteUserDialog({ canInviteAdmin }: InviteUserDialogProps) {
         kind: "ok",
         email: body.data.email,
         ticket: body.data.ticket,
+        emailSent: body.data.emailSent ?? false,
       });
       form.reset();
       router.refresh();
@@ -198,8 +204,8 @@ export function InviteUserDialog({ canInviteAdmin }: InviteUserDialogProps) {
               {state.kind === "ok" && (
                 <div
                   style={{
-                    background: "#F0FDF4",
-                    border: "1px solid #16A34A",
+                    background: state.emailSent ? "#F0FDF4" : "#FFFBEB",
+                    border: `1px solid ${state.emailSent ? "#16A34A" : "#D97706"}`,
                     borderRadius: "0.375rem",
                     padding: "0.75rem",
                     margin: "0.75rem 0 0",
@@ -207,7 +213,9 @@ export function InviteUserDialog({ canInviteAdmin }: InviteUserDialogProps) {
                   }}
                 >
                   <p style={{ margin: 0, fontWeight: 600 }}>
-                    Invitation sent to {state.email}.
+                    {state.emailSent
+                      ? `Invitation email sent to ${state.email}.`
+                      : `Invitation created for ${state.email}, but email was not sent.`}
                   </p>
                   <p
                     style={{
@@ -215,8 +223,9 @@ export function InviteUserDialog({ canInviteAdmin }: InviteUserDialogProps) {
                       color: "rgba(30,41,59,0.72)",
                     }}
                   >
-                    If the user does not receive the email, share this
-                    activation link manually:
+                    {state.emailSent
+                      ? "If the user does not receive the email, share this activation link manually:"
+                      : "Check RESEND_API_KEY / RESEND_FROM_EMAIL in .env.local, or forward this activation link manually:"}
                   </p>
                   <code
                     style={{

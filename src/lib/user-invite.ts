@@ -6,6 +6,7 @@ import {
   createAuth0User,
   createPasswordChangeTicket,
 } from "@/lib/auth0-management";
+import { sendInviteEmail } from "@/lib/email";
 import { logAudit, type AuditPrisma } from "@/lib/audit";
 
 // Invite payload schema — email is required and validated, name is
@@ -43,6 +44,7 @@ export interface InviteActor {
   readonly userId: string;
   readonly ipAddress: string;
   readonly userAgent: string;
+  readonly displayName: string | null;
 }
 
 export interface InviteUserResult {
@@ -52,6 +54,11 @@ export interface InviteUserResult {
   readonly name: string | null;
   readonly role: Role;
   readonly ticket: string;
+  // Whether the Resend-sent invitation email actually left the server.
+  // False when RESEND_API_KEY / RESEND_FROM_EMAIL unset OR when Resend
+  // returned a non-ok status. UI shows the ticket URL as a manual
+  // fallback so operators can forward it out-of-band.
+  readonly emailSent: boolean;
 }
 
 type InvitePrisma = Pick<PrismaClient, "user"> & AuditPrisma;
@@ -77,6 +84,16 @@ export async function inviteUser(
   await assignAuth0RoleByName(created.userId, input.role);
 
   const ticket = await createPasswordChangeTicket(created.userId);
+
+  // Resend email delivery is non-fatal: if it fails (missing env,
+  // Resend 4xx/5xx, network), we still return the ticket URL in the
+  // API response so the operator can forward it manually. sendInviteEmail
+  // itself swallows all errors and just reports {sent, reason}.
+  const emailResult = await sendInviteEmail({
+    to: created.email,
+    activationUrl: ticket,
+    inviterName: args.actor.displayName,
+  });
 
   // Local DB upsert — keyed by Auth0 sub, so a re-invite of an
   // already-synced user still lands on the same row. status defaults
@@ -118,5 +135,6 @@ export async function inviteUser(
     name: input.name,
     role: input.role,
     ticket,
+    emailSent: emailResult.sent,
   };
 }

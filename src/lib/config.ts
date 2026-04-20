@@ -73,6 +73,28 @@ const envSchema = z.object({
     (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
     z.string().optional(),
   ),
+  // Resend (https://resend.com) API key for transactional email delivery.
+  // Required for F10.3 invite email to actually leave the server. If
+  // unset, the invite API still returns 201 with the activation ticket
+  // URL in the response body as a manual fallback — operators email it
+  // out-of-band. Blank string treated as unset, same idiom as other
+  // optional env vars above.
+  RESEND_API_KEY: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.string().optional(),
+  ),
+  // From address Resend sends as. MUST match a verified Resend domain
+  // (dashboard → Domains). Required when RESEND_API_KEY is set.
+  RESEND_FROM_EMAIL: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.string().email().optional(),
+  ),
+  // Product brand name for email subject + CTA text. Optional; falls
+  // back to "HelpUcompli" at the send site.
+  APP_NAME: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.string().optional(),
+  ),
 });
 
 export type Env = z.infer<typeof envSchema>;
