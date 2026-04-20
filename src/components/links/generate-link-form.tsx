@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BRAND } from "@/lib/brand";
 import {
@@ -76,6 +76,20 @@ export function GenerateLinkForm({
   const [result, setResult] = useState<CreateResp | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [embedCopied, setEmbedCopied] = useState(false);
+
+  const embedCode = useMemo(() => {
+    if (!result) return "";
+    return `<iframe
+  src="${result.shareableUrl}"
+  width="100%"
+  height="600"
+  style="border:0"
+  loading="lazy"
+  referrerpolicy="no-referrer-when-downgrade"
+  allow="fullscreen"
+></iframe>`;
+  }, [result]);
 
   const isValid = documentId !== "";
 
@@ -119,6 +133,17 @@ export function GenerateLinkForm({
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
       setError("Clipboard write failed. Copy the URL manually.");
+    }
+  };
+
+  const onCopyEmbed = async () => {
+    if (!embedCode) return;
+    try {
+      await navigator.clipboard.writeText(embedCode);
+      setEmbedCopied(true);
+      window.setTimeout(() => setEmbedCopied(false), 2000);
+    } catch {
+      setError("Clipboard write failed. Copy the embed code manually.");
     }
   };
 
@@ -292,9 +317,61 @@ export function GenerateLinkForm({
                 whiteSpace: "nowrap",
               }}
             >
-              {copied ? "Copied!" : "Copy"}
+              {copied ? "Copied!" : "Copy URL"}
             </button>
           </div>
+          <div
+            style={{
+              display: "flex",
+              gap: "0.5rem",
+              marginTop: "0.5rem",
+              alignItems: "flex-start",
+            }}
+          >
+            <textarea
+              readOnly
+              value={embedCode}
+              onFocus={(e) => e.currentTarget.select()}
+              aria-label="Iframe embed code"
+              rows={6}
+              style={{
+                ...inputStyle,
+                flex: 1,
+                fontFamily: "ui-monospace, monospace",
+                fontSize: "0.7rem",
+                resize: "vertical",
+                whiteSpace: "pre",
+              }}
+            />
+            <button
+              type="button"
+              onClick={onCopyEmbed}
+              style={{
+                padding: "0.5rem 1rem",
+                background: BRAND.colors.blue,
+                color: "#FFFFFF",
+                border: "none",
+                borderRadius: "0.375rem",
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: "0.85rem",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {embedCopied ? "Copied!" : "Copy embed"}
+            </button>
+          </div>
+          <p
+            style={{
+              margin: "0.25rem 0 0",
+              fontSize: "0.7rem",
+              color: "rgba(30,41,59,0.56)",
+            }}
+          >
+            Paste the embed snippet into any HTML page. If a policy with
+            Allowed Domains is attached, the page must be hosted on one
+            of those domains so the browser sends a matching Referer.
+          </p>
           <div style={{ marginTop: "0.75rem" }}>
             <QrCode url={result.shareableUrl} />
           </div>
