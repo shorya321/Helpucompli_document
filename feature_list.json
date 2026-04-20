@@ -989,7 +989,7 @@
             "Set up CloudWatch Alarms: unauthorized API calls, failed logins, S3 policy changes, IAM role modifications",
             "Test CloudWatch alarm triggers"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F11.7",
