@@ -616,7 +616,7 @@
             "Edit and delete action buttons per row",
             "Test list page renders correctly with data"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F8.2",
