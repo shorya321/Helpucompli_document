@@ -916,7 +916,7 @@
             "Test CSP blocks inline scripts",
             "Test all headers present on every response"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F11.2",

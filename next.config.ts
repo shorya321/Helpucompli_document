@@ -1,89 +1,28 @@
 import type { NextConfig } from "next";
 
-const isProd = process.env.NODE_ENV === "production";
-const auth0Domain = process.env.AUTH0_DOMAIN?.trim();
-const auth0Origin = auth0Domain ? `https://${auth0Domain}` : "";
-const awsRegion = process.env.AWS_REGION?.trim() ?? "us-east-1";
-
-// Browser direct-PUT upload flow targets:
-//   https://<bucket>.s3.<region>.amazonaws.com/<key>
-// CSP connect-src MUST include this origin wildcard or the F6.2 XHR
-// upload is blocked silently (onerror "Network error"). Scoped to the
-// deployment's AWS_REGION so we don't allow buckets in other regions.
-const s3UploadOrigin = `https://*.s3.${awsRegion}.amazonaws.com`;
-
-// img-src + frame-src must ALSO include the same origin so document
-// previews (F6.6 <iframe src> for PDF, <img src> for images) can load
-// presigned GET URLs from S3. img-src already permits https: so images
-// work, but frame-src defaults to 'none' — PDF preview fails without
-// this.
-const s3ReadOrigin = s3UploadOrigin;
-
-// Build CSP once at config time. Script-src intentionally allows
-// 'unsafe-inline' for Next.js App Router boot scripts (no nonce pipeline
-// yet — carry-forward to F11 middleware). Dev additionally needs
-// 'unsafe-eval' for hot reload. connect-src + form-action extend to the
-// Auth0 tenant so Universal Login + /oauth/token calls succeed.
-function buildCsp(): string {
-  const directives: Record<string, string[]> = {
-    "default-src": ["'self'"],
-    "script-src": isProd
-      ? ["'self'", "'unsafe-inline'"]
-      : ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-    "style-src": ["'self'", "'unsafe-inline'"],
-    "img-src": ["'self'", "data:", "blob:", "https:"],
-    "font-src": ["'self'", "data:"],
-    "connect-src": [
-      "'self'",
-      ...(auth0Origin ? [auth0Origin] : []),
-      s3UploadOrigin,
-    ],
-    "frame-ancestors": ["'none'"],
-    "frame-src": ["'self'", s3ReadOrigin],
-    "base-uri": ["'self'"],
-    "form-action": ["'self'", ...(auth0Origin ? [auth0Origin] : [])],
-    "object-src": ["'none'"],
-    "upgrade-insecure-requests": [],
-  };
-  return Object.entries(directives)
-    .map(([name, values]) =>
-      values.length > 0 ? `${name} ${values.join(" ")}` : name,
-    )
-    .join("; ");
-}
-
+// Static security headers are applied here (every Next response, incl.
+// static assets excluded from proxy.ts matcher). The dynamic,
+// nonce-bearing Content-Security-Policy is set per-request in
+// src/proxy.ts — do NOT duplicate CSP here or the static value would
+// override the per-request nonce.
+//
+// Reference: next.config.ts `async headers()` applies to every response
+// emitted by Next, including static files under /_next/static.
 const nextConfig: NextConfig = {
-  // Security headers for HIPAA compliance
   async headers() {
     return [
       {
         source: "/(.*)",
         headers: [
-          {
-            key: "X-Content-Type-Options",
-            value: "nosniff",
-          },
-          {
-            key: "X-Frame-Options",
-            value: "DENY",
-          },
-          {
-            key: "X-XSS-Protection",
-            value: "1; mode=block",
-          },
-          {
-            // `no-referrer` drops the Origin leak on cross-origin
-            // logout → Auth0 navigation (module 04 sec-review MED-3).
-            key: "Referrer-Policy",
-            value: "no-referrer",
-          },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-XSS-Protection", value: "1; mode=block" },
+          // `no-referrer` drops the Origin leak on cross-origin
+          // logout → Auth0 navigation (module 04 sec-review MED-3).
+          { key: "Referrer-Policy", value: "no-referrer" },
           {
             key: "Strict-Transport-Security",
             value: "max-age=63072000; includeSubDomains; preload",
-          },
-          {
-            key: "Content-Security-Policy",
-            value: buildCsp(),
           },
         ],
       },
