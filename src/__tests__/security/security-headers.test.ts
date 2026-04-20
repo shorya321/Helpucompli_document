@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 const configMock = vi.hoisted(() => ({
   AUTH0_DOMAIN: "auth.helpucompli.com",
@@ -58,9 +58,11 @@ describe("buildCsp", () => {
     expect(csp).toMatch(/script-src[^;]*'unsafe-eval'/);
   });
 
-  it("uses nonce for style-src with 'unsafe-inline' fallback for CSP2 browsers", () => {
+  it("uses 'unsafe-inline' for style-src without a nonce (CSP3 nonce would block inline style attrs)", () => {
     const csp = buildCsp(nonce, { isDev: false });
-    expect(csp).toMatch(/style-src[^;]*'nonce-AAAA1111'/);
+    const styleSrc = /style-src ([^;]+);/.exec(csp)?.[1] ?? "";
+    expect(styleSrc).toContain("'unsafe-inline'");
+    expect(styleSrc).not.toContain("'nonce-");
   });
 
   it("includes default-src 'self'", () => {

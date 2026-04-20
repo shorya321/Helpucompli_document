@@ -57,15 +57,15 @@ export function buildCsp(nonce: string, opts: CspOptions): string {
       "'strict-dynamic'",
       ...(isDev ? ["'unsafe-eval'"] : []),
     ],
-    // Style nonce + 'unsafe-inline': CSP3-compliant browsers honor the
-    // nonce and ignore 'unsafe-inline'; CSP2 browsers fall back. Required
-    // because Tailwind / shadcn inject inline <style> tags that cannot
-    // always receive a nonce via the Next.js pipeline.
-    "style-src": [
-      "'self'",
-      `'nonce-${nonce}'`,
-      "'unsafe-inline'",
-    ],
+    // Style-src intentionally uses 'unsafe-inline' without a nonce.
+    // CSP3 browsers ignore 'unsafe-inline' when a nonce is present, so
+    // mixing both would silently block every inline `style="…"` attribute
+    // on <div>/<h1>/etc — React renders style props as attributes, and
+    // Next.js's error page uses `dangerouslySetInnerHTML` <style> tags,
+    // neither of which receive a nonce. Scripts stay strict (nonce +
+    // strict-dynamic); stylesheet-level XSS has far narrower exploit
+    // surface than inline script injection.
+    "style-src": ["'self'", "'unsafe-inline'"],
     "img-src": ["'self'", "data:", "blob:", "https:"],
     "font-src": ["'self'", "data:"],
     "connect-src": [
