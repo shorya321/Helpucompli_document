@@ -856,7 +856,7 @@
             "Log USER_ROLE_CHANGE in audit",
             "Test hierarchy enforcement for each role level"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F10.5",

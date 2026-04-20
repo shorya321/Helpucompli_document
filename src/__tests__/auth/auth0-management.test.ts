@@ -26,6 +26,7 @@ import {
   getManagementToken,
   getUserRoles,
   listAuth0Roles,
+  replaceAuth0RoleByName,
 } from "@/lib/auth0-management";
 
 const fetchMock = vi.fn();
@@ -339,5 +340,61 @@ describe("listAuth0Roles + assignAuth0RoleByName", () => {
     await expect(
       assignAuth0RoleByName("auth0|new", "viewer"),
     ).rejects.toThrow(/role.*viewer.*not found/i);
+  });
+});
+
+describe("replaceAuth0RoleByName", () => {
+  beforeEach(() => {
+    _resetRoleIdCache();
+    fetchMock.mockResolvedValueOnce(
+      okJson({ access_token: "tkn", expires_in: 86400 }),
+    );
+  });
+
+  it("DELETEs current Auth0 roles then POSTs the new role id", async () => {
+    fetchMock
+      // listAuth0Roles
+      .mockResolvedValueOnce(
+        okJson([
+          { id: "r-sa", name: "superadmin" },
+          { id: "r-ad", name: "admin" },
+          { id: "r-vw", name: "viewer" },
+        ]),
+      )
+      // current roles for user
+      .mockResolvedValueOnce(okJson([{ id: "r-ad", name: "admin" }]))
+      // DELETE current roles
+      .mockResolvedValueOnce(okJson({}))
+      // POST new role
+      .mockResolvedValueOnce(okJson({}));
+
+    await replaceAuth0RoleByName("auth0|u1", "viewer");
+    // 1 token, 2 roles GETs, 1 DELETE, 1 POST = 5
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    const deleteCall = fetchMock.mock.calls[3];
+    const postCall = fetchMock.mock.calls[4];
+    expect((deleteCall?.[1] as { method: string }).method).toBe("DELETE");
+    expect(JSON.parse((deleteCall?.[1] as { body: string }).body)).toEqual({
+      roles: ["r-ad"],
+    });
+    expect((postCall?.[1] as { method: string }).method).toBe("POST");
+    expect(JSON.parse((postCall?.[1] as { body: string }).body)).toEqual({
+      roles: ["r-vw"],
+    });
+  });
+
+  it("skips DELETE when user has no current roles", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        okJson([{ id: "r-vw", name: "viewer" }]),
+      )
+      .mockResolvedValueOnce(okJson([]))
+      .mockResolvedValueOnce(okJson({}));
+
+    await replaceAuth0RoleByName("auth0|u2", "viewer");
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    // last call is the POST assign
+    const postCall = fetchMock.mock.calls[3];
+    expect((postCall?.[1] as { method: string }).method).toBe("POST");
   });
 });

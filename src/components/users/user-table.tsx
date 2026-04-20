@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BRAND } from "@/lib/brand";
 import type { UserListRow } from "@/lib/user-list";
 import type { Role } from "@/types";
+import { RoleSelect } from "@/components/users/role-select";
 
 interface UserTableProps {
   readonly rows: ReadonlyArray<UserListRow>;
@@ -13,6 +14,8 @@ interface UserTableProps {
     readonly role?: Role;
     readonly status?: "active" | "disabled";
   };
+  readonly actorRole: Role;
+  readonly actorId: string | null;
 }
 
 const ROLE_STYLES: Record<Role, { bg: string; fg: string }> = {
@@ -61,7 +64,15 @@ function StatusBadge({ status }: { readonly status: "active" | "disabled" }) {
   );
 }
 
-export function UserTable({ rows, total, page, pageSize, query }: UserTableProps) {
+export function UserTable({
+  rows,
+  total,
+  page,
+  pageSize,
+  query,
+  actorRole,
+  actorId,
+}: UserTableProps) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const cell: React.CSSProperties = {
@@ -195,7 +206,21 @@ export function UserTable({ rows, total, page, pageSize, query }: UserTableProps
                   {row.email}
                 </td>
                 <td style={cell}>
-                  <RoleBadge role={row.role} />
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    <RoleBadge role={row.role} />
+                    <RoleSelect
+                      userId={row.id}
+                      currentRole={row.role}
+                      actorRole={actorRole}
+                      isSelf={actorId === row.id}
+                    />
+                  </span>
                 </td>
                 <td
                   style={{

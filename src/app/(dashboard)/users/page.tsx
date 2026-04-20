@@ -3,6 +3,7 @@ import { auth0 } from "@/lib/auth0";
 import { resolveRole } from "@/lib/auth-guard";
 import { BRAND } from "@/lib/brand";
 import { prisma } from "@/lib/prisma";
+import { ensureUser } from "@/lib/ensure-user";
 import {
   asUserListPrisma,
   listUsers,
@@ -37,8 +38,13 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
   let rows: ReadonlyArray<UserListRow> = [];
   let total = 0;
   let loadError = false;
+  let actorId: string | null = null;
   try {
-    const result = await listUsers(asUserListPrisma(prisma), query);
+    const [actor, result] = await Promise.all([
+      ensureUser(prisma, { session, role }),
+      listUsers(asUserListPrisma(prisma), query),
+    ]);
+    actorId = actor.id;
     rows = result.users;
     total = result.total;
   } catch {
@@ -84,6 +90,8 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
         page={query.page}
         pageSize={query.pageSize}
         query={{ q: query.q, role: query.role, status: query.status }}
+        actorRole={role}
+        actorId={actorId}
       />
     </main>
   );

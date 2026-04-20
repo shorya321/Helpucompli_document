@@ -281,6 +281,91 @@ export async function listAuth0Roles(): Promise<Auth0Role[]> {
   return cachedRoles;
 }
 
+async function removeAuth0Roles(
+  userId: string,
+  roleIds: readonly string[],
+): Promise<void> {
+  if (roleIds.length === 0) return;
+  const config = getConfig();
+  const token = await getManagementToken();
+  const response = await fetch(
+    `https://${config.AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(userId)}/roles`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ roles: roleIds }),
+    },
+  );
+  if (!response.ok) {
+    if (response.status === 429) {
+      const retryAfterMs = parseRetryAfterMs(
+        response.headers.get("retry-after"),
+      );
+      throw new Auth0RateLimitError(
+        retryAfterMs,
+        `Auth0 removeAuth0Roles rate-limited (429); retry after ${retryAfterMs}ms`,
+      );
+    }
+    throw new Error(`Auth0 removeAuth0Roles failed: ${response.status}`);
+  }
+}
+
+// Replaces the user's role set in Auth0 with a single role by name.
+// POST /users/{id}/roles is additive — without first DELETEing the
+// existing role ids, a role-change operation leaves the old role
+// assigned. resolveRole() picks the first name matching the app's Role
+// union, so a stale admin role would shadow a new viewer assignment
+// and silently restore elevated privileges on next login.
+export async function replaceAuth0RoleByName(
+  userId: string,
+  roleName: string,
+): Promise<void> {
+  const roles = await listAuth0Roles();
+  const match = roles.find((r) => r.name === roleName);
+  if (!match) {
+    throw new Error(
+      `Auth0 role '${roleName}' not found in tenant — configure via dashboard`,
+    );
+  }
+
+  const current = await getUserRoles(userId);
+  const toRemove = current
+    .filter((r) => r.name !== roleName)
+    .map((r) => r.id);
+  await removeAuth0Roles(userId, toRemove);
+
+  // Always POST — even when current contained roleName we may have
+  // just cleared the remainder; re-posting is a no-op on Auth0 side.
+  const config = getConfig();
+  const token = await getManagementToken();
+  const response = await fetch(
+    `https://${config.AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(userId)}/roles`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ roles: [match.id] }),
+    },
+  );
+  if (!response.ok) {
+    if (response.status === 429) {
+      const retryAfterMs = parseRetryAfterMs(
+        response.headers.get("retry-after"),
+      );
+      throw new Auth0RateLimitError(
+        retryAfterMs,
+        `Auth0 replaceAuth0RoleByName rate-limited (429); retry after ${retryAfterMs}ms`,
+      );
+    }
+    throw new Error(`Auth0 replaceAuth0RoleByName failed: ${response.status}`);
+  }
+}
+
 export async function assignAuth0RoleByName(
   userId: string,
   roleName: string,
