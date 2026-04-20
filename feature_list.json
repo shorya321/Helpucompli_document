@@ -657,7 +657,7 @@
             "Remove individual domains by clicking X",
             "Test domain validation and chip display"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F8.5",
