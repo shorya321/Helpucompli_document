@@ -14,7 +14,10 @@ import {
   inviteUserInputSchema,
   type InviteUserResult,
 } from "@/lib/user-invite";
-import { Auth0ConflictError } from "@/lib/auth0-management";
+import {
+  Auth0ConflictError,
+  Auth0RateLimitError,
+} from "@/lib/auth0-management";
 import { ensureUser } from "@/lib/ensure-user";
 import { createRateLimiter } from "@/lib/rate-limit";
 import type { ApiResponse } from "@/types";
@@ -157,6 +160,32 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     if (err instanceof Auth0ConflictError) {
       return json({ data: null, error: "User with this email already exists" }, 409);
+    }
+    if (err instanceof Auth0RateLimitError) {
+      const retrySec = Math.max(1, Math.ceil(err.retryAfterMs / 1000));
+      return json({ data: null, error: "Auth0 rate-limited" }, 429, {
+        "Retry-After": String(retrySec),
+      });
+    }
+    // Surface the error to the server log (npm run dev terminal) so the
+    // operator can diagnose tenant-config issues (missing scope, role
+    // catalogue mismatch, connection name typo). Client response stays
+    // generic — error.message can include Auth0 body text that must not
+    // be returned over the wire.
+    const name = err instanceof Error ? err.name : "Unknown";
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[POST /api/users] invite failed: ${name}: ${message}`);
+    // Role-catalogue misconfig is an operator error, not a secret — a
+    // slightly more specific client message helps the tester debug.
+    if (err instanceof Error && /role '.*' not found/i.test(err.message)) {
+      return json(
+        {
+          data: null,
+          error:
+            "Auth0 tenant missing required role — create 'superadmin', 'admin', 'viewer' roles in Auth0 dashboard",
+        },
+        503,
+      );
     }
     return json({ data: null, error: "Failed to invite user" }, 500);
   }

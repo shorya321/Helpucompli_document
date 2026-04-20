@@ -7,6 +7,7 @@
 // in the Auth0 Dashboard (Roles → Users). The M2M app needs
 // `read:roles` + `read:role_members` scopes on the Management API.
 
+import { randomBytes } from "node:crypto";
 import { getConfig } from "./config";
 
 export interface Auth0Role {
@@ -45,6 +46,19 @@ function dbConnection(): string {
   return cfg && cfg.length > 0 ? cfg : DEFAULT_DB_CONNECTION;
 }
 
+// Throwaway password for F10.3 invite flow. Auth0's database-connection
+// POST /api/v2/users rejects a body without `password` (400 invalid_body)
+// on every non-passwordless connection. The invitee never sees this
+// value — the follow-up password-change ticket forces them to set their
+// own password on first login. Prefix `A1a!` guarantees Auth0's
+// strictest default policy class requirements (upper/lower/digit/special)
+// even if the tenant escalates the policy. 24 random bytes base64url =
+// 32 chars → combined 36-char password. Never log, never return to
+// client — treat as a HIPAA credential in transit.
+function generateInvitePassword(): string {
+  return `A1a!${randomBytes(24).toString("base64url")}`;
+}
+
 const DEFAULT_RETRY_AFTER_MS = 2_000;
 
 function parseRetryAfterMs(headerValue: string | null): number {
@@ -52,6 +66,30 @@ function parseRetryAfterMs(headerValue: string | null): number {
   const seconds = Number.parseInt(headerValue, 10);
   if (!Number.isFinite(seconds) || seconds < 0) return DEFAULT_RETRY_AFTER_MS;
   return seconds * 1000;
+}
+
+// Emit diagnostic server-side log for non-ok Auth0 responses so operators
+// can see which scope or tenant-config issue broke the call. Body is
+// TEXT-read (not .json()) + truncated to 512 chars so malformed JSON
+// responses still log. Never surfaced in thrown Error messages — those
+// stay opaque to avoid leaking client_id/secret hints through the API.
+async function logAuth0Failure(
+  op: string,
+  response: Response,
+): Promise<void> {
+  let bodyExcerpt = "<body unreadable>";
+  try {
+    const text = await response.text();
+    bodyExcerpt = text.length > 512 ? `${text.slice(0, 512)}…` : text;
+  } catch {
+    // ignore
+  }
+  // Use console.error: appears in `npm run dev` terminal + server logs.
+  // In prod a structured logger (pino) would replace this. HIPAA-safe:
+  // no PHI, no credentials, only Auth0 tenant API response text.
+  console.error(
+    `[auth0-management] ${op} failed status=${response.status} body=${bodyExcerpt}`,
+  );
 }
 
 // Module-level M2M token cache. Token is tenant-wide, not per-user.
@@ -89,6 +127,7 @@ export async function getManagementToken(): Promise<string> {
   });
 
   if (!response.ok) {
+    await logAuth0Failure("getManagementToken", response);
     // Raw status only — response body can echo client_secret back on
     // certain Auth0 error shapes, never surface it.
     throw new Error(`Failed to fetch Auth0 M2M token: ${response.status}`);
@@ -120,6 +159,7 @@ export async function getUserRoles(userId: string): Promise<Auth0Role[]> {
   );
 
   if (!response.ok) {
+    await logAuth0Failure("getUserRoles", response);
     if (response.status === 429) {
       const retryAfterMs = parseRetryAfterMs(
         response.headers.get("retry-after"),
@@ -162,6 +202,7 @@ export async function createAuth0User(
   const body: Record<string, unknown> = {
     email: input.email,
     connection: dbConnection(),
+    password: generateInvitePassword(),
     email_verified: false,
     verify_email: false,
     app_metadata: { needsInvitation: true },
@@ -178,6 +219,7 @@ export async function createAuth0User(
   });
 
   if (!response.ok) {
+    await logAuth0Failure("createAuth0User", response);
     if (response.status === 409) {
       throw new Auth0ConflictError("Auth0 user already exists");
     }
@@ -224,6 +266,7 @@ export async function createPasswordChangeTicket(
   );
 
   if (!response.ok) {
+    await logAuth0Failure("createPasswordChangeTicket", response);
     if (response.status === 429) {
       const retryAfterMs = parseRetryAfterMs(
         response.headers.get("retry-after"),
@@ -265,6 +308,7 @@ export async function listAuth0Roles(): Promise<Auth0Role[]> {
   );
 
   if (!response.ok) {
+    await logAuth0Failure("listAuth0Roles", response);
     if (response.status === 429) {
       const retryAfterMs = parseRetryAfterMs(
         response.headers.get("retry-after"),
@@ -303,6 +347,7 @@ export async function setAuth0UserBlocked(
     },
   );
   if (!response.ok) {
+    await logAuth0Failure("setAuth0UserBlocked", response);
     if (response.status === 429) {
       const retryAfterMs = parseRetryAfterMs(
         response.headers.get("retry-after"),
@@ -335,6 +380,7 @@ async function removeAuth0Roles(
     },
   );
   if (!response.ok) {
+    await logAuth0Failure("removeAuth0Roles", response);
     if (response.status === 429) {
       const retryAfterMs = parseRetryAfterMs(
         response.headers.get("retry-after"),
@@ -388,6 +434,7 @@ export async function replaceAuth0RoleByName(
     },
   );
   if (!response.ok) {
+    await logAuth0Failure("replaceAuth0RoleByName", response);
     if (response.status === 429) {
       const retryAfterMs = parseRetryAfterMs(
         response.headers.get("retry-after"),
@@ -430,6 +477,7 @@ export async function assignAuth0RoleByName(
   );
 
   if (!response.ok) {
+    await logAuth0Failure("assignAuth0RoleByName", response);
     if (response.status === 429) {
       const retryAfterMs = parseRetryAfterMs(
         response.headers.get("retry-after"),

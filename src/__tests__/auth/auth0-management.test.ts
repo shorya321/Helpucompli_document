@@ -233,7 +233,12 @@ describe("createAuth0User", () => {
       verify_email: false,
       app_metadata: { needsInvitation: true },
     });
-    expect(body).not.toHaveProperty("password");
+    // Auth0 database connections reject POST /v2/users without a password.
+    // The invite flow generates a throwaway — the password-change ticket
+    // issued later forces the invitee to replace it on first login.
+    expect(typeof body.password).toBe("string");
+    expect(body.password).toMatch(/^A1a!/);
+    expect((body.password as string).length).toBeGreaterThanOrEqual(16);
   });
 
   it("throws Auth0ConflictError on 409 so callers can surface duplicate-email", async () => {
