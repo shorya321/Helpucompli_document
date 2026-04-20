@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient } from "@prisma/client";
+import { getConfig } from "@/lib/config";
 
 // Deployment assumption: long-lived Node.js process (EC2/ECS/Vercel
 // Node runtime). The globalThis cache below deduplicates clients
@@ -6,6 +7,11 @@ import { Prisma, PrismaClient } from "@prisma/client";
 // production. For isolate-per-request runtimes (Lambda, Edge)
 // revisit connection-pool strategy (consider Prisma Accelerate or
 // Data Proxy) to avoid RDS pool exhaustion under burst traffic.
+//
+// F11.3 — DATABASE_URL is validated and threaded through getConfig()
+// (src/lib/config.ts — F1.6) instead of letting Prisma read
+// process.env directly. Fail-fast at boot if the URL is unset or
+// malformed; see docs/RUNBOOK.md for ConfigError troubleshooting.
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
@@ -15,6 +21,9 @@ const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 // 'warn' remains on stdout since it carries no credentials.
 function buildClient(): PrismaClient {
   const client = new PrismaClient({
+    datasources: {
+      db: { url: getConfig().DATABASE_URL },
+    },
     log: [
       { level: "error", emit: "event" },
       { level: "warn", emit: "stdout" },

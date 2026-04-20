@@ -945,7 +945,7 @@
             "FOLLOW-UP: create vitest.setup.ts with beforeAll env stubs for every validated key (AUTH0_*, AWS_*, DATABASE_URL, APP_BASE_URL, NODE_ENV) so unit tests pass getConfig() cache-populate",
             "Add runbook entry: on boot failure, ConfigError aggregated per-field messages cross-reference .env.example"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F11.4",
