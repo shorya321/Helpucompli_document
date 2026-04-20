@@ -158,6 +158,40 @@ Because no PHI is collected or stored as content, a narrow BAA scope applies: st
 - [ ] Obtain Resend DPA or migrate to SES (already under AWS BAA).
 - [ ] Record all BAA signature dates in this table.
 
+### AWS HIPAA-Eligible Services in use (F11.10)
+
+Each AWS service this platform uses MUST be on the AWS HIPAA-eligible list for the BAA to cover it. Services NOT on the list MUST NOT process or store ePHI — any such service requires a migration plan or an explicit carve-out validated with Legal.
+
+| Service | Used for | HIPAA-eligible? | Notes |
+|---------|----------|-----------------|-------|
+| **Amazon S3** | Document + audit-archive buckets | YES | SSE-KMS + TLS-only policy (see F3, F11.4). |
+| **AWS KMS** | CMK for SSE-KMS + CloudTrail log encryption | YES | Per-tenant CMK, automatic rotation enabled (F11.6 §7). |
+| **Amazon RDS for PostgreSQL** | Application data (users, buckets, audit_logs) | YES | Encryption at rest + enforced TLS in transit. |
+| **AWS CloudTrail** | Management + data events | YES | Trail logs in dedicated SSE-KMS bucket. |
+| **Amazon CloudWatch** | Alarms + metric filters | YES | No document body content logged; only control-plane metadata. |
+| **AWS IAM** | Access control, federated roles | YES | No long-lived human access keys. |
+| **AWS Identity Center / SSO** | Federated admin access | YES | Replaces long-lived IAM users. |
+| **Amazon GuardDuty** | Threat detection | YES | Findings → EventBridge → on-call SNS. |
+| **Amazon Macie** | PHI/PII canary | YES | ONE_TIME classification job (F11.6 §5). |
+| **AWS Config** | Compliance-rule drift | YES | S3 managed rules (F11.6 §3). |
+| **IAM Access Analyzer** | External-access detection | YES | Account-scope analyzer (F11.6 §4). |
+| **Amazon SNS** | On-call paging fan-out | YES | Message bodies contain identifiers only, no ePHI. |
+| **Amazon EventBridge** | Finding routing | YES | Control-plane only. |
+
+Services explicitly NOT used (kept here to document the HIPAA surface intentionally):
+
+- AWS Lambda (current architecture is long-lived Node). Will revisit in Module 12 if Edge functions adopted — Lambda is HIPAA-eligible.
+- Amazon SES — would replace Resend (see BAA Status row) to keep all email-sending under AWS BAA.
+- AWS WAF — deferred; carry-forward in F11.9 DoS containment.
+
+### Verification procedure
+
+Before every production release:
+
+- [ ] `aws support describe-trusted-advisor-checks` + HIPAA-eligible-service audit — confirm no newly introduced service is outside the signed BAA.
+- [ ] Legal sign-off on BAA Status table dates.
+- [ ] If a new vendor is added, record BAA status + signature date in the BAA Status table above BEFORE routing any production traffic through it.
+
 ---
 
 *F11.4 sign-off: Every Technical Safeguard row above maps to a code path or a documented tenant-config carry-forward. The row-by-row verification column cites the authoritative test or migration. This section will be re-reviewed at launch (Module 12) with signed-off dates.*

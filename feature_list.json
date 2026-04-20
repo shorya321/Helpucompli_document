@@ -1037,7 +1037,7 @@
             "Document BAA status, dates, and scope",
             "Add BAA status to docs/HIPAA-COMPLIANCE-CHECKLIST.md"
           ],
-          "passes": false
+          "passes": true
         }
       ]
     },

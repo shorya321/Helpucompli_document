@@ -85,4 +85,30 @@ describe("HIPAA compliance checklist (F11.4)", () => {
   it("data classification: asserts no PHI collected in any input/metadata", () => {
     expect(doc.toLowerCase()).toMatch(/no phi/i);
   });
+
+  // F11.10 — AWS BAA scope + HIPAA-eligible services table
+  it("BAA table includes AWS + Auth0 rows", () => {
+    expect(doc).toMatch(/AWS[^\n]*\|/);
+    expect(doc).toMatch(/Auth0[^\n]*\|/);
+  });
+
+  it("lists AWS HIPAA-eligible services in scope", () => {
+    for (const svc of [
+      "Amazon S3",
+      "AWS KMS",
+      "Amazon RDS",
+      "AWS CloudTrail",
+      "Amazon CloudWatch",
+      "Amazon GuardDuty",
+      "Amazon Macie",
+      "IAM Access Analyzer",
+    ]) {
+      expect(doc).toContain(svc);
+    }
+  });
+
+  it("requires BAA signature dates + per-release verification", () => {
+    expect(doc.toLowerCase()).toMatch(/signature date/);
+    expect(doc.toLowerCase()).toMatch(/before every production release/);
+  });
 });
