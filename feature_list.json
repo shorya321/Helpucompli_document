@@ -681,7 +681,7 @@
             "Display: target description, TTL, max downloads, IP restrictions, domain restrictions, auth required",
             "Test preview updates as each form field changes"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F8.7",
