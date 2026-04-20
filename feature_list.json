@@ -1092,7 +1092,7 @@
             "Hard delete document → verify superadmin required",
             "Disable user → verify cannot log in"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F12.4",
