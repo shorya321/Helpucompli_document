@@ -644,7 +644,7 @@
             "Form fields: name, target picker (bucket/prefix/object), allowed domains, allowed IPs, TTL, max downloads, require auth",
             "Test form validation with Zod"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F8.4",
