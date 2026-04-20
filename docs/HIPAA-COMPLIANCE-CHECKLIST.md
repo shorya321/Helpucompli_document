@@ -76,4 +76,18 @@ Quarterly audit drill:
 
 ---
 
-*This section owns F2.4. Expand this checklist in subsequent modules — F11 will add the consolidated Technical Safeguard Mapping table, BAA status, and post-launch evidence columns.*
+*This section owns F2.4 and F7.5 — Module 07's retention requirement is fully satisfied by the policy above (6-year floor, append-only triggers, monthly RANGE partitioning plan, S3 Glacier archive, quarterly drill). Expand this checklist in subsequent modules — F11 will add the consolidated Technical Safeguard Mapping table, BAA status, and post-launch evidence columns.*
+
+### 7. F7.5 verification (Module 07)
+
+Sign-off that the retention policy is enforced today:
+
+- [x] **6-year floor** — documented in §1, sourced to 45 CFR §164.316(b)(2)(i).
+- [x] **Append-only enforcement live** — three-layer defense in §2: DB triggers (`audit_logs_no_update/delete/truncate`, ENABLE ALWAYS), application surface (`src/lib/audit.ts` exposes only `logAudit()`), and schema-level uniqueness constraints. Migrations: `20260417100556_init`, `20260417175504_rereview_hardening`.
+- [x] **Partitioning plan documented** — §3 (monthly RANGE on `created_at`), follow-up tracked in §6.
+- [x] **Glacier archive plan documented** — §4 with lifecycle to DEEP_ARCHIVE, restoration drill, and `s3:PutObject`-only IAM scope.
+- [x] **Verification cadence defined** — §5 quarterly drill checklist.
+
+No-deletion guard tests:
+- `src/__tests__/audit/log-audit.test.ts` — confirms `logAudit()` is the only write path; `AuditPrisma` interface exposes `auditLog.create` only (no `update`/`delete`/`upsert`/`deleteMany`).
+- F2.4 migration test exercises trigger rejections at the DB layer.

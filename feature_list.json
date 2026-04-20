@@ -598,7 +598,7 @@
             "Verify retention policy enforcement",
             "Document in docs/HIPAA-COMPLIANCE-CHECKLIST.md"
           ],
-          "passes": false
+          "passes": true
         }
       ]
     },
