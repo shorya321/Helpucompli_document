@@ -1060,7 +1060,7 @@
             "Run npx vitest run --coverage",
             "Verify 80%+ line coverage on src/lib/"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F12.2",
