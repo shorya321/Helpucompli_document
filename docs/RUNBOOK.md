@@ -69,6 +69,42 @@ F11.1 enforces a strict nonce-based CSP. Symptoms:
 
 ---
 
+## Error pages + monitoring (F12.5)
+
+**App-level error boundaries:**
+
+- `src/app/not-found.tsx` — 404 page, static.
+- `src/app/error.tsx` — route-segment client boundary with `reset()`
+  + Next.js-generated `digest` for correlation. Never echoes raw
+  `error.message` — HIPAA leak guard (Prisma errors may contain
+  connection strings).
+- `src/app/global-error.tsx` — root boundary that ships its own
+  `<html><body>` (layout/providers not available when it fires).
+
+**Health check:** `GET /api/health` returns `{ status: "ok",
+service, timestamp }`. Pre-auth, rate-limit excluded. Wire external
+uptime monitor (UptimeRobot / Pingdom / Datadog Synthetics) against
+this path with a 60 s interval.
+
+**Graceful shutdown:** `src/instrumentation.ts` registers SIGTERM +
+SIGINT handlers that call `prisma.$disconnect()` and
+`process.exit(0)`. Verify on rolling deploy via `kill -TERM <pid>`
+in staging — RDS `connections` metric must return to baseline
+within 30 s; no orphan pools.
+
+**Sentry / Vercel Analytics wiring (carry-forward):**
+
+1. `npm install @sentry/nextjs` — run once post-merge.
+2. `npx @sentry/wizard@latest -i nextjs` — scaffolds
+   `sentry.client.config.ts`, `sentry.server.config.ts`,
+   `sentry.edge.config.ts`; wire `SENTRY_DSN` via `getConfig()`
+   (already in `src/lib/config.ts` as optional).
+3. Verify events flow: trigger a deliberate `throw` in a test page
+   and confirm in Sentry UI.
+4. Tune sampling: `tracesSampleRate: 0.1` for request performance.
+
+---
+
 ## Dependency security scanning (F11.7)
 
 **Continuous layer:** GitHub Dependabot (`.github/dependabot.yml`)

@@ -1125,7 +1125,7 @@
             "FOLLOW-UP from F2.2: register SIGTERM + SIGINT handlers in server bootstrap (instrumentation.ts or custom server) calling prisma.$disconnect() to flush connection pool on graceful shutdown",
             "Verify via `kill -TERM <pid>` in staging: Postgres connection count returns to baseline; no orphan pools on rolling deploy"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F12.6",
