@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
-import { resolveHasRole, resolveRole } from "@/lib/auth-guard";
 import { ensureUser } from "@/lib/ensure-user";
+import { resolveRole } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
 import {
   asPolicyEnginePrisma,
@@ -185,7 +185,20 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
   if (!link) return forbidden();
 
   const session = await auth0.getSession();
-  const dbUserId: string | null = null; // Anonymous lookup — link is the credential.
+  // Sec-review H2: when the recipient happens to be authenticated, the
+  // audit row MUST attribute the access to that user. ensureUser
+  // resolves the Auth0 sub → DB user.id; null only for truly anonymous
+  // accesses. Failure here is non-fatal — fall back to anonymous.
+  let dbUserId: string | null = null;
+  if (session) {
+    try {
+      const role = (await resolveRole(session)) ?? "viewer";
+      const dbu = await ensureUser(prisma, { session, role });
+      dbUserId = dbu.id;
+    } catch {
+      dbUserId = null;
+    }
+  }
 
   const status = computeLinkStatus({
     isRevoked: link.isRevoked as boolean,
@@ -247,18 +260,62 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
   }
 
   // Compute presign TTL — never exceed the link's own remaining life.
+  // Sec-review H1: hard-fail when remaining < MIN_TTL_SECONDS instead
+  // of clamping UP. The presigned URL would otherwise outlive the
+  // link itself by minutes (s3-presign min is 900s). For HIPAA we
+  // refuse to issue a URL whose lifespan exceeds the policy contract.
   const remainingMs = (link.expiresAt as Date).getTime() - Date.now();
   const remainingSec = Math.max(0, Math.floor(remainingMs / 1000));
+  if (remainingSec < MIN_TTL_SECONDS) {
+    await writeAudit(
+      "LINK_DENIED",
+      { id: link.id, documentId: link.documentId, policyId: link.policyId },
+      {
+        ipAddress,
+        userAgent,
+        userId: dbUserId,
+        reason: "remaining-ttl-below-presign-floor",
+      },
+    );
+    return forbidden();
+  }
   const desired = decision.linkTtlSeconds;
-  const ceiling = Math.min(MAX_GET_TTL_SECONDS, remainingSec || desired);
-  // s3-presign requires ≥ MIN_TTL_SECONDS — clamp up if link is about
-  // to expire (the link is still valid; the presign just expires
-  // slightly later, which is fine because the audit row records the
-  // single use we're authorising right now).
-  const presignTtl = Math.max(
-    MIN_TTL_SECONDS,
-    Math.min(desired, ceiling || MIN_TTL_SECONDS),
+  const presignTtl = Math.min(
+    desired,
+    remainingSec,
+    MAX_GET_TTL_SECONDS,
   );
+
+  // Sec-review M3: atomic conditional increment via updateMany — the
+  // WHERE clause refuses to bump the counter past maxDownloads, so N
+  // concurrent requests at maxDownloads-1 cannot all succeed. Race-
+  // safe: at most one wins; the rest see count=0 and 403. Done BEFORE
+  // presigning so a slow presign cannot leak the URL to a request that
+  // failed the count check.
+  const cap = link.maxDownloads;
+  const where: Record<string, unknown> = {
+    id: link.id,
+    isRevoked: false,
+    expiresAt: { gt: new Date() },
+  };
+  if (cap !== null) where.downloadCount = { lt: cap };
+  const updated = await prisma.generatedLink.updateMany({
+    where: where as Parameters<typeof prisma.generatedLink.updateMany>[0]["where"],
+    data: { downloadCount: { increment: 1 } },
+  });
+  if (updated.count === 0) {
+    await writeAudit(
+      "LINK_DENIED",
+      { id: link.id, documentId: link.documentId, policyId: link.policyId },
+      {
+        ipAddress,
+        userAgent,
+        userId: dbUserId,
+        reason: "race-lost-or-just-exhausted",
+      },
+    );
+    return forbidden();
+  }
 
   let presignedUrl: string;
   try {
@@ -269,6 +326,15 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
       responseContentDisposition: "inline",
     });
   } catch {
+    // Counter already incremented — best-effort decrement to keep the
+    // accounting honest. If the decrement fails the count slightly
+    // overstates real downloads (safe direction).
+    await prisma.generatedLink
+      .update({
+        where: { id: link.id },
+        data: { downloadCount: { decrement: 1 } },
+      })
+      .catch(() => {});
     await writeAudit(
       "LINK_DENIED",
       {
@@ -279,18 +345,6 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
       { ipAddress, userAgent, userId: dbUserId, reason: "presign-failed" },
     );
     return forbidden();
-  }
-
-  // Atomic increment via Prisma {increment: 1} — no read-modify-write
-  // race when two requests arrive simultaneously.
-  try {
-    await prisma.generatedLink.update({
-      where: { id: link.id },
-      data: { downloadCount: { increment: 1 } },
-    });
-  } catch {
-    // Increment failure is non-fatal for the redirect (already
-    // authorised) but MUST be flagged. Audit row records the access.
   }
 
   await writeAudit(
@@ -305,113 +359,5 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
       Location: presignedUrl,
       "Cache-Control": "no-store, private",
     },
-  });
-}
-
-const revokeLimiter = createRateLimiter({
-  max: 30,
-  windowMs: 60_000,
-  prefix: "@helpucompli/link-revoke",
-});
-
-function jsonError(status: number, msg: string) {
-  return NextResponse.json(
-    { data: null, error: msg },
-    {
-      status,
-      headers: { "Cache-Control": "no-store, private" },
-    },
-  );
-}
-
-export async function DELETE(req: NextRequest, ctx: RouteCtx) {
-  const session = await auth0.getSession();
-  if (!session) return jsonError(401, "Unauthorized");
-  if (!(await resolveHasRole(session, ["superadmin", "admin"]))) {
-    return jsonError(403, "Forbidden");
-  }
-
-  const { hash } = await ctx.params;
-  if (!TOKEN_RE.test(hash)) {
-    return jsonError(400, "Invalid token");
-  }
-
-  const sub = (session.user as { sub?: string }).sub;
-  if (!sub) return jsonError(401, "Unauthorized");
-  const quota = await revokeLimiter.limit(`link-revoke:${sub}`);
-  if (!quota.success) {
-    const retrySec = Math.max(1, Math.ceil((quota.reset - Date.now()) / 1000));
-    return NextResponse.json(
-      { data: null, error: "Too Many Requests" },
-      {
-        status: 429,
-        headers: {
-          "Cache-Control": "no-store, private",
-          "Retry-After": String(retrySec),
-        },
-      },
-    );
-  }
-
-  const role = await resolveRole(session);
-  if (role !== "superadmin" && role !== "admin") {
-    return jsonError(403, "Forbidden");
-  }
-  const dbUser = await ensureUser(prisma, { session, role });
-
-  const ipAddress = extractIp(req);
-  const userAgent = extractUserAgent(req);
-
-  const link = await prisma.generatedLink.findUnique({
-    where: { presignedUrlHash: hash },
-    select: {
-      id: true,
-      documentId: true,
-      policyId: true,
-      isRevoked: true,
-    },
-  });
-  if (!link) return jsonError(404, "Not Found");
-
-  // Idempotent: already revoked → 204 with no audit row, no second
-  // update. Avoids audit-trail noise from accidental double-clicks.
-  if (link.isRevoked) {
-    return new NextResponse(null, {
-      status: 204,
-      headers: { "Cache-Control": "no-store, private" },
-    });
-  }
-
-  try {
-    await prisma.generatedLink.update({
-      where: { id: link.id },
-      data: { isRevoked: true },
-    });
-  } catch {
-    return jsonError(500, "Failed to revoke link");
-  }
-
-  try {
-    await prisma.auditLog.create({
-      data: {
-        userId: dbUser.id,
-        action: "LINK_REVOKE",
-        targetType: "link",
-        targetId: link.id,
-        metadata: {
-          documentId: link.documentId,
-          policyId: link.policyId,
-        },
-        ipAddress,
-        userAgent,
-      },
-    });
-  } catch {
-    // Audit failure is non-fatal — revoke already committed.
-  }
-
-  return new NextResponse(null, {
-    status: 204,
-    headers: { "Cache-Control": "no-store, private" },
   });
 }

@@ -71,8 +71,10 @@ interface LinkTableProps {
   readonly initial: LinkListResult;
 }
 
-async function revokeLink(token: string): Promise<void> {
-  const res = await fetch(`/api/links/${encodeURIComponent(token)}`, {
+async function revokeLink(id: string): Promise<void> {
+  // Sec-review C1: revoke is keyed on link.id (UUID) not the bearer
+  // token, so the admin browser never receives valid tokens.
+  const res = await fetch(`/api/links/admin/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
   if (!res.ok && res.status !== 204) {
@@ -83,13 +85,13 @@ async function revokeLink(token: string): Promise<void> {
 export function LinkTable({ initial }: LinkTableProps) {
   const queryClient = useQueryClient();
   const [revoking, setRevoking] = useState<string | null>(null);
-  const onRevoke = async (id: string, token: string) => {
+  const onRevoke = async (id: string) => {
     if (!window.confirm("Revoke this link? Anyone holding the URL will get 403.")) {
       return;
     }
     setRevoking(id);
     try {
-      await revokeLink(token);
+      await revokeLink(id);
       await queryClient.invalidateQueries({ queryKey: ["links"] });
     } catch {
       window.alert("Failed to revoke. Try again.");
@@ -290,7 +292,7 @@ export function LinkTable({ initial }: LinkTableProps) {
                     {row.status === "active" ? (
                       <button
                         type="button"
-                        onClick={() => onRevoke(row.id, row.token)}
+                        onClick={() => onRevoke(row.id)}
                         disabled={revoking === row.id}
                         style={{
                           background: "transparent",

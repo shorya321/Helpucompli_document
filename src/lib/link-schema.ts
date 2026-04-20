@@ -39,7 +39,9 @@ export const linkListQuerySchema = z
       .enum(["createdAt", "expiresAt", "downloadCount"])
       .default("createdAt"),
     dir: z.enum(["asc", "desc"]).default("desc"),
-    cursor: z.string().min(1).max(64).optional(),
+    // Sec-review M2: cursor is a link.id (UUID) — validate strictly so
+    // an admin cannot probe arbitrary string IDs via 404/500 oracle.
+    cursor: uuidString.optional(),
     limit: z.coerce.number().int().optional(),
   })
   .strict();

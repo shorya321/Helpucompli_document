@@ -30,13 +30,13 @@ vi.mock("@/lib/rate-limit", () => ({
   createRateLimiter: () => ({ limit: mocks.limit }),
 }));
 
-import { DELETE } from "@/app/api/links/[hash]/route";
+import { DELETE } from "@/app/api/links/admin/[id]/route";
 import { NextRequest } from "next/server";
 
 const ok = { success: true, reset: Date.now() + 30_000 };
 const adminSession = () => ({ user: { sub: "auth0|a" } });
-const params = (hash: string) => Promise.resolve({ hash });
-const TOKEN = "tok_abc_with_long_enough_token_value_xyz";
+const params = (id: string) => Promise.resolve({ id });
+const ID = "11111111-1111-4111-8111-111111111111";
 
 afterEach(() => {
   for (const m of Object.values(mocks)) m.mockReset();
@@ -44,31 +44,32 @@ afterEach(() => {
 
 beforeEach(() => {
   mocks.limit.mockResolvedValue(ok);
+  mocks.auditCreate.mockResolvedValue({ id: "a-1" });
 });
 
 function req() {
-  return new NextRequest(`http://x/api/links/${TOKEN}`, { method: "DELETE" });
+  return new NextRequest(`http://x/api/links/admin/${ID}`, { method: "DELETE" });
 }
 
-describe("DELETE /api/links/[hash]", () => {
+describe("DELETE /api/links/admin/[id]", () => {
   it("401 unauthenticated", async () => {
     mocks.getSession.mockResolvedValueOnce(null);
-    const res = await DELETE(req(), { params: params(TOKEN) });
+    const res = await DELETE(req(), { params: params(ID) });
     expect(res.status).toBe(401);
   });
 
   it("403 non-admin", async () => {
     mocks.getSession.mockResolvedValueOnce(adminSession());
     mocks.resolveHasRole.mockResolvedValueOnce(false);
-    const res = await DELETE(req(), { params: params(TOKEN) });
+    const res = await DELETE(req(), { params: params(ID) });
     expect(res.status).toBe(403);
     expect(mocks.updateLink).not.toHaveBeenCalled();
   });
 
-  it("400 malformed token", async () => {
+  it("400 malformed id", async () => {
     mocks.getSession.mockResolvedValueOnce(adminSession());
     mocks.resolveHasRole.mockResolvedValueOnce(true);
-    const res = await DELETE(req(), { params: params("short") });
+    const res = await DELETE(req(), { params: params("not-uuid") });
     expect(res.status).toBe(400);
   });
 
@@ -78,7 +79,7 @@ describe("DELETE /api/links/[hash]", () => {
     mocks.resolveRole.mockResolvedValueOnce("admin");
     mocks.ensureUser.mockResolvedValueOnce({ id: "u-1" });
     mocks.findLink.mockResolvedValueOnce(null);
-    const res = await DELETE(req(), { params: params(TOKEN) });
+    const res = await DELETE(req(), { params: params(ID) });
     expect(res.status).toBe(404);
     expect(mocks.updateLink).not.toHaveBeenCalled();
   });
@@ -89,17 +90,16 @@ describe("DELETE /api/links/[hash]", () => {
     mocks.resolveRole.mockResolvedValueOnce("admin");
     mocks.ensureUser.mockResolvedValueOnce({ id: "u-1" });
     mocks.findLink.mockResolvedValueOnce({
-      id: "link-1",
+      id: ID,
       documentId: "d-1",
       policyId: null,
       isRevoked: false,
     });
     mocks.updateLink.mockResolvedValueOnce({});
-    const res = await DELETE(req(), { params: params(TOKEN) });
+    const res = await DELETE(req(), { params: params(ID) });
     expect(res.status).toBe(204);
     expect(mocks.updateLink).toHaveBeenCalledOnce();
     const args = mocks.updateLink.mock.calls[0]?.[0] as {
-      where: Record<string, unknown>;
       data: Record<string, unknown>;
     };
     expect(args.data.isRevoked).toBe(true);
@@ -108,20 +108,22 @@ describe("DELETE /api/links/[hash]", () => {
     );
   });
 
-  it("idempotent — already revoked returns 204 without writing audit again", async () => {
+  it("idempotent — already revoked still writes audit row with reason='already-revoked' (sec-review C2)", async () => {
     mocks.getSession.mockResolvedValueOnce(adminSession());
     mocks.resolveHasRole.mockResolvedValueOnce(true);
     mocks.resolveRole.mockResolvedValueOnce("admin");
     mocks.ensureUser.mockResolvedValueOnce({ id: "u-1" });
     mocks.findLink.mockResolvedValueOnce({
-      id: "link-1",
+      id: ID,
       documentId: "d-1",
       policyId: null,
       isRevoked: true,
     });
-    const res = await DELETE(req(), { params: params(TOKEN) });
+    const res = await DELETE(req(), { params: params(ID) });
     expect(res.status).toBe(204);
     expect(mocks.updateLink).not.toHaveBeenCalled();
-    expect(mocks.auditCreate).not.toHaveBeenCalled();
+    expect(mocks.auditCreate).toHaveBeenCalledOnce();
+    const meta = mocks.auditCreate.mock.calls[0]?.[0].data.metadata;
+    expect(meta.reason).toBe("already-revoked");
   });
 });

@@ -24,7 +24,9 @@ export function computeLinkStatus(
 
 export interface LinkListRow {
   readonly id: string;
-  readonly token: string;
+  // Sec-review C1: bearer token (presignedUrlHash) is intentionally NOT
+  // returned in the list response. Tokens are returned ONCE at create
+  // time and never re-emitted. Admin actions (revoke) use `id`.
   readonly documentId: string;
   readonly documentName: string;
   readonly bucketName: string;
@@ -108,7 +110,7 @@ export async function queryLinks(
     select: {
       id: true,
       documentId: true,
-      presignedUrlHash: true,
+      // presignedUrlHash deliberately NOT selected (sec-review C1).
       expiresAt: true,
       createdAt: true,
       downloadCount: true,
@@ -143,7 +145,6 @@ export async function queryLinks(
 
     return {
       id: row.id as string,
-      token: row.presignedUrlHash as string,
       documentId: row.documentId as string,
       documentName: doc?.filename ?? "(deleted)",
       bucketName: doc?.bucket?.name ?? "(unknown)",

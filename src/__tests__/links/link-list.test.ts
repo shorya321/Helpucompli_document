@@ -167,7 +167,7 @@ describe("queryLinks", () => {
     expect(result.nextCursor).toBe("b");
   });
 
-  it("flattens document + generatedBy joins and computes status", async () => {
+  it("flattens document + generatedBy joins and computes status (no token in response — sec-review C1)", async () => {
     const stub = makeStub([row()]);
     const result = await queryLinks(
       stub.client,
@@ -176,11 +176,14 @@ describe("queryLinks", () => {
     );
     expect(result.rows[0]).toMatchObject({
       id: "link-1",
-      token: "tok-1",
       documentName: "a.pdf",
       bucketName: "alpha-bucket",
       generatedByName: "Alice",
       status: "active",
     });
+    expect(result.rows[0]).not.toHaveProperty("token");
+    // Confirm select did NOT request presignedUrlHash.
+    const select = stub.calls[0]?.select as Record<string, unknown>;
+    expect(select.presignedUrlHash).toBeUndefined();
   });
 });

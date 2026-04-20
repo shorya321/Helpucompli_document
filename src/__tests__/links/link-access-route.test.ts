@@ -7,9 +7,16 @@ const mocks = vi.hoisted(() => ({
   enforcePolicy: vi.fn(),
   presignGetUrl: vi.fn(),
   incrementCount: vi.fn(),
+  updateMany: vi.fn(),
+  decrementCount: vi.fn(),
   auditCreate: vi.fn(),
   limit: vi.fn(),
+  ensureUser: vi.fn(),
+  resolveRole: vi.fn(),
 }));
+
+vi.mock("@/lib/auth-guard", () => ({ resolveRole: mocks.resolveRole }));
+vi.mock("@/lib/ensure-user", () => ({ ensureUser: mocks.ensureUser }));
 
 vi.mock("@/lib/rate-limit", () => ({
   createRateLimiter: () => ({ limit: mocks.limit }),
@@ -20,7 +27,8 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     generatedLink: {
       findUnique: mocks.findLink,
-      update: mocks.incrementCount,
+      update: mocks.decrementCount,
+      updateMany: mocks.updateMany,
     },
     auditLog: { create: mocks.auditCreate },
   },
@@ -167,22 +175,42 @@ describe("GET /api/links/[hash]", () => {
     mocks.findLink.mockResolvedValueOnce(linkRow());
     mocks.resolvePolicy.mockResolvedValueOnce(defaultEffective);
     mocks.enforcePolicy.mockReturnValueOnce(allow);
+    mocks.updateMany.mockResolvedValueOnce({ count: 1 });
     mocks.presignGetUrl.mockResolvedValueOnce(
       "https://s3.amazonaws.com/alpha-bucket/shared/file.pdf?X-Amz-Signature=abc",
     );
-    mocks.incrementCount.mockResolvedValueOnce({});
-    const res = await GET(req(), { params: params("tok_abc_with_long_enough_token_value_xyz") });
+    const res = await GET(req(), {
+      params: params("tok_abc_with_long_enough_token_value_xyz"),
+    });
     expect(res.status).toBe(302);
     expect(res.headers.get("Location")).toMatch(/X-Amz-Signature=abc/);
-    expect(mocks.incrementCount).toHaveBeenCalledOnce();
-    const updateArgs = mocks.incrementCount.mock.calls[0]?.[0] as {
+    // Sec-review M3: atomic conditional increment via updateMany.
+    expect(mocks.updateMany).toHaveBeenCalledOnce();
+    const args = mocks.updateMany.mock.calls[0]?.[0] as {
       where: Record<string, unknown>;
       data: Record<string, unknown>;
     };
-    // Atomic increment via Prisma {increment: 1}, NOT read-then-write.
-    expect(updateArgs.data.downloadCount).toEqual({ increment: 1 });
+    expect(args.data.downloadCount).toEqual({ increment: 1 });
+    expect(args.where.isRevoked).toBe(false);
     expect(mocks.auditCreate.mock.calls[0]?.[0].data.action).toBe(
       "LINK_ACCESS",
+    );
+  });
+
+  it("403 when atomic increment loses the race (count=0)", async () => {
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({ downloadCount: 4, maxDownloads: 5 }),
+    );
+    mocks.resolvePolicy.mockResolvedValueOnce(defaultEffective);
+    mocks.enforcePolicy.mockReturnValueOnce(allow);
+    mocks.updateMany.mockResolvedValueOnce({ count: 0 });
+    const res = await GET(req(), {
+      params: params("tok_abc_with_long_enough_token_value_xyz"),
+    });
+    expect(res.status).toBe(403);
+    expect(mocks.presignGetUrl).not.toHaveBeenCalled();
+    expect(mocks.auditCreate.mock.calls[0]?.[0].data.action).toBe(
+      "LINK_DENIED",
     );
   });
 
@@ -201,9 +229,11 @@ describe("GET /api/links/[hash]", () => {
       }),
     );
     mocks.enforcePolicy.mockReturnValueOnce(allow);
+    mocks.updateMany.mockResolvedValueOnce({ count: 1 });
     mocks.presignGetUrl.mockResolvedValueOnce("https://s3/x?sig=1");
-    mocks.incrementCount.mockResolvedValueOnce({});
-    const res = await GET(req(), { params: params("tok_abc_with_long_enough_token_value_xyz") });
+    const res = await GET(req(), {
+      params: params("tok_abc_with_long_enough_token_value_xyz"),
+    });
     expect(res.status).toBe(302);
     expect(mocks.resolvePolicy).not.toHaveBeenCalled();
   });
@@ -212,32 +242,52 @@ describe("GET /api/links/[hash]", () => {
     mocks.findLink.mockResolvedValueOnce(linkRow());
     mocks.resolvePolicy.mockResolvedValueOnce(defaultEffective);
     mocks.enforcePolicy.mockReturnValueOnce(allow);
+    mocks.updateMany.mockResolvedValueOnce({ count: 1 });
     mocks.presignGetUrl.mockResolvedValueOnce("https://s3/x?sig=1");
-    mocks.incrementCount.mockResolvedValueOnce({});
-    const res = await GET(req(), { params: params("tok_abc_with_long_enough_token_value_xyz") });
+    const res = await GET(req(), {
+      params: params("tok_abc_with_long_enough_token_value_xyz"),
+    });
     expect(res.headers.get("Cache-Control")).toMatch(/no-store/);
     expect(res.headers.get("Cache-Control")).toMatch(/private/);
   });
 
-  it("clamps presign TTL to time-remaining when link expires before policy TTL", async () => {
-    const linkExpiresIn = 120; // seconds
+  it("403 (NOT clamp) when remaining link life < MIN_TTL_SECONDS — sec-review H1", async () => {
     mocks.findLink.mockResolvedValueOnce(
-      linkRow({ expiresAt: new Date(Date.now() + linkExpiresIn * 1000) }),
+      linkRow({ expiresAt: new Date(Date.now() + 120_000) }), // 120s
     );
     mocks.resolvePolicy.mockResolvedValueOnce(defaultEffective);
     mocks.enforcePolicy.mockReturnValueOnce({
       ...allow,
       linkTtlSeconds: 3600,
     });
+    const res = await GET(req(), {
+      params: params("tok_abc_with_long_enough_token_value_xyz"),
+    });
+    expect(res.status).toBe(403);
+    expect(mocks.presignGetUrl).not.toHaveBeenCalled();
+    expect(mocks.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("uses min(decision.ttl, remaining, 7d) as presign TTL when remaining > MIN_TTL", async () => {
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({ expiresAt: new Date(Date.now() + 1200 * 1000) }), // 1200s
+    );
+    mocks.resolvePolicy.mockResolvedValueOnce(defaultEffective);
+    mocks.enforcePolicy.mockReturnValueOnce({
+      ...allow,
+      linkTtlSeconds: 3600,
+    });
+    mocks.updateMany.mockResolvedValueOnce({ count: 1 });
     mocks.presignGetUrl.mockResolvedValueOnce("https://s3/x?sig=1");
-    mocks.incrementCount.mockResolvedValueOnce({});
-    await GET(req(), { params: params("tok_abc_with_long_enough_token_value_xyz") });
+    await GET(req(), {
+      params: params("tok_abc_with_long_enough_token_value_xyz"),
+    });
     const presignArgs = mocks.presignGetUrl.mock.calls[0]?.[0] as {
       ttlSeconds: number;
     };
-    // Should be ≤ link expiry (120s) — but s3-presign min is 900s, so it
-    // should clamp UP to 900 (presign min), proving we never pass 3600s
-    // when link itself expires in 120s.
-    expect(presignArgs.ttlSeconds).toBeLessThanOrEqual(900);
+    // Should be ≤ 1200 (remaining) and ≤ 3600 (decision); minimum of
+    // the three values wins. Specifically expect 1200.
+    expect(presignArgs.ttlSeconds).toBeLessThanOrEqual(1200);
+    expect(presignArgs.ttlSeconds).toBeGreaterThanOrEqual(900);
   });
 });
