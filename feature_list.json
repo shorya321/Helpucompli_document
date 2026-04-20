@@ -1170,7 +1170,7 @@
             "Verify rollback procedure ready",
             "Document post-launch observations"
           ],
-          "passes": false
+          "passes": true
         }
       ]
     }
