@@ -8,6 +8,7 @@ const configMock = vi.hoisted(() => ({
   AUTH0_TENANT_DOMAIN: "helpucompli.us.auth0.com",
   AUTH0_MGMT_CLIENT_ID: "mgmt-client-id",
   AUTH0_MGMT_CLIENT_SECRET: "mgmt-client-secret",
+  AUTH0_DB_CONNECTION: "Username-Password-Authentication",
 }));
 
 vi.mock("@/lib/config", () => ({
@@ -15,10 +16,16 @@ vi.mock("@/lib/config", () => ({
 }));
 
 import {
+  Auth0ConflictError,
   Auth0RateLimitError,
+  _resetRoleIdCache,
   _resetTokenCache,
+  assignAuth0RoleByName,
+  createAuth0User,
+  createPasswordChangeTicket,
   getManagementToken,
   getUserRoles,
+  listAuth0Roles,
 } from "@/lib/auth0-management";
 
 const fetchMock = vi.fn();
@@ -194,5 +201,143 @@ describe("getUserRoles", () => {
     await expect(getUserRoles("auth0|x")).rejects.toThrow(
       /getUserRoles failed/,
     );
+  });
+});
+
+describe("createAuth0User", () => {
+  beforeEach(() => {
+    fetchMock.mockResolvedValueOnce(
+      okJson({ access_token: "tkn", expires_in: 86400 }),
+    );
+  });
+
+  it("POSTs /api/v2/users with email + name + connection + needsInvitation metadata", async () => {
+    fetchMock.mockResolvedValueOnce(
+      okJson({ user_id: "auth0|new123", email: "new@x.com" }),
+    );
+    const result = await createAuth0User({
+      email: "new@x.com",
+      name: "New User",
+    });
+    expect(result).toEqual({ userId: "auth0|new123", email: "new@x.com" });
+    const [url, init] = fetchMock.mock.calls[1] ?? [];
+    expect(url).toBe("https://auth.helpucompli.com/api/v2/users");
+    const body = JSON.parse((init as { body: string }).body);
+    expect(body).toMatchObject({
+      email: "new@x.com",
+      name: "New User",
+      connection: "Username-Password-Authentication",
+      email_verified: false,
+      verify_email: false,
+      app_metadata: { needsInvitation: true },
+    });
+    expect(body).not.toHaveProperty("password");
+  });
+
+  it("throws Auth0ConflictError on 409 so callers can surface duplicate-email", async () => {
+    fetchMock.mockResolvedValueOnce(
+      errJson(409, { message: "user already exists" }),
+    );
+    await expect(
+      createAuth0User({ email: "dup@x.com", name: null }),
+    ).rejects.toBeInstanceOf(Auth0ConflictError);
+  });
+
+  it("throws generic error on 500 without echoing response body (no PII leak)", async () => {
+    fetchMock.mockResolvedValueOnce(
+      errJson(500, { secret: "client_id leak" }),
+    );
+    await expect(
+      createAuth0User({ email: "x@y.com", name: null }),
+    ).rejects.toThrow(/createAuth0User failed: 500/);
+  });
+
+  it("rate-limits via Auth0RateLimitError on 429", async () => {
+    fetchMock.mockResolvedValueOnce(
+      errJson(429, { message: "slow down" }, { "retry-after": "3" }),
+    );
+    let caught: unknown;
+    try {
+      await createAuth0User({ email: "x@y.com", name: null });
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(Auth0RateLimitError);
+    expect((caught as Auth0RateLimitError).retryAfterMs).toBe(3000);
+  });
+});
+
+describe("createPasswordChangeTicket", () => {
+  beforeEach(() => {
+    fetchMock.mockResolvedValueOnce(
+      okJson({ access_token: "tkn", expires_in: 86400 }),
+    );
+  });
+
+  it("POSTs /api/v2/tickets/password-change with user_id + mark_email_as_verified", async () => {
+    fetchMock.mockResolvedValueOnce(
+      okJson({ ticket: "https://auth.helpucompli.com/lo/reset?ticket=abc" }),
+    );
+    const ticket = await createPasswordChangeTicket("auth0|new123");
+    expect(ticket).toBe("https://auth.helpucompli.com/lo/reset?ticket=abc");
+    const [url, init] = fetchMock.mock.calls[1] ?? [];
+    expect(url).toBe("https://auth.helpucompli.com/api/v2/tickets/password-change");
+    const body = JSON.parse((init as { body: string }).body);
+    expect(body).toMatchObject({
+      user_id: "auth0|new123",
+      mark_email_as_verified: false,
+    });
+  });
+});
+
+describe("listAuth0Roles + assignAuth0RoleByName", () => {
+  beforeEach(() => {
+    _resetRoleIdCache();
+    fetchMock.mockResolvedValueOnce(
+      okJson({ access_token: "tkn", expires_in: 86400 }),
+    );
+  });
+
+  it("listAuth0Roles GETs /api/v2/roles and caches the result", async () => {
+    fetchMock.mockResolvedValueOnce(
+      okJson([
+        { id: "r-sa", name: "superadmin" },
+        { id: "r-ad", name: "admin" },
+        { id: "r-vw", name: "viewer" },
+      ]),
+    );
+    const first = await listAuth0Roles();
+    const second = await listAuth0Roles();
+    expect(first).toHaveLength(3);
+    expect(second).toEqual(first);
+    // token fetch + roles fetch = 2 calls only; second call served from cache.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("assignAuth0RoleByName POSTs /api/v2/users/{id}/roles with matching role id", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        okJson([
+          { id: "r-ad", name: "admin" },
+          { id: "r-vw", name: "viewer" },
+        ]),
+      )
+      .mockResolvedValueOnce(okJson({}));
+    await assignAuth0RoleByName("auth0|new123", "viewer");
+    const [url, init] = fetchMock.mock.calls[2] ?? [];
+    expect(url).toBe(
+      "https://auth.helpucompli.com/api/v2/users/auth0%7Cnew123/roles",
+    );
+    const body = JSON.parse((init as { body: string }).body);
+    expect(body).toEqual({ roles: ["r-vw"] });
+  });
+
+  it("assignAuth0RoleByName throws when role name is not configured in Auth0", async () => {
+    fetchMock.mockResolvedValueOnce(
+      okJson([{ id: "r-ad", name: "admin" }]),
+    );
+    await expect(
+      assignAuth0RoleByName("auth0|new", "viewer"),
+    ).rejects.toThrow(/role.*viewer.*not found/i);
   });
 });

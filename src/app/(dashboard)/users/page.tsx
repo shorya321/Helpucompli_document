@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth0 } from "@/lib/auth0";
-import { resolveHasRole } from "@/lib/auth-guard";
+import { resolveRole } from "@/lib/auth-guard";
 import { BRAND } from "@/lib/brand";
 import { prisma } from "@/lib/prisma";
 import {
@@ -10,6 +10,7 @@ import {
   type UserListRow,
 } from "@/lib/user-list";
 import { UserTable } from "@/components/users/user-table";
+import { InviteUserDialog } from "@/components/users/invite-user-dialog";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,8 @@ interface UsersPageProps {
 export default async function UsersPage({ searchParams }: UsersPageProps) {
   const session = await auth0.getSession();
   if (!session) redirect("/auth/login");
-  if (!(await resolveHasRole(session, ["superadmin", "admin"]))) {
+  const role = await resolveRole(session);
+  if (role !== "superadmin" && role !== "admin") {
     redirect("/");
   }
 
@@ -53,11 +55,21 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
         color: BRAND.colors.dark,
       }}
     >
-      <header style={{ marginBottom: "1.5rem" }}>
-        <h1 style={{ fontSize: "1.5rem", fontWeight: 700, margin: 0 }}>Users</h1>
-        <p style={{ color: "rgba(30,41,59,0.64)", margin: "0.25rem 0 0" }}>
-          Manage who can access the document repository.
-        </p>
+      <header
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: "1.5rem",
+        }}
+      >
+        <div>
+          <h1 style={{ fontSize: "1.5rem", fontWeight: 700, margin: 0 }}>Users</h1>
+          <p style={{ color: "rgba(30,41,59,0.64)", margin: "0.25rem 0 0" }}>
+            Manage who can access the document repository.
+          </p>
+        </div>
+        <InviteUserDialog canInviteAdmin={role === "superadmin"} />
       </header>
 
       {loadError && (

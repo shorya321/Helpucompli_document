@@ -3,12 +3,19 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getSession: vi.fn(),
   resolveHasRole: vi.fn(),
+  resolveRole: vi.fn(),
   listUsers: vi.fn(),
+  inviteUser: vi.fn(),
+  ensureUser: vi.fn(),
   limitGet: vi.fn(),
+  limitPost: vi.fn(),
 }));
 
 vi.mock("@/lib/auth0", () => ({ auth0: { getSession: mocks.getSession } }));
-vi.mock("@/lib/auth-guard", () => ({ resolveHasRole: mocks.resolveHasRole }));
+vi.mock("@/lib/auth-guard", () => ({
+  resolveHasRole: mocks.resolveHasRole,
+  resolveRole: mocks.resolveRole,
+}));
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 vi.mock("@/lib/user-list", async () => {
   const actual = await vi.importActual<typeof import("@/lib/user-list")>(
@@ -16,12 +23,23 @@ vi.mock("@/lib/user-list", async () => {
   );
   return { ...actual, listUsers: mocks.listUsers };
 });
+vi.mock("@/lib/user-invite", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/user-invite")>(
+    "@/lib/user-invite",
+  );
+  return { ...actual, inviteUser: mocks.inviteUser };
+});
+vi.mock("@/lib/ensure-user", () => ({ ensureUser: mocks.ensureUser }));
 vi.mock("@/lib/rate-limit", () => ({
-  createRateLimiter: vi.fn().mockImplementation(() => ({ limit: mocks.limitGet })),
+  createRateLimiter: vi
+    .fn()
+    .mockImplementationOnce(() => ({ limit: mocks.limitGet }))
+    .mockImplementationOnce(() => ({ limit: mocks.limitPost })),
 }));
 
-import { GET } from "@/app/api/users/route";
+import { GET, POST } from "@/app/api/users/route";
 import { NextRequest } from "next/server";
+import { Auth0ConflictError } from "@/lib/auth0-management";
 
 const ok = { success: true, reset: Date.now() + 30_000 };
 
@@ -112,5 +130,134 @@ describe("GET /api/users", () => {
     expect(res.status).toBe(500);
     const body = (await res.json()) as { error: string };
     expect(body.error).not.toMatch(/postgres|@|pw/i);
+  });
+});
+
+function jsonReq(body: unknown, ctype = "application/json") {
+  return new NextRequest("http://x/api/users", {
+    method: "POST",
+    headers: { "content-type": ctype },
+    body: ctype === "application/json" ? JSON.stringify(body) : String(body),
+  });
+}
+
+const VALID_INVITE = {
+  email: "invitee@x.com",
+  name: "Invitee",
+  role: "viewer",
+};
+
+describe("POST /api/users", () => {
+  it("401 no session", async () => {
+    mocks.getSession.mockResolvedValueOnce(null);
+    const res = await POST(jsonReq(VALID_INVITE));
+    expect(res.status).toBe(401);
+  });
+
+  it("403 when not admin+", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(false);
+    const res = await POST(jsonReq(VALID_INVITE));
+    expect(res.status).toBe(403);
+  });
+
+  it("429 when rate-limited", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(true);
+    mocks.limitPost.mockResolvedValueOnce({
+      success: false,
+      reset: Date.now() + 5000,
+    });
+    const res = await POST(jsonReq(VALID_INVITE));
+    expect(res.status).toBe(429);
+  });
+
+  it("415 on non-JSON content-type", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(true);
+    mocks.limitPost.mockResolvedValueOnce(ok);
+    const res = await POST(jsonReq("oops", "text/plain"));
+    expect(res.status).toBe(415);
+  });
+
+  it("400 on invalid JSON", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(true);
+    mocks.limitPost.mockResolvedValueOnce(ok);
+    const req = new NextRequest("http://x/api/users", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{not json",
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+  });
+
+  it("400 on schema violation", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(true);
+    mocks.limitPost.mockResolvedValueOnce(ok);
+    const res = await POST(jsonReq({ ...VALID_INVITE, email: "not-email" }));
+    expect(res.status).toBe(400);
+  });
+
+  it("403 when admin tries to invite admin (hierarchy)", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(true);
+    mocks.limitPost.mockResolvedValueOnce(ok);
+    mocks.resolveRole.mockResolvedValueOnce("admin");
+    mocks.ensureUser.mockResolvedValueOnce({ id: "actor-1" });
+    const res = await POST(
+      jsonReq({ ...VALID_INVITE, role: "admin" }),
+    );
+    expect(res.status).toBe(403);
+    expect(mocks.inviteUser).not.toHaveBeenCalled();
+  });
+
+  it("409 on Auth0ConflictError (duplicate email)", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(true);
+    mocks.limitPost.mockResolvedValueOnce(ok);
+    mocks.resolveRole.mockResolvedValueOnce("superadmin");
+    mocks.ensureUser.mockResolvedValueOnce({ id: "actor-1" });
+    mocks.inviteUser.mockRejectedValueOnce(new Auth0ConflictError());
+    const res = await POST(jsonReq(VALID_INVITE));
+    expect(res.status).toBe(409);
+  });
+
+  it("201 on success returns invited user + ticket", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(true);
+    mocks.limitPost.mockResolvedValueOnce(ok);
+    mocks.resolveRole.mockResolvedValueOnce("admin");
+    mocks.ensureUser.mockResolvedValueOnce({ id: "actor-1" });
+    mocks.inviteUser.mockResolvedValueOnce({
+      id: "db-1",
+      auth0Id: "auth0|new",
+      email: "invitee@x.com",
+      name: "Invitee",
+      role: "viewer",
+      ticket: "https://auth.helpucompli.com/lo/reset?ticket=abc",
+    });
+    const res = await POST(jsonReq(VALID_INVITE));
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as {
+      data: { email: string; ticket: string };
+    };
+    expect(body.data.email).toBe("invitee@x.com");
+    expect(body.data.ticket).toMatch(/ticket=abc$/);
+  });
+
+  it("500 on unknown inviteUser failure — no PII leak", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(true);
+    mocks.limitPost.mockResolvedValueOnce(ok);
+    mocks.resolveRole.mockResolvedValueOnce("superadmin");
+    mocks.ensureUser.mockResolvedValueOnce({ id: "actor-1" });
+    mocks.inviteUser.mockRejectedValueOnce(new Error("boom pw=secret"));
+    const res = await POST(jsonReq(VALID_INVITE));
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).not.toMatch(/pw|secret/i);
   });
 });

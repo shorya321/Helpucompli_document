@@ -841,7 +841,7 @@
             "Log USER_INVITE in audit",
             "Test invite flow end-to-end"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F10.4",

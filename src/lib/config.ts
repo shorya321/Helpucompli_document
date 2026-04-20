@@ -32,6 +32,13 @@ const envSchema = z.object({
   AUTH0_CLIENT_SECRET: nonEmpty("AUTH0_CLIENT_SECRET"),
   AUTH0_MGMT_CLIENT_ID: nonEmpty("AUTH0_MGMT_CLIENT_ID"),
   AUTH0_MGMT_CLIENT_SECRET: nonEmpty("AUTH0_MGMT_CLIENT_SECRET"),
+  // Name of the Auth0 database connection that hosts application users.
+  // Required by POST /api/v2/users on invite (F10.3). Defaults to
+  // Auth0's standard connection when unset.
+  AUTH0_DB_CONNECTION: z
+    .string()
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined)),
   AWS_REGION: nonEmpty("AWS_REGION"),
   AWS_ACCESS_KEY_ID: nonEmpty("AWS_ACCESS_KEY_ID"),
   AWS_SECRET_ACCESS_KEY: nonEmpty("AWS_SECRET_ACCESS_KEY"),
