@@ -69,4 +69,20 @@ describe("HIPAA compliance checklist (F11.4)", () => {
   it("references the audit_logs append-only triggers (Audit Controls 164.312(b))", () => {
     expect(doc).toContain("audit_logs_no_update");
   });
+
+  // F11.8 — explicit data classification statements
+  it("data classification: asserts no direct ePHI / patient records stored", () => {
+    // Table row carries the classification label + NO status + narrative.
+    expect(doc).toMatch(/Patient records[^|]*\|\s*\*?\*?NO\*?\*?/i);
+    expect(doc.toLowerCase()).toContain("does not store clinical records");
+  });
+
+  it("data classification: asserts file content is opaque (not parsed/indexed)", () => {
+    expect(doc.toLowerCase()).toContain("opaque");
+    expect(doc.toLowerCase()).toMatch(/not parsed|never parsed|not indexed|never indexed/);
+  });
+
+  it("data classification: asserts no PHI collected in any input/metadata", () => {
+    expect(doc.toLowerCase()).toMatch(/no phi/i);
+  });
 });

@@ -1012,7 +1012,7 @@
             "Document that file content is opaque (not parsed or indexed)",
             "Add data classification to docs/HIPAA-COMPLIANCE-CHECKLIST.md"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F11.9",
