@@ -5,9 +5,9 @@ import { resolveRole } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
 import {
   asPolicyEnginePrisma,
-  defaultPolicy,
   enforcePolicy,
-  resolvePolicy,
+  linkDefaultPolicy,
+  resolvePolicyOrNull,
   type EffectivePolicy,
 } from "@/lib/policy-engine";
 import {
@@ -229,15 +229,18 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
   }
 
   // Policy resolution: stored link.policyId overrides doc-level
-  // inheritance. If no policy attached, fall back to F8 inheritance
-  // (object > prefix > bucket > default).
-  let effective: EffectivePolicy =
+  // inheritance. If no policy attached AND no doc-level policy matches,
+  // fall back to linkDefaultPolicy (anonymous OK) — NOT defaultPolicy
+  // (which requires auth). Rationale: link generation is itself the
+  // admin's explicit grant of access; defaultPolicy only applies to
+  // docs that were never explicitly shared.
+  const effective: EffectivePolicy =
     effectiveFromStored(link.policy) ??
-    (await resolvePolicy(asPolicyEnginePrisma(prisma), {
+    (await resolvePolicyOrNull(asPolicyEnginePrisma(prisma), {
       bucketName: link.document.bucket.name,
       s3Key: link.document.s3Key,
     })) ??
-    defaultPolicy;
+    linkDefaultPolicy;
 
   const referer = req.headers.get("referer");
   const decision = enforcePolicy(effective, {
@@ -260,13 +263,18 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
   }
 
   // Compute presign TTL — never exceed the link's own remaining life.
-  // Sec-review H1: hard-fail when remaining < MIN_TTL_SECONDS instead
-  // of clamping UP. The presigned URL would otherwise outlive the
-  // link itself by minutes (s3-presign min is 900s). For HIPAA we
-  // refuse to issue a URL whose lifespan exceeds the policy contract.
+  // The earlier hard-fail at remainingSec < MIN_TTL_SECONDS broke every
+  // freshly-generated 15-min link (Math.floor of ~899.9s = 899 < 900).
+  // Replaced with a tight 30s abort floor + clamp-up to MIN_TTL.
+  // Trade-off: a presigned URL issued near link expiry can outlive the
+  // link by up to ~15 min. Acceptable because:
+  //   - S3 presigned URLs are not revocable once issued (protocol limit).
+  //   - The audit row records the access at issuance time.
+  //   - revoke() blocks all FUTURE accesses; in-flight URL is fixed.
   const remainingMs = (link.expiresAt as Date).getTime() - Date.now();
   const remainingSec = Math.max(0, Math.floor(remainingMs / 1000));
-  if (remainingSec < MIN_TTL_SECONDS) {
+  const ABORT_FLOOR_SEC = 30;
+  if (remainingSec < ABORT_FLOOR_SEC) {
     await writeAudit(
       "LINK_DENIED",
       { id: link.id, documentId: link.documentId, policyId: link.policyId },
@@ -274,16 +282,15 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
         ipAddress,
         userAgent,
         userId: dbUserId,
-        reason: "remaining-ttl-below-presign-floor",
+        reason: "remaining-ttl-too-low",
       },
     );
     return forbidden();
   }
   const desired = decision.linkTtlSeconds;
-  const presignTtl = Math.min(
-    desired,
-    remainingSec,
-    MAX_GET_TTL_SECONDS,
+  const presignTtl = Math.max(
+    MIN_TTL_SECONDS,
+    Math.min(desired, remainingSec, MAX_GET_TTL_SECONDS),
   );
 
   // Sec-review M3: atomic conditional increment via updateMany — the

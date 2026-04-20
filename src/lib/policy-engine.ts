@@ -48,6 +48,21 @@ export const defaultPolicy: EffectivePolicy = {
   allowedIpRanges: [],
 } as const;
 
+// When a share link was explicitly created with no attached policy AND
+// no doc-level policy matches, the act of link creation IS the admin's
+// grant of access — anonymous read should succeed. Distinct from
+// defaultPolicy (which protects docs that have no link generated at
+// all). Only the link access endpoint uses this constant.
+export const linkDefaultPolicy: EffectivePolicy = {
+  source: "default",
+  policyId: null,
+  linkTtlSeconds: 900,
+  maxDownloads: null,
+  requireAuth: false,
+  allowedDomains: [],
+  allowedIpRanges: [],
+} as const;
+
 // ---------------------------------------------------------------------------
 // IP CIDR membership — pure, dependency-free, IPv4 only.
 // Returns false on any malformed input (fail closed).
@@ -273,6 +288,18 @@ export async function resolvePolicy(
   if (bucketMatch) return toEffective(bucketMatch, "bucket");
 
   return defaultPolicy;
+}
+
+// Same lookup as resolvePolicy, but returns null when no policy row
+// matches (instead of falling back to defaultPolicy). Used by the link
+// access endpoint so it can substitute its own permissive
+// linkDefaultPolicy in the no-match case.
+export async function resolvePolicyOrNull(
+  prisma: PolicyEnginePrisma,
+  doc: DocumentInfo,
+): Promise<EffectivePolicy | null> {
+  const r = await resolvePolicy(prisma, doc);
+  return r === defaultPolicy ? null : r;
 }
 
 interface PolicyEnginePrismaLike {

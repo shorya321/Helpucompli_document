@@ -4,7 +4,9 @@ import {
   refererAllowed,
   enforcePolicy,
   resolvePolicy,
+  resolvePolicyOrNull,
   defaultPolicy,
+  linkDefaultPolicy,
   type EffectivePolicy,
   type EnforcementContext,
   type PolicyEnginePrisma,
@@ -296,6 +298,34 @@ describe("resolvePolicy (inheritance order)", () => {
     ]);
     const policy = await resolvePolicy(stub.client, documentInfo);
     expect(policy.source).toBe("default");
+  });
+
+  it("resolvePolicyOrNull returns null when nothing matches (no defaultPolicy fallback)", async () => {
+    const stub = makeStub([]);
+    const r = await resolvePolicyOrNull(stub.client, documentInfo);
+    expect(r).toBeNull();
+  });
+
+  it("resolvePolicyOrNull returns the matched row when something matches", async () => {
+    const stub = makeStub([
+      {
+        id: "p-bucket",
+        targetType: "bucket",
+        targetValue: "alpha-bucket",
+        allowedDomains: [],
+        allowedIpRanges: [],
+        linkTtlSeconds: 900,
+        maxDownloads: null,
+        requireAuth: false,
+      },
+    ]);
+    const r = await resolvePolicyOrNull(stub.client, documentInfo);
+    expect(r?.policyId).toBe("p-bucket");
+  });
+
+  it("linkDefaultPolicy permits anonymous (requireAuth=false), distinct from defaultPolicy", () => {
+    expect(linkDefaultPolicy.requireAuth).toBe(false);
+    expect(defaultPolicy.requireAuth).toBe(true);
   });
 
   it("falls back to bucket policy when no object/prefix matches", async () => {

@@ -40,6 +40,7 @@ vi.mock("@/lib/policy-engine", async () => {
   return {
     ...actual,
     resolvePolicy: mocks.resolvePolicy,
+    resolvePolicyOrNull: mocks.resolvePolicy,
     enforcePolicy: mocks.enforcePolicy,
   };
 });
@@ -251,14 +252,14 @@ describe("GET /api/links/[hash]", () => {
     expect(res.headers.get("Cache-Control")).toMatch(/private/);
   });
 
-  it("403 (NOT clamp) when remaining link life < MIN_TTL_SECONDS — sec-review H1", async () => {
+  it("403 when remaining < ABORT_FLOOR (30s) — link essentially expired", async () => {
     mocks.findLink.mockResolvedValueOnce(
-      linkRow({ expiresAt: new Date(Date.now() + 120_000) }), // 120s
+      linkRow({ expiresAt: new Date(Date.now() + 10_000) }), // 10s left
     );
     mocks.resolvePolicy.mockResolvedValueOnce(defaultEffective);
     mocks.enforcePolicy.mockReturnValueOnce({
       ...allow,
-      linkTtlSeconds: 3600,
+      linkTtlSeconds: 900,
     });
     const res = await GET(req(), {
       params: params("tok_abc_with_long_enough_token_value_xyz"),
@@ -266,6 +267,31 @@ describe("GET /api/links/[hash]", () => {
     expect(res.status).toBe(403);
     expect(mocks.presignGetUrl).not.toHaveBeenCalled();
     expect(mocks.updateMany).not.toHaveBeenCalled();
+    const reason = mocks.auditCreate.mock.calls[0]?.[0].data.metadata.reason;
+    expect(reason).toBe("remaining-ttl-too-low");
+  });
+
+  it("clamps presign TTL UP to MIN_TTL_SECONDS when remaining is short but > 30s — accepted overhang", async () => {
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({ expiresAt: new Date(Date.now() + 120_000) }), // 120s left
+    );
+    mocks.resolvePolicy.mockResolvedValueOnce(defaultEffective);
+    mocks.enforcePolicy.mockReturnValueOnce({
+      ...allow,
+      linkTtlSeconds: 900,
+    });
+    mocks.updateMany.mockResolvedValueOnce({ count: 1 });
+    mocks.presignGetUrl.mockResolvedValueOnce("https://s3/x?sig=1");
+    const res = await GET(req(), {
+      params: params("tok_abc_with_long_enough_token_value_xyz"),
+    });
+    expect(res.status).toBe(302);
+    const presignArgs = mocks.presignGetUrl.mock.calls[0]?.[0] as {
+      ttlSeconds: number;
+    };
+    // Math.min(900 desired, 120 remaining, 7d max) = 120, then
+    // Math.max(900 floor, 120) = 900.
+    expect(presignArgs.ttlSeconds).toBe(900);
   });
 
   it("uses min(decision.ttl, remaining, 7d) as presign TTL when remaining > MIN_TTL", async () => {
@@ -285,9 +311,7 @@ describe("GET /api/links/[hash]", () => {
     const presignArgs = mocks.presignGetUrl.mock.calls[0]?.[0] as {
       ttlSeconds: number;
     };
-    // Should be ≤ 1200 (remaining) and ≤ 3600 (decision); minimum of
-    // the three values wins. Specifically expect 1200.
-    expect(presignArgs.ttlSeconds).toBeLessThanOrEqual(1200);
-    expect(presignArgs.ttlSeconds).toBeGreaterThanOrEqual(900);
+    // min(3600, 1200, 7d) = 1200. max(900, 1200) = 1200.
+    expect(presignArgs.ttlSeconds).toBe(1200);
   });
 });

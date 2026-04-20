@@ -174,6 +174,18 @@ export function GenerateLinkForm({
             </option>
           ))}
         </select>
+        {policyId === "" && (
+          <span
+            style={{
+              color: BRAND.colors.pink,
+              fontSize: "0.7rem",
+              fontWeight: 500,
+            }}
+          >
+            ⚠ Anonymous unrestricted share — anyone with the URL can download
+            until expiry or revoke.
+          </span>
+        )}
       </label>
 
       <label style={labelStyle}>
