@@ -5,11 +5,17 @@ import { BRAND } from "@/lib/brand";
 import { prisma } from "@/lib/prisma";
 import { GenerateLinkForm } from "@/components/links/generate-link-form";
 import { LinkTable } from "@/components/links/link-table";
+import { LinkAnalyticsView } from "@/components/links/link-analytics";
 import {
   asLinkListPrisma,
   queryLinks,
   type LinkListResult,
 } from "@/lib/link-list";
+import {
+  asLinkAnalyticsPrisma,
+  getLinkAnalytics,
+  type LinkAnalytics,
+} from "@/lib/link-analytics";
 
 export const dynamic = "force-dynamic";
 
@@ -35,9 +41,16 @@ export default async function LinksPage() {
   }> = [];
 
   let initialLinks: LinkListResult = { rows: [], nextCursor: null };
+  let analytics: LinkAnalytics = {
+    total: 0,
+    active: 0,
+    expired: 0,
+    revoked: 0,
+    topDocuments: [],
+  };
   if (isAdminUp) {
     try {
-      const [docRows, polRows, linkRes] = await Promise.all([
+      const [docRows, polRows, linkRes, analyticsRes] = await Promise.all([
         prisma.document.findMany({
           where: { isDeleted: false },
           include: { bucket: { select: { name: true } } },
@@ -58,8 +71,10 @@ export default async function LinksPage() {
           sort: "createdAt",
           dir: "desc",
         }),
+        getLinkAnalytics(asLinkAnalyticsPrisma(prisma)),
       ]);
       initialLinks = linkRes;
+      analytics = analyticsRes;
       documents = docRows.map((d) => ({
         id: d.id,
         name: d.filename,
@@ -98,6 +113,7 @@ export default async function LinksPage() {
 
       {isAdminUp ? (
         <>
+          <LinkAnalyticsView stats={analytics} />
           <GenerateLinkForm documents={documents} policies={policies} />
           <LinkTable initial={initialLinks} />
         </>

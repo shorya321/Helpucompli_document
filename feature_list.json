@@ -769,7 +769,7 @@
             "Show active vs expired vs revoked link counts",
             "Test analytics display with sample data"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F9.5",
