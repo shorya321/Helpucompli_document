@@ -757,7 +757,7 @@
             "Log LINK_ACCESS or LINK_DENIED in audit trail",
             "Test all enforcement scenarios (expired, over-limit, wrong IP, wrong domain)"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F9.4",
