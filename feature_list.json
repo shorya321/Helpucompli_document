@@ -1074,7 +1074,7 @@
             "Test role enforcement on all protected routes (admin, viewer, unauthenticated)",
             "Test rate limiting middleware"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F12.3",
