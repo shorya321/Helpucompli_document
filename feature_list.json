@@ -868,7 +868,7 @@
             "GET /api/users/[id]/buckets returns assigned buckets",
             "Test viewer sees only assigned buckets"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F10.6",
