@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BRAND } from "@/lib/brand";
 import type { ApiResponse } from "@/types";
 import type { LinkListResult, LinkListRow, LinkStatus } from "@/lib/link-list";
@@ -69,10 +69,34 @@ async function fetchLinks(qs: string): Promise<LinkListResult> {
 
 interface LinkTableProps {
   readonly initial: LinkListResult;
-  readonly onRevoke?: (id: string, token: string) => void;
 }
 
-export function LinkTable({ initial, onRevoke }: LinkTableProps) {
+async function revokeLink(token: string): Promise<void> {
+  const res = await fetch(`/api/links/${encodeURIComponent(token)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok && res.status !== 204) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+}
+
+export function LinkTable({ initial }: LinkTableProps) {
+  const queryClient = useQueryClient();
+  const [revoking, setRevoking] = useState<string | null>(null);
+  const onRevoke = async (id: string, token: string) => {
+    if (!window.confirm("Revoke this link? Anyone holding the URL will get 403.")) {
+      return;
+    }
+    setRevoking(id);
+    try {
+      await revokeLink(token);
+      await queryClient.invalidateQueries({ queryKey: ["links"] });
+    } catch {
+      window.alert("Failed to revoke. Try again.");
+    } finally {
+      setRevoking(null);
+    }
+  };
   const [status, setStatus] = useState<"all" | LinkStatus>("all");
   const [sort, setSort] = useState<
     "createdAt" | "expiresAt" | "downloadCount"
@@ -187,16 +211,8 @@ export function LinkTable({ initial, onRevoke }: LinkTableProps) {
         >
           <thead>
             <tr>
-              {[
-                "Document",
-                "Status",
-                "Created by",
-                "Downloads",
-                "Expires",
-                onRevoke ? "" : null,
-              ]
-                .filter((h): h is string => h !== null)
-                .map((h) => (
+              {["Document", "Status", "Created by", "Downloads", "Expires", ""].map(
+                (h) => (
                   <th
                     key={h || "actions"}
                     style={{
@@ -211,7 +227,8 @@ export function LinkTable({ initial, onRevoke }: LinkTableProps) {
                   >
                     {h}
                   </th>
-                ))}
+                ),
+              )}
             </tr>
           </thead>
           <tbody>
@@ -269,33 +286,33 @@ export function LinkTable({ initial, onRevoke }: LinkTableProps) {
                   >
                     {row.expiresAt.toLocaleString()}
                   </td>
-                  {onRevoke && (
-                    <td style={{ ...cellStyle, textAlign: "right" }}>
-                      {row.status === "active" ? (
-                        <button
-                          type="button"
-                          onClick={() => onRevoke(row.id, row.token)}
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            color: BRAND.colors.pink,
-                            cursor: "pointer",
-                            fontWeight: 600,
-                            fontSize: "0.85rem",
-                          }}
-                        >
-                          Revoke
-                        </button>
-                      ) : null}
-                    </td>
-                  )}
+                  <td style={{ ...cellStyle, textAlign: "right" }}>
+                    {row.status === "active" ? (
+                      <button
+                        type="button"
+                        onClick={() => onRevoke(row.id, row.token)}
+                        disabled={revoking === row.id}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: BRAND.colors.pink,
+                          cursor:
+                            revoking === row.id ? "wait" : "pointer",
+                          fontWeight: 600,
+                          fontSize: "0.85rem",
+                        }}
+                      >
+                        {revoking === row.id ? "Revoking…" : "Revoke"}
+                      </button>
+                    ) : null}
+                  </td>
                 </tr>
               );
             })}
             {rows.length === 0 && !isFetching && (
               <tr>
                 <td
-                  colSpan={onRevoke ? 6 : 5}
+                  colSpan={6}
                   style={{
                     padding: "2rem",
                     textAlign: "center",
