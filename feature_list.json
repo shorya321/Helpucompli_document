@@ -574,7 +574,7 @@
             "Create src/app/api/audit/route.ts with GET handler and query params for all filters",
             "Test filters work correctly"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F7.4",
