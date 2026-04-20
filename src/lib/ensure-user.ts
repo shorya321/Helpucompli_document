@@ -12,9 +12,9 @@ export interface EnsureUserInput {
 // this helper is the DB-side of that resolution, not an auth check.
 // Returns { id } for use as a FK (e.g. Bucket.createdBy).
 //
-// Intentionally only touches lastLoginAt on update: once a user exists
-// their role + email are owned by the user-management module, not by
-// whichever Auth0 claim happens to be present on the next request.
+// Role is NOT synced on update: role changes flow through the F10.4
+// user-management endpoint (admin-driven), not passive login sync.
+// Email + name ARE synced so Auth0-side profile edits propagate.
 export async function ensureUser(
   prisma: Pick<PrismaClient, "user">,
   { session, role }: EnsureUserInput,
@@ -35,7 +35,11 @@ export async function ensureUser(
 
   return prisma.user.upsert({
     where: { auth0Id: sub },
-    update: { lastLoginAt: new Date() },
+    update: {
+      email,
+      name,
+      lastLoginAt: new Date(),
+    },
     create: {
       auth0Id: sub,
       email,

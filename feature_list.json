@@ -811,7 +811,7 @@
             "Create new user record if first login",
             "Test sync creates and updates user correctly"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F10.2",

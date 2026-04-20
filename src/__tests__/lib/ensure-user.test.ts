@@ -50,9 +50,9 @@ describe("ensureUser", () => {
     expect(arg.select).toEqual({ id: true });
   });
 
-  it("update branch refreshes lastLoginAt but does NOT overwrite role or email", async () => {
+  it("update branch syncs email + name + lastLoginAt from Auth0 but NOT role (F10.1)", async () => {
     const prisma = makePrisma({ id: "u-2" });
-    const session = sessionOf();
+    const session = sessionOf({ email: "new@b.com", name: "New Name" });
 
     await ensureUser(
       prisma as unknown as Parameters<typeof ensureUser>[0],
@@ -60,10 +60,24 @@ describe("ensureUser", () => {
     );
 
     const arg = prisma.user.upsert.mock.calls[0]?.[0];
-    expect(Object.keys(arg.update)).toEqual(["lastLoginAt"]);
+    expect(arg.update.email).toBe("new@b.com");
+    expect(arg.update.name).toBe("New Name");
     expect(arg.update.lastLoginAt).toBeInstanceOf(Date);
+    // Role change is governed by F10.4 role-management flow, not passive login sync.
     expect(arg.update.role).toBeUndefined();
-    expect(arg.update.email).toBeUndefined();
+  });
+
+  it("update branch coerces missing name to null on Auth0 profile change", async () => {
+    const prisma = makePrisma({ id: "u-3" });
+    const session = sessionOf({ name: undefined });
+
+    await ensureUser(
+      prisma as unknown as Parameters<typeof ensureUser>[0],
+      { session, role: "viewer" },
+    );
+
+    const arg = prisma.user.upsert.mock.calls[0]?.[0];
+    expect(arg.update.name).toBeNull();
   });
 
   it("coerces non-string name to null (Auth0 may omit or return non-string)", async () => {
