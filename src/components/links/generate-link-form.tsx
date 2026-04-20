@@ -8,6 +8,7 @@ import {
   LINK_MAX_TTL_SECONDS,
 } from "@/lib/link-create";
 import type { ApiResponse } from "@/types";
+import { QrCode } from "@/components/links/qr-code";
 
 const TTL_PRESETS: ReadonlyArray<{ value: number; label: string }> = [
   { value: 900, label: "15 minutes" },
@@ -281,6 +282,9 @@ export function GenerateLinkForm({
             >
               {copied ? "Copied!" : "Copy"}
             </button>
+          </div>
+          <div style={{ marginTop: "0.75rem" }}>
+            <QrCode url={result.shareableUrl} />
           </div>
         </div>
       )}

@@ -792,7 +792,7 @@
             "Download QR as PNG image",
             "Test QR code scans to correct URL"
           ],
-          "passes": false
+          "passes": true
         }
       ]
     },
