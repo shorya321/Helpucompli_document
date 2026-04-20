@@ -825,7 +825,7 @@
             "GET /api/users with query params",
             "Test list rendering and filters"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F10.3",
