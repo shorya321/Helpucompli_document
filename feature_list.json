@@ -879,7 +879,7 @@
             "Log USER_DISABLE or USER_ENABLE in audit",
             "Test disabled user cannot log in"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F10.7",

@@ -281,6 +281,41 @@ export async function listAuth0Roles(): Promise<Auth0Role[]> {
   return cachedRoles;
 }
 
+// PATCH /api/v2/users/{id} with { blocked: true|false }. Scope:
+// update:users. Blocking in Auth0 (not just flipping a local column)
+// is what actually prevents the user from obtaining a session — the
+// local User.status is a mirror for UI display + audit filters.
+export async function setAuth0UserBlocked(
+  userId: string,
+  blocked: boolean,
+): Promise<void> {
+  const config = getConfig();
+  const token = await getManagementToken();
+  const response = await fetch(
+    `https://${config.AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(userId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ blocked }),
+    },
+  );
+  if (!response.ok) {
+    if (response.status === 429) {
+      const retryAfterMs = parseRetryAfterMs(
+        response.headers.get("retry-after"),
+      );
+      throw new Auth0RateLimitError(
+        retryAfterMs,
+        `Auth0 setAuth0UserBlocked rate-limited (429); retry after ${retryAfterMs}ms`,
+      );
+    }
+    throw new Error(`Auth0 setAuth0UserBlocked failed: ${response.status}`);
+  }
+}
+
 async function removeAuth0Roles(
   userId: string,
   roleIds: readonly string[],

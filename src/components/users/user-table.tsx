@@ -3,6 +3,7 @@ import { BRAND } from "@/lib/brand";
 import type { UserListRow } from "@/lib/user-list";
 import type { Role } from "@/types";
 import { RoleSelect } from "@/components/users/role-select";
+import { StatusToggle } from "@/components/users/status-toggle";
 
 interface UserTableProps {
   readonly rows: ReadonlyArray<UserListRow>;
@@ -232,7 +233,22 @@ export function UserTable({
                   {row.lastLoginAt ? row.lastLoginAt.toLocaleString() : "Never"}
                 </td>
                 <td style={cell}>
-                  <StatusBadge status={row.status} />
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    <StatusBadge status={row.status} />
+                    <StatusToggle
+                      userId={row.id}
+                      currentStatus={row.status}
+                      targetRole={row.role}
+                      actorRole={actorRole}
+                      isSelf={actorId === row.id}
+                    />
+                  </span>
                 </td>
                 <td style={{ ...cell, textAlign: "right" }}>
                   <Link

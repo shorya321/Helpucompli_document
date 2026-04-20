@@ -27,6 +27,7 @@ import {
   getUserRoles,
   listAuth0Roles,
   replaceAuth0RoleByName,
+  setAuth0UserBlocked,
 } from "@/lib/auth0-management";
 
 const fetchMock = vi.fn();
@@ -396,5 +397,53 @@ describe("replaceAuth0RoleByName", () => {
     // last call is the POST assign
     const postCall = fetchMock.mock.calls[3];
     expect((postCall?.[1] as { method: string }).method).toBe("POST");
+  });
+});
+
+describe("setAuth0UserBlocked", () => {
+  beforeEach(() => {
+    fetchMock.mockResolvedValueOnce(
+      okJson({ access_token: "tkn", expires_in: 86400 }),
+    );
+  });
+
+  it("PATCHes /api/v2/users/{id} with {blocked: true}", async () => {
+    fetchMock.mockResolvedValueOnce(okJson({ user_id: "auth0|x", blocked: true }));
+    await setAuth0UserBlocked("auth0|x", true);
+    const [url, init] = fetchMock.mock.calls[1] ?? [];
+    expect(url).toBe("https://auth.helpucompli.com/api/v2/users/auth0%7Cx");
+    expect((init as { method: string }).method).toBe("PATCH");
+    expect(JSON.parse((init as { body: string }).body)).toEqual({
+      blocked: true,
+    });
+  });
+
+  it("PATCHes {blocked: false} on enable", async () => {
+    fetchMock.mockResolvedValueOnce(okJson({ user_id: "auth0|x" }));
+    await setAuth0UserBlocked("auth0|x", false);
+    const [, init] = fetchMock.mock.calls[1] ?? [];
+    expect(JSON.parse((init as { body: string }).body)).toEqual({
+      blocked: false,
+    });
+  });
+
+  it("throws Auth0RateLimitError on 429", async () => {
+    fetchMock.mockResolvedValueOnce(
+      errJson(429, { message: "slow" }, { "retry-after": "5" }),
+    );
+    let caught: unknown;
+    try {
+      await setAuth0UserBlocked("auth0|x", true);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(Auth0RateLimitError);
+  });
+
+  it("throws generic error on 500 without echoing body", async () => {
+    fetchMock.mockResolvedValueOnce(errJson(500, { leak: "secret" }));
+    await expect(setAuth0UserBlocked("auth0|x", true)).rejects.toThrow(
+      /setAuth0UserBlocked failed: 500/,
+    );
   });
 });
