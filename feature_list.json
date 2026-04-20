@@ -543,7 +543,7 @@
             "Ensure append-only (no update/delete methods exposed)",
             "Test audit entry creation with all fields"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F7.2",
