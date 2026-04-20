@@ -670,7 +670,7 @@
             "Validate CIDR format before adding",
             "Test CIDR validation with various formats"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F8.6",
