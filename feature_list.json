@@ -977,7 +977,7 @@
             "Verify all AWS operations are server-side only",
             "Test CSRF protection against cross-site requests"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F11.6",
