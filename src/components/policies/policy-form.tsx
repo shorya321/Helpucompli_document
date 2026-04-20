@@ -56,11 +56,25 @@ const inputStyle: React.CSSProperties = {
 
 export function PolicyForm({ initial, buckets, mode }: PolicyFormProps) {
   const router = useRouter();
-  const [policy, setPolicy] = useState<PolicyInput>({
-    ...DEFAULT_VALUES,
-    ...initial,
-    allowedDomains: initial?.allowedDomains ?? [],
-    allowedIpRanges: initial?.allowedIpRanges ?? [],
+  const [policy, setPolicy] = useState<PolicyInput>(() => {
+    // Build the PolicyInput WITHOUT spreading `initial` blindly — the
+    // edit page passes `{ id, ...fields }` and `policyInputSchema` is
+    // .strict(), so any stray key (including `id`) would fail
+    // validation and permanently disable the Save button.
+    const src = initial ?? {};
+    return {
+      name: src.name ?? DEFAULT_VALUES.name,
+      targetType: src.targetType ?? DEFAULT_VALUES.targetType,
+      targetValue: src.targetValue ?? DEFAULT_VALUES.targetValue,
+      allowedDomains: src.allowedDomains ?? [],
+      allowedIpRanges: src.allowedIpRanges ?? [],
+      linkTtlSeconds: src.linkTtlSeconds ?? DEFAULT_VALUES.linkTtlSeconds,
+      maxDownloads:
+        src.maxDownloads === undefined
+          ? DEFAULT_VALUES.maxDownloads
+          : src.maxDownloads,
+      requireAuth: src.requireAuth ?? DEFAULT_VALUES.requireAuth,
+    };
   });
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);

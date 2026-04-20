@@ -7,6 +7,9 @@ export default defineConfig({
   test: {
     environment: "node",
     globals: true,
+    // e2e/ runs under Playwright, not vitest. Without this, vitest
+    // discovers e2e/*.spec.ts and fails to import @playwright/test.
+    exclude: ["**/node_modules/**", "**/dist/**", "e2e/**"],
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
