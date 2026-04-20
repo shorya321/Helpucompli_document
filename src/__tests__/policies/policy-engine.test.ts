@@ -1,0 +1,319 @@
+import { describe, expect, it, vi } from "vitest";
+import {
+  ipInCidr,
+  refererAllowed,
+  enforcePolicy,
+  resolvePolicy,
+  defaultPolicy,
+  type EffectivePolicy,
+  type EnforcementContext,
+  type PolicyEnginePrisma,
+} from "@/lib/policy-engine";
+
+// ---------------------------------------------------------------------------
+// ipInCidr
+// ---------------------------------------------------------------------------
+describe("ipInCidr", () => {
+  it.each([
+    ["10.0.0.5", "10.0.0.0/8", true],
+    ["10.255.255.255", "10.0.0.0/8", true],
+    ["11.0.0.1", "10.0.0.0/8", false],
+    ["192.168.1.42", "192.168.1.0/24", true],
+    ["192.168.2.1", "192.168.1.0/24", false],
+    ["1.2.3.4", "1.2.3.4/32", true],
+    ["1.2.3.5", "1.2.3.4/32", false],
+    ["1.2.3.4", "0.0.0.0/0", true],
+    ["255.255.255.255", "0.0.0.0/0", true],
+  ])("ip=%s cidr=%s → %s", (ip, cidr, expected) => {
+    expect(ipInCidr(ip, cidr)).toBe(expected);
+  });
+
+  it("returns false for malformed inputs (defensive — fail closed)", () => {
+    expect(ipInCidr("not-an-ip", "10.0.0.0/8")).toBe(false);
+    expect(ipInCidr("10.0.0.5", "garbage")).toBe(false);
+    expect(ipInCidr("", "10.0.0.0/8")).toBe(false);
+    expect(ipInCidr("256.0.0.0", "0.0.0.0/0")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// refererAllowed
+// ---------------------------------------------------------------------------
+describe("refererAllowed", () => {
+  it("matches exact host", () => {
+    expect(refererAllowed("https://example.com/page", ["example.com"])).toBe(
+      true,
+    );
+  });
+
+  it("rejects different host even with same suffix", () => {
+    expect(refererAllowed("https://evil.com/page", ["example.com"])).toBe(
+      false,
+    );
+    expect(
+      refererAllowed("https://notexample.com/", ["example.com"]),
+    ).toBe(false);
+  });
+
+  it("matches wildcard subdomain (*.example.com matches sub.example.com)", () => {
+    expect(
+      refererAllowed("https://sub.example.com/", ["*.example.com"]),
+    ).toBe(true);
+    expect(
+      refererAllowed("https://deep.sub.example.com/", ["*.example.com"]),
+    ).toBe(true);
+  });
+
+  it("wildcard does NOT match the bare apex (sec-review L2 — security invariant)", () => {
+    expect(refererAllowed("https://example.com/", ["*.example.com"])).toBe(
+      false,
+    );
+    // Also reject zero-label injection: ".example.com" must not pass.
+    expect(refererAllowed("https://.example.com/", ["*.example.com"])).toBe(
+      false,
+    );
+  });
+
+  it("is case-insensitive on host", () => {
+    expect(
+      refererAllowed("https://Example.COM/", ["example.com"]),
+    ).toBe(true);
+  });
+
+  it("strips port before matching", () => {
+    expect(
+      refererAllowed("https://example.com:8443/", ["example.com"]),
+    ).toBe(true);
+  });
+
+  it("returns false for malformed referer (fail closed)", () => {
+    expect(refererAllowed("not a url", ["example.com"])).toBe(false);
+    expect(refererAllowed("", ["example.com"])).toBe(false);
+    expect(refererAllowed(null, ["example.com"])).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// enforcePolicy
+// ---------------------------------------------------------------------------
+const openPolicy: EffectivePolicy = {
+  source: "default",
+  policyId: null,
+  linkTtlSeconds: 900,
+  maxDownloads: null,
+  requireAuth: false,
+  allowedDomains: [],
+  allowedIpRanges: [],
+};
+
+describe("enforcePolicy", () => {
+  const baseCtx: EnforcementContext = {
+    ipAddress: "1.2.3.4",
+    referer: null,
+    isAuthenticated: false,
+  };
+
+  it("allows when policy has no restrictions", () => {
+    expect(enforcePolicy(openPolicy, baseCtx)).toEqual({
+      allow: true,
+      linkTtlSeconds: 900,
+      maxDownloads: null,
+    });
+  });
+
+  it("denies when requireAuth && !isAuthenticated", () => {
+    const policy = { ...openPolicy, requireAuth: true };
+    expect(enforcePolicy(policy, baseCtx)).toEqual({ allow: false });
+  });
+
+  it("allows when requireAuth && isAuthenticated", () => {
+    const policy = { ...openPolicy, requireAuth: true };
+    expect(
+      enforcePolicy(policy, { ...baseCtx, isAuthenticated: true }),
+    ).toEqual({ allow: true, linkTtlSeconds: 900, maxDownloads: null });
+  });
+
+  it("denies when ip not in allowed ranges", () => {
+    const policy = { ...openPolicy, allowedIpRanges: ["10.0.0.0/8"] };
+    expect(enforcePolicy(policy, baseCtx)).toEqual({ allow: false });
+  });
+
+  it("allows when ip in allowed ranges (any range matches)", () => {
+    const policy = {
+      ...openPolicy,
+      allowedIpRanges: ["10.0.0.0/8", "1.2.3.0/24"],
+    };
+    expect(enforcePolicy(policy, baseCtx)).toMatchObject({ allow: true });
+  });
+
+  it("denies when referer set on policy but absent on request", () => {
+    const policy = { ...openPolicy, allowedDomains: ["example.com"] };
+    expect(enforcePolicy(policy, baseCtx)).toEqual({ allow: false });
+  });
+
+  it("denies when referer present but not allowed", () => {
+    const policy = { ...openPolicy, allowedDomains: ["example.com"] };
+    expect(
+      enforcePolicy(policy, { ...baseCtx, referer: "https://evil.com/" }),
+    ).toEqual({ allow: false });
+  });
+
+  it("allows when all checks pass together", () => {
+    const policy = {
+      ...openPolicy,
+      requireAuth: true,
+      allowedIpRanges: ["10.0.0.0/8"],
+      allowedDomains: ["*.example.com"],
+      linkTtlSeconds: 3600,
+      maxDownloads: 5,
+    };
+    expect(
+      enforcePolicy(policy, {
+        ipAddress: "10.0.0.42",
+        referer: "https://app.example.com/",
+        isAuthenticated: true,
+      }),
+    ).toEqual({ allow: true, linkTtlSeconds: 3600, maxDownloads: 5 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolvePolicy (inheritance)
+// ---------------------------------------------------------------------------
+function makeStub(policies: ReadonlyArray<Record<string, unknown>>) {
+  const calls: Record<string, unknown>[] = [];
+  const client: PolicyEnginePrisma = {
+    accessPolicy: {
+      findMany: vi.fn(async (args: Record<string, unknown>) => {
+        calls.push(args);
+        // Return rows whose targetType+targetValue match the OR clauses;
+        // keep the stub naive so the engine's filtering logic is what is
+        // actually under test.
+        return [...policies];
+      }),
+    },
+  };
+  return { client, calls };
+}
+
+const documentInfo = {
+  bucketName: "alpha-bucket",
+  s3Key: "shared/contracts/q4.pdf",
+};
+
+describe("resolvePolicy (inheritance order)", () => {
+  it("returns default policy when nothing matches", async () => {
+    const stub = makeStub([]);
+    const policy = await resolvePolicy(stub.client, documentInfo);
+    expect(policy.source).toBe("default");
+    expect(policy.policyId).toBeNull();
+    expect(policy).toMatchObject(defaultPolicy);
+    // Sec-review H3: HIPAA-safe default requires authentication.
+    expect(policy.requireAuth).toBe(true);
+  });
+
+  it("object policy beats prefix and bucket", async () => {
+    const stub = makeStub([
+      {
+        id: "p-bucket",
+        targetType: "bucket",
+        targetValue: "alpha-bucket",
+        allowedDomains: [],
+        allowedIpRanges: [],
+        linkTtlSeconds: 900,
+        maxDownloads: null,
+        requireAuth: false,
+      },
+      {
+        id: "p-prefix",
+        targetType: "prefix",
+        targetValue: "shared/",
+        allowedDomains: [],
+        allowedIpRanges: [],
+        linkTtlSeconds: 900,
+        maxDownloads: null,
+        requireAuth: false,
+      },
+      {
+        id: "p-obj",
+        targetType: "object",
+        targetValue: "shared/contracts/q4.pdf",
+        allowedDomains: [],
+        allowedIpRanges: [],
+        linkTtlSeconds: 60,
+        maxDownloads: null,
+        requireAuth: true,
+      },
+    ]);
+    const policy = await resolvePolicy(stub.client, documentInfo);
+    expect(policy.source).toBe("object");
+    expect(policy.policyId).toBe("p-obj");
+    expect(policy.requireAuth).toBe(true);
+    expect(policy.linkTtlSeconds).toBe(60);
+  });
+
+  it("longest matching prefix wins when no object policy exists", async () => {
+    const stub = makeStub([
+      {
+        id: "p-short",
+        targetType: "prefix",
+        targetValue: "shared/",
+        allowedDomains: [],
+        allowedIpRanges: [],
+        linkTtlSeconds: 1800,
+        maxDownloads: null,
+        requireAuth: false,
+      },
+      {
+        id: "p-long",
+        targetType: "prefix",
+        targetValue: "shared/contracts/",
+        allowedDomains: [],
+        allowedIpRanges: [],
+        linkTtlSeconds: 600,
+        maxDownloads: null,
+        requireAuth: true,
+      },
+    ]);
+    const policy = await resolvePolicy(stub.client, documentInfo);
+    expect(policy.source).toBe("prefix");
+    expect(policy.policyId).toBe("p-long");
+    expect(policy.linkTtlSeconds).toBe(600);
+  });
+
+  it("ignores prefix policies that are not actually a prefix of the key", async () => {
+    const stub = makeStub([
+      {
+        id: "p-other",
+        targetType: "prefix",
+        targetValue: "private/",
+        allowedDomains: [],
+        allowedIpRanges: [],
+        linkTtlSeconds: 60,
+        maxDownloads: null,
+        requireAuth: true,
+      },
+    ]);
+    const policy = await resolvePolicy(stub.client, documentInfo);
+    expect(policy.source).toBe("default");
+  });
+
+  it("falls back to bucket policy when no object/prefix matches", async () => {
+    const stub = makeStub([
+      {
+        id: "p-bucket",
+        targetType: "bucket",
+        targetValue: "alpha-bucket",
+        allowedDomains: ["app.example.com"],
+        allowedIpRanges: [],
+        linkTtlSeconds: 1800,
+        maxDownloads: null,
+        requireAuth: false,
+      },
+    ]);
+    const policy = await resolvePolicy(stub.client, documentInfo);
+    expect(policy.source).toBe("bucket");
+    expect(policy.policyId).toBe("p-bucket");
+    expect(policy.allowedDomains).toEqual(["app.example.com"]);
+  });
+});

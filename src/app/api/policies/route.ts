@@ -40,6 +40,14 @@ function json(body: Resp, status: number, extra?: Record<string, string>) {
   });
 }
 
+// Sec-review C2: x-real-ip / x-forwarded-for are user-supplied unless
+// the load balancer strips them at the edge before re-injecting the
+// trusted client IP. Runbook MUST document the LB config; without it
+// the value is forgeable and IP-range policies can be bypassed by
+// sending an attacker-controlled XFF header. We still record it on the
+// audit trail (HIPAA 164.312(b)) but DO NOT trust it for IP-range
+// enforcement — that decision lives in policy-engine.ts and uses the
+// same value, so the LB strip is the single point of trust.
 function extractIp(req: NextRequest): string {
   const realIp = req.headers.get("x-real-ip");
   if (realIp && realIp.trim().length > 0) return realIp.trim();

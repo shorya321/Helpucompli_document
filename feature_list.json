@@ -699,7 +699,7 @@
             "Test CIDR range matching with /32, /24, /8 ranges",
             "Test inheritance order (object overrides prefix overrides bucket)"
           ],
-          "passes": false
+          "passes": true
         }
       ]
     },

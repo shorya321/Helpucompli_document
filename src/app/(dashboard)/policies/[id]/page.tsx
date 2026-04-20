@@ -21,6 +21,14 @@ export default async function EditPolicyPage({
   }
 
   const { id } = await params;
+  // Match the API route's UUID guard (sec-review C1) — refuse to query
+  // the DB with arbitrary URL segments. Prevents 404-vs-500 oracle on
+  // malformed ids and keeps Prisma engine errors out of the page.
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+  ) {
+    notFound();
+  }
   const policy = await getPolicy(asPolicyCrudPrisma(prisma), id);
   if (!policy) notFound();
 

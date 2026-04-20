@@ -56,11 +56,22 @@ export const policyInputSchema = z
 
 export type PolicyInput = z.infer<typeof policyInputSchema>;
 
+// Sec-review H2: targetType and targetValue must move together — a
+// patch that flips targetType from `bucket` to `object` while leaving
+// the old bucket name as targetValue would orphan the policy. Force
+// callers to send both or neither.
 export const policyUpdateSchema = policyInputSchema
   .partial()
   .strict()
   .refine((obj) => Object.keys(obj).length > 0, {
     message: "Patch must contain at least one field",
-  });
+  })
+  .refine(
+    (obj) =>
+      (obj.targetType === undefined) === (obj.targetValue === undefined),
+    {
+      message: "targetType and targetValue must be updated together",
+    },
+  );
 
 export type PolicyUpdate = z.infer<typeof policyUpdateSchema>;
