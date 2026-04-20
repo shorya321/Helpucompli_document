@@ -54,8 +54,22 @@ export function StatusToggle({
           const body = (await res.json().catch(() => ({}))) as {
             error?: string;
           };
-          setError(body.error ?? "Failed");
+          const msg = body.error ?? "Failed";
+          console.error(
+            `[status-toggle] PATCH /api/users/${userId}/status ${res.status}: ${msg}`,
+          );
+          setError(msg);
           return;
+        }
+        const body = (await res.json().catch(() => ({}))) as {
+          data?: { auth0Synced?: boolean };
+        };
+        if (body.data?.auth0Synced === false) {
+          // Local DB + audit succeeded; Auth0 user was already gone. Alert
+          // operator so they can clean up the orphan row or accept drift.
+          alert(
+            "Status updated locally, but the Auth0 user was not found (likely deleted from the Auth0 dashboard). The local DB is now out of sync.",
+          );
         }
         router.refresh();
       })();

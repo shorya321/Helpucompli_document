@@ -1,7 +1,10 @@
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import type { Role } from "@/types";
-import { setAuth0UserBlocked } from "@/lib/auth0-management";
+import {
+  Auth0UserNotFoundError,
+  setAuth0UserBlocked,
+} from "@/lib/auth0-management";
 import { logAudit, type AuditPrisma } from "@/lib/audit";
 
 export type UserStatus = "active" | "disabled";
@@ -63,6 +66,12 @@ export interface StatusChangeResult {
   readonly id: string;
   readonly auth0Id: string;
   readonly status: UserStatus;
+  // False when the corresponding Auth0 account could not be updated
+  // (e.g. 404 — operator deleted it in the dashboard). Local DB + audit
+  // write still proceed because disable/enable intent is satisfied: the
+  // missing Auth0 user cannot authenticate regardless of our flag. UI
+  // surfaces a warning so the operator knows the DB is out of sync.
+  readonly auth0Synced: boolean;
 }
 
 type StatusChangePrisma = Pick<PrismaClient, "user"> & AuditPrisma;
@@ -98,14 +107,28 @@ export async function changeUserStatus(
       id: target.id,
       auth0Id: target.auth0Id,
       status: target.status,
+      auth0Synced: true,
     };
   }
 
   // Auth0 first — the `blocked` flag on Auth0 is what actually stops
-  // the user from authenticating. If Auth0 PATCH fails, do not update
-  // the local mirror (status would lie about access).
+  // the user from authenticating. A non-404 Auth0 failure aborts the
+  // whole op so status never lies about access. A 404 (user deleted in
+  // Auth0 dashboard, orphan local row) is handled explicitly: the user
+  // is already effectively blocked upstream, so we still flip the local
+  // mirror + audit, but mark auth0Synced=false so the UI can surface
+  // the drift to the operator.
   const blocked = args.newStatus === "disabled";
-  await setAuth0UserBlocked(target.auth0Id, blocked);
+  let auth0Synced = true;
+  try {
+    await setAuth0UserBlocked(target.auth0Id, blocked);
+  } catch (err) {
+    if (err instanceof Auth0UserNotFoundError) {
+      auth0Synced = false;
+    } else {
+      throw err;
+    }
+  }
 
   const updated = (await prisma.user.update({
     where: { id: target.id },
@@ -121,10 +144,11 @@ export async function changeUserStatus(
     metadata: {
       fromStatus: target.status,
       toStatus: args.newStatus,
+      auth0Synced,
     },
     ipAddress: args.actor.ipAddress,
     userAgent: args.actor.userAgent,
   });
 
-  return updated;
+  return { ...updated, auth0Synced };
 }

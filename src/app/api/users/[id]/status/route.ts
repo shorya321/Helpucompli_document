@@ -114,6 +114,15 @@ export async function PATCH(
     if (err instanceof ForbiddenStatusChangeError) {
       return json({ data: null, error: err.message }, 403);
     }
+    // Surface unexpected errors to the server log so the operator can
+    // diagnose Auth0 tenant config issues (missing update:users scope,
+    // rate limit, etc) without reading the client response. err.message
+    // may echo Auth0 body text — stay server-side, never return verbatim.
+    const name = err instanceof Error ? err.name : "Unknown";
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(
+      `[PATCH /api/users/[id]/status] failed: ${name}: ${message}`,
+    );
     return json({ data: null, error: "Failed to update status" }, 500);
   }
 }

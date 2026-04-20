@@ -19,6 +19,7 @@ import {
   changeUserStatus,
   userStatusUpdateSchema,
 } from "@/lib/user-status";
+import { Auth0UserNotFoundError } from "@/lib/auth0-management";
 
 afterEach(() => {
   for (const m of Object.values(mocks)) m.mockReset();
@@ -174,7 +175,7 @@ describe("changeUserStatus", () => {
         },
       },
     );
-    expect(result).toMatchObject({ id: "t-1", status: "active" });
+    expect(result).toMatchObject({ id: "t-1", status: "active", auth0Synced: true });
     expect(mocks.setAuth0UserBlocked).not.toHaveBeenCalled();
     expect(mocks.logAudit).not.toHaveBeenCalled();
     expect(prisma.user.update).not.toHaveBeenCalled();
@@ -202,12 +203,72 @@ describe("changeUserStatus", () => {
       },
     );
     expect(result?.status).toBe("disabled");
+    expect(result?.auth0Synced).toBe(true);
     expect(mocks.setAuth0UserBlocked).toHaveBeenCalledWith("auth0|t1", true);
     expect(prisma.user.update.mock.calls[0]?.[0].data).toEqual({
       status: "disabled",
     });
     const auditArg = mocks.logAudit.mock.calls[0]?.[1];
     expect(auditArg.action).toBe("USER_DISABLE");
+    expect(auditArg.metadata).toMatchObject({ auth0Synced: true });
+  });
+
+  it("orphan Auth0 user (404): still updates local DB + audit with auth0Synced=false", async () => {
+    const prisma = stubPrisma({
+      id: "t-1",
+      auth0Id: "auth0|gone",
+      role: "viewer",
+      status: "active",
+    });
+    mocks.setAuth0UserBlocked.mockRejectedValueOnce(new Auth0UserNotFoundError());
+    const result = await changeUserStatus(
+      prisma as unknown as Parameters<typeof changeUserStatus>[0],
+      {
+        targetUserId: "t-1",
+        newStatus: "disabled",
+        actor: {
+          userId: "a",
+          role: "superadmin",
+          ipAddress: "1.2.3.4",
+          userAgent: "UA",
+        },
+      },
+    );
+    expect(result?.auth0Synced).toBe(false);
+    expect(result?.status).toBe("disabled");
+    expect(prisma.user.update.mock.calls[0]?.[0].data).toEqual({
+      status: "disabled",
+    });
+    const auditArg = mocks.logAudit.mock.calls[0]?.[1];
+    expect(auditArg.action).toBe("USER_DISABLE");
+    expect(auditArg.metadata).toMatchObject({ auth0Synced: false });
+  });
+
+  it("rethrows non-404 Auth0 errors (no DB update on Auth0 failure)", async () => {
+    const prisma = stubPrisma({
+      id: "t-1",
+      auth0Id: "auth0|t1",
+      role: "viewer",
+      status: "active",
+    });
+    mocks.setAuth0UserBlocked.mockRejectedValueOnce(new Error("Auth0 500"));
+    await expect(
+      changeUserStatus(
+        prisma as unknown as Parameters<typeof changeUserStatus>[0],
+        {
+          targetUserId: "t-1",
+          newStatus: "disabled",
+          actor: {
+            userId: "a",
+            role: "superadmin",
+            ipAddress: "1.2.3.4",
+            userAgent: "UA",
+          },
+        },
+      ),
+    ).rejects.toThrow(/Auth0 500/);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(mocks.logAudit).not.toHaveBeenCalled();
   });
 
   it("enables user: PATCHes Auth0 blocked=false + logs USER_ENABLE", async () => {

@@ -38,6 +38,19 @@ export class Auth0ConflictError extends Error {
   }
 }
 
+// 404 from Auth0 user-scoped endpoints. Means the Auth0 account tied to
+// the local DB row no longer exists (operator deleted it in the Auth0
+// dashboard, or an earlier partial failure left the DB row orphaned).
+// Callers typically treat this as "already gone" and update local state
+// without the Auth0 write — the user cannot log in either way, so the
+// disable/enable/role intent is effectively satisfied.
+export class Auth0UserNotFoundError extends Error {
+  constructor(message = "Auth0 user not found") {
+    super(message);
+    this.name = "Auth0UserNotFoundError";
+  }
+}
+
 const DEFAULT_DB_CONNECTION = "Username-Password-Authentication";
 
 function dbConnection(): string {
@@ -348,6 +361,9 @@ export async function setAuth0UserBlocked(
   );
   if (!response.ok) {
     await logAuth0Failure("setAuth0UserBlocked", response);
+    if (response.status === 404) {
+      throw new Auth0UserNotFoundError();
+    }
     if (response.status === 429) {
       const retryAfterMs = parseRetryAfterMs(
         response.headers.get("retry-after"),

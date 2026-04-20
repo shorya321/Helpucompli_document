@@ -18,6 +18,7 @@ vi.mock("@/lib/config", () => ({
 import {
   Auth0ConflictError,
   Auth0RateLimitError,
+  Auth0UserNotFoundError,
   _resetRoleIdCache,
   _resetTokenCache,
   assignAuth0RoleByName,
@@ -449,6 +450,15 @@ describe("setAuth0UserBlocked", () => {
     fetchMock.mockResolvedValueOnce(errJson(500, { leak: "secret" }));
     await expect(setAuth0UserBlocked("auth0|x", true)).rejects.toThrow(
       /setAuth0UserBlocked failed: 500/,
+    );
+  });
+
+  it("throws Auth0UserNotFoundError on 404 (orphan local row)", async () => {
+    fetchMock.mockResolvedValueOnce(
+      errJson(404, { errorCode: "inexistent_user" }),
+    );
+    await expect(setAuth0UserBlocked("auth0|gone", true)).rejects.toBeInstanceOf(
+      Auth0UserNotFoundError,
     );
   });
 });
