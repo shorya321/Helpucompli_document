@@ -1025,7 +1025,7 @@
             "Create docs/INCIDENT-RESPONSE-PLAN.md",
             "Test incident response procedures"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F11.10",
