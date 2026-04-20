@@ -1157,7 +1157,7 @@
             "Backup strategy documented",
             "Rollback procedure documented"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F12.8",
