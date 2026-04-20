@@ -586,7 +586,7 @@
             "Filename format: audit_log_YYYY-MM-DD_HH-mm.csv",
             "Test export downloads correctly with filtered data"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F7.5",

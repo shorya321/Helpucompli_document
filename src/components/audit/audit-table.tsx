@@ -13,6 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BRAND } from "@/lib/brand";
 import { actionBadgeTone, type BadgeTone } from "@/lib/activity-feed";
 import { AuditFilters, EMPTY_FILTERS, type AuditFiltersValue } from "@/components/audit/audit-filters";
+import { ExportCsv } from "@/components/audit/export-csv";
 import type { ApiResponse } from "@/types";
 import type { AuditQueryResult, AuditQueryRow } from "@/lib/audit-query";
 
@@ -170,6 +171,15 @@ export function AuditTable({ initial }: AuditTableProps) {
         onReset={reset}
         disabled={isFetching}
       />
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          marginBottom: "0.5rem",
+        }}
+      >
+        <ExportCsv filters={appliedFilters} />
+      </div>
       {isError && (
         <p role="alert" style={{ color: BRAND.colors.pink }}>
           Failed to load audit log.
