@@ -1137,7 +1137,7 @@
             "Write Incident Response Playbook (security incident procedures)",
             "Compile HIPAA Compliance Evidence (completed checklist with evidence)"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F12.7",
