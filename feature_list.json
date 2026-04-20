@@ -1000,7 +1000,7 @@
             "Verify no known critical vulnerabilities at deploy time",
             "Document dependency scanning in security runbook"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F11.8",

@@ -1,0 +1,39 @@
+# Dependabot — F11.7 dependency security scanning.
+# https://docs.github.com/en/code-security/dependabot
+
+version: 2
+updates:
+  # Application dependencies (HIPAA in scope — treat every
+  # vulnerability as compliance-relevant until risk-assessed).
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - security
+    commit-message:
+      prefix: chore(deps)
+      include: scope
+    groups:
+      # Batch non-major updates so reviewers are not flooded. Majors
+      # still land as individual PRs because they typically require
+      # a migration.
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+
+  # GitHub Actions workflow pins.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - ci

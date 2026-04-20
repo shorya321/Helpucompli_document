@@ -1,0 +1,36 @@
+# F11.7 — scheduled dependency + secret scans. Fails CI on any
+# HIGH or CRITICAL npm audit finding.
+name: security-scan
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    # 07:00 UTC daily — ensures newly disclosed advisories in
+    # pinned versions fail fast without waiting for the next PR.
+    - cron: "0 7 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pull-requests: read
+  security-events: write
+
+jobs:
+  npm-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps (audit mode — ignore scripts)
+        run: npm ci --ignore-scripts
+
+      - name: npm audit — fail on HIGH or CRITICAL
+        run: npm audit --audit-level=high

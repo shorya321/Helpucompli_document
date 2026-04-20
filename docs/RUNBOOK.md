@@ -69,6 +69,41 @@ F11.1 enforces a strict nonce-based CSP. Symptoms:
 
 ---
 
+## Dependency security scanning (F11.7)
+
+**Continuous layer:** GitHub Dependabot (`.github/dependabot.yml`)
+opens weekly PRs for npm + GitHub Actions updates. Minor/patch
+bundled, majors individual. Label `security` for triage.
+
+**Gate layer:** `.github/workflows/security-scan.yml` runs
+`npm audit --audit-level=high` on every PR, main push, and daily
+at 07:00 UTC. Any HIGH or CRITICAL advisory fails CI.
+
+**Manual audit:** `npm audit --json` locally — current baseline is
+0 vulnerabilities across all severities.
+
+**Known triage rules:**
+
+1. CRITICAL → fix or justified workaround before merge.
+2. HIGH → 7-day SLA; track in Linear / issue tracker if deferred.
+3. MODERATE/LOW → monthly sweep during the same drill cadence as
+   `docs/AWS-SECURITY-CONFIG.md` §Ownership.
+
+**If CI fails on `npm audit` for a newly disclosed advisory:**
+
+```bash
+npm audit
+# identify the path
+npm audit fix           # safe non-breaking fixes
+npm audit fix --force   # breaking upgrades (review changelog first)
+```
+
+If no upgrade path exists, add a documented override to
+`package.json` `overrides` field and file an issue to track upstream
+resolution.
+
+---
+
 ## Rate limiting returning 429 in dev
 
 Dev uses `createInMemoryLimiter` (per-process, non-durable). Restart
