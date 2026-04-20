@@ -724,7 +724,7 @@
             "Copy-to-clipboard button with toast notification",
             "Test link generation flow"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F9.2",

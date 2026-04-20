@@ -1,0 +1,281 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  createLink,
+  generateLinkToken,
+  resolveEffectiveSettings,
+  DocumentNotFoundError,
+  PolicyMismatchError,
+  type LinkCreatePrisma,
+  type LinkCreateInput,
+} from "@/lib/link-create";
+
+// ---------------------------------------------------------------------------
+// generateLinkToken
+// ---------------------------------------------------------------------------
+describe("generateLinkToken", () => {
+  it("returns a base64url string of length ≥ 43 (256 bits of entropy)", () => {
+    const token = generateLinkToken();
+    expect(token.length).toBeGreaterThanOrEqual(43);
+    expect(token).toMatch(/^[A-Za-z0-9_-]+$/);
+  });
+
+  it("never repeats across many invocations (entropy guard)", () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 1000; i++) seen.add(generateLinkToken());
+    expect(seen.size).toBe(1000);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveEffectiveSettings — TTL + maxDownloads precedence
+// ---------------------------------------------------------------------------
+describe("resolveEffectiveSettings", () => {
+  it("uses default TTL (900) when no policy and no override", () => {
+    const r = resolveEffectiveSettings({
+      policy: null,
+      ttlOverride: null,
+      maxDownloadsOverride: null,
+    });
+    expect(r.ttlSeconds).toBe(900);
+    expect(r.maxDownloads).toBeNull();
+  });
+
+  it("uses policy TTL when no override", () => {
+    const r = resolveEffectiveSettings({
+      policy: {
+        linkTtlSeconds: 3600,
+        maxDownloads: 10,
+      },
+      ttlOverride: null,
+      maxDownloadsOverride: null,
+    });
+    expect(r.ttlSeconds).toBe(3600);
+    expect(r.maxDownloads).toBe(10);
+  });
+
+  it("override clamps to policy TTL ceiling (cannot extend beyond policy)", () => {
+    const r = resolveEffectiveSettings({
+      policy: { linkTtlSeconds: 3600, maxDownloads: null },
+      ttlOverride: 86_400,
+      maxDownloadsOverride: null,
+    });
+    expect(r.ttlSeconds).toBe(3600);
+  });
+
+  it("override may shorten TTL below policy", () => {
+    const r = resolveEffectiveSettings({
+      policy: { linkTtlSeconds: 3600, maxDownloads: null },
+      ttlOverride: 900,
+      maxDownloadsOverride: null,
+    });
+    expect(r.ttlSeconds).toBe(900);
+  });
+
+  it("override TTL is clamped to global [60, 604800] range", () => {
+    expect(
+      resolveEffectiveSettings({
+        policy: null,
+        ttlOverride: 1,
+        maxDownloadsOverride: null,
+      }).ttlSeconds,
+    ).toBe(60);
+    expect(
+      resolveEffectiveSettings({
+        policy: null,
+        ttlOverride: 9_999_999,
+        maxDownloadsOverride: null,
+      }).ttlSeconds,
+    ).toBe(604_800);
+  });
+
+  it("maxDownloads override clamps to policy ceiling when policy sets it", () => {
+    const r = resolveEffectiveSettings({
+      policy: { linkTtlSeconds: 900, maxDownloads: 5 },
+      ttlOverride: null,
+      maxDownloadsOverride: 100,
+    });
+    expect(r.maxDownloads).toBe(5);
+  });
+
+  it("maxDownloads override may shorten below policy", () => {
+    const r = resolveEffectiveSettings({
+      policy: { linkTtlSeconds: 900, maxDownloads: 50 },
+      ttlOverride: null,
+      maxDownloadsOverride: 3,
+    });
+    expect(r.maxDownloads).toBe(3);
+  });
+
+  it("maxDownloads override sets a finite cap when policy has none", () => {
+    const r = resolveEffectiveSettings({
+      policy: { linkTtlSeconds: 900, maxDownloads: null },
+      ttlOverride: null,
+      maxDownloadsOverride: 10,
+    });
+    expect(r.maxDownloads).toBe(10);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createLink
+// ---------------------------------------------------------------------------
+type Tx = {
+  document: {
+    findUnique: ReturnType<typeof vi.fn>;
+  };
+  accessPolicy: {
+    findUnique: ReturnType<typeof vi.fn>;
+  };
+  generatedLink: {
+    create: ReturnType<typeof vi.fn>;
+  };
+  auditLog: {
+    create: ReturnType<typeof vi.fn>;
+  };
+};
+
+function makeStub(opts: {
+  document?: Record<string, unknown> | null;
+  policy?: Record<string, unknown> | null;
+} = {}) {
+  const audit: Record<string, unknown>[] = [];
+  const tx: Tx = {
+    document: {
+      findUnique: vi.fn(async () => opts.document ?? null),
+    },
+    accessPolicy: {
+      findUnique: vi.fn(async () => opts.policy ?? null),
+    },
+    generatedLink: {
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+        id: "link-1",
+        ...data,
+      })),
+    },
+    auditLog: {
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        audit.push(data);
+        return { id: `a-${audit.length}` };
+      }),
+    },
+  };
+  const client: LinkCreatePrisma = {
+    document: tx.document,
+    accessPolicy: tx.accessPolicy,
+    generatedLink: tx.generatedLink,
+    auditLog: tx.auditLog,
+    $transaction: vi.fn(async (cb: (t: Tx) => Promise<unknown>) => cb(tx)),
+  } as unknown as LinkCreatePrisma;
+  return { client, tx, audit };
+}
+
+const ctx = {
+  userId: "u-1",
+  ipAddress: "10.0.0.1",
+  userAgent: "vitest",
+};
+
+const baseInput: LinkCreateInput = {
+  documentId: "11111111-1111-4111-8111-111111111111",
+  policyId: null,
+  ttlSecondsOverride: null,
+  maxDownloadsOverride: null,
+};
+
+const baseDoc = {
+  id: baseInput.documentId,
+  s3Key: "shared/contract.pdf",
+  isDeleted: false,
+  bucket: { name: "alpha-bucket" },
+};
+
+describe("createLink", () => {
+  it("404s (DocumentNotFoundError) when document missing", async () => {
+    const stub = makeStub({ document: null });
+    await expect(createLink(stub.client, baseInput, ctx)).rejects.toBeInstanceOf(
+      DocumentNotFoundError,
+    );
+    expect(stub.tx.generatedLink.create).not.toHaveBeenCalled();
+  });
+
+  it("404s when document soft-deleted", async () => {
+    const stub = makeStub({ document: { ...baseDoc, isDeleted: true } });
+    await expect(createLink(stub.client, baseInput, ctx)).rejects.toBeInstanceOf(
+      DocumentNotFoundError,
+    );
+  });
+
+  it("inserts link + audit in single transaction", async () => {
+    const stub = makeStub({ document: baseDoc });
+    await createLink(stub.client, baseInput, ctx);
+    expect(stub.tx.generatedLink.create).toHaveBeenCalledOnce();
+    expect(stub.audit).toHaveLength(1);
+    expect(stub.audit[0]).toMatchObject({
+      action: "LINK_GENERATE",
+      targetType: "link",
+      userId: "u-1",
+      ipAddress: "10.0.0.1",
+    });
+  });
+
+  it("computes expiresAt = now + ttl", async () => {
+    const stub = makeStub({ document: baseDoc });
+    const before = Date.now();
+    const result = await createLink(
+      stub.client,
+      { ...baseInput, ttlSecondsOverride: 900 },
+      ctx,
+    );
+    const expected = before + 900_000;
+    expect(result.expiresAt.getTime()).toBeGreaterThanOrEqual(expected - 1000);
+    expect(result.expiresAt.getTime()).toBeLessThanOrEqual(expected + 5000);
+  });
+
+  it("rejects when policyId provided but policy missing", async () => {
+    const stub = makeStub({ document: baseDoc, policy: null });
+    await expect(
+      createLink(stub.client, { ...baseInput, policyId: "p-1" }, ctx),
+    ).rejects.toBeInstanceOf(PolicyMismatchError);
+  });
+
+  it("uses policy.linkTtlSeconds when no override", async () => {
+    const stub = makeStub({
+      document: baseDoc,
+      policy: { id: "p-1", linkTtlSeconds: 3600, maxDownloads: 5 },
+    });
+    const result = await createLink(
+      stub.client,
+      { ...baseInput, policyId: "p-1" },
+      ctx,
+    );
+    expect(result.ttlSeconds).toBe(3600);
+    expect(result.maxDownloads).toBe(5);
+  });
+
+  it("returned token is the base64url hash stored in row.presignedUrlHash", async () => {
+    const stub = makeStub({ document: baseDoc });
+    const result = await createLink(stub.client, baseInput, ctx);
+    expect(result.token).toMatch(/^[A-Za-z0-9_-]+$/);
+    const args = stub.tx.generatedLink.create.mock.calls[0]?.[0] as {
+      data: Record<string, unknown>;
+    };
+    expect(args.data.presignedUrlHash).toBe(result.token);
+  });
+
+  it("audit metadata includes documentId + policyId for forensic review", async () => {
+    const stub = makeStub({
+      document: baseDoc,
+      policy: { id: "p-1", linkTtlSeconds: 900, maxDownloads: null },
+    });
+    await createLink(stub.client, { ...baseInput, policyId: "p-1" }, ctx);
+    const meta = stub.audit[0]?.metadata as Record<string, unknown>;
+    expect(meta).toMatchObject({
+      documentId: baseInput.documentId,
+      policyId: "p-1",
+    });
+    // Token MUST NOT be logged — it is a bearer token.
+    expect(JSON.stringify(meta)).not.toMatch(/[A-Za-z0-9_-]{40,}/);
+  });
+});
+
+afterEach(() => vi.restoreAllMocks());
