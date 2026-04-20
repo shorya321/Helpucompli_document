@@ -4,6 +4,12 @@ import { resolveHasRole } from "@/lib/auth-guard";
 import { BRAND } from "@/lib/brand";
 import { prisma } from "@/lib/prisma";
 import { GenerateLinkForm } from "@/components/links/generate-link-form";
+import { LinkTable } from "@/components/links/link-table";
+import {
+  asLinkListPrisma,
+  queryLinks,
+  type LinkListResult,
+} from "@/lib/link-list";
 
 export const dynamic = "force-dynamic";
 
@@ -28,9 +34,10 @@ export default async function LinksPage() {
     maxDownloads: number | null;
   }> = [];
 
+  let initialLinks: LinkListResult = { rows: [], nextCursor: null };
   if (isAdminUp) {
     try {
-      const [docRows, polRows] = await Promise.all([
+      const [docRows, polRows, linkRes] = await Promise.all([
         prisma.document.findMany({
           where: { isDeleted: false },
           include: { bucket: { select: { name: true } } },
@@ -46,7 +53,13 @@ export default async function LinksPage() {
           },
           orderBy: { name: "asc" },
         }),
+        queryLinks(asLinkListPrisma(prisma), {
+          status: "all",
+          sort: "createdAt",
+          dir: "desc",
+        }),
       ]);
+      initialLinks = linkRes;
       documents = docRows.map((d) => ({
         id: d.id,
         name: d.filename,
@@ -84,7 +97,10 @@ export default async function LinksPage() {
       </header>
 
       {isAdminUp ? (
-        <GenerateLinkForm documents={documents} policies={policies} />
+        <>
+          <GenerateLinkForm documents={documents} policies={policies} />
+          <LinkTable initial={initialLinks} />
+        </>
       ) : (
         <p style={{ color: "rgba(30,41,59,0.64)" }}>
           Only admins can generate share links.

@@ -737,7 +737,7 @@
             "Sort by creation date, expiry date, download count",
             "Test link list renders with correct statuses"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F9.3",

@@ -10,7 +10,12 @@ import {
   DocumentNotFoundError,
   PolicyMismatchError,
 } from "@/lib/link-create";
-import { linkCreateSchema } from "@/lib/link-schema";
+import {
+  asLinkListPrisma,
+  queryLinks,
+  type LinkListResult,
+} from "@/lib/link-list";
+import { linkCreateSchema, linkListQuerySchema } from "@/lib/link-schema";
 import type { ApiResponse } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -21,17 +26,14 @@ const limiter = createRateLimiter({
   prefix: "@helpucompli/links-create",
 });
 
-interface CreateResponseBody {
-  readonly id: string;
-  readonly token: string;
-  readonly shareableUrl: string;
-  readonly expiresAt: string;
-  readonly ttlSeconds: number;
-  readonly maxDownloads: number | null;
-}
+const listLimiter = createRateLimiter({
+  max: 60,
+  windowMs: 30_000,
+  prefix: "@helpucompli/links-list",
+});
 
-function json(
-  body: ApiResponse<CreateResponseBody | null>,
+function json<T>(
+  body: ApiResponse<T>,
   status: number,
   extra?: Record<string, string>,
 ) {
@@ -39,6 +41,58 @@ function json(
     status,
     headers: { "Cache-Control": "no-store, private", ...extra },
   });
+}
+
+export async function GET(req: NextRequest) {
+  const session = await auth0.getSession();
+  if (!session) {
+    return json<LinkListResult | null>(
+      { data: null, error: "Unauthorized" },
+      401,
+    );
+  }
+  if (!(await resolveHasRole(session, ["superadmin", "admin"]))) {
+    return json<LinkListResult | null>(
+      { data: null, error: "Forbidden" },
+      403,
+    );
+  }
+
+  const sub = (session.user as { sub?: string }).sub;
+  if (!sub) {
+    return json<LinkListResult | null>(
+      { data: null, error: "Unauthorized" },
+      401,
+    );
+  }
+  const quota = await listLimiter.limit(`links-list:${sub}`);
+  if (!quota.success) {
+    const retrySec = Math.max(1, Math.ceil((quota.reset - Date.now()) / 1000));
+    return json<LinkListResult | null>(
+      { data: null, error: "Too Many Requests" },
+      429,
+      { "Retry-After": String(retrySec) },
+    );
+  }
+
+  const params = Object.fromEntries(new URL(req.url).searchParams.entries());
+  const parsed = linkListQuerySchema.safeParse(params);
+  if (!parsed.success) {
+    return json<LinkListResult | null>(
+      { data: null, error: "Invalid query parameters" },
+      400,
+    );
+  }
+
+  try {
+    const result = await queryLinks(asLinkListPrisma(prisma), parsed.data);
+    return json<LinkListResult>({ data: result, error: null }, 200);
+  } catch {
+    return json<LinkListResult | null>(
+      { data: null, error: "Failed to load links" },
+      500,
+    );
+  }
 }
 
 // Sec-review C2 (Module 08): x-real-ip / x-forwarded-for trust requires
