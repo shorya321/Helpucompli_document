@@ -20,8 +20,12 @@ import type { ApiResponse } from "@/types";
 
 export const dynamic = "force-dynamic";
 
+// F11.2 HIPAA rate-limit: link generation capped at 10 req/min per
+// authenticated user. Generated links are presigned bearer credentials
+// — aggressive cap blunts credential-harvesting + enumeration. Module
+// spec docs/modules/11-security-hipaa-module.md#F11.3.
 const limiter = createRateLimiter({
-  max: 30,
+  max: 10,
   windowMs: 60_000,
   prefix: "@helpucompli/links-create",
 });

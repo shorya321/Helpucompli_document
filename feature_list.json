@@ -929,7 +929,7 @@
             "Apply rate limiting middleware to all API routes",
             "Test rate limiting triggers correctly under load"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F11.3",
