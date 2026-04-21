@@ -202,6 +202,11 @@ export async function POST(req: NextRequest) {
     if (err instanceof PerpetualLinkForbiddenError) {
       return json({ data: null, error: "Forbidden" }, 403);
     }
+    // Log server-side for diagnosis. Response body stays generic so no
+    // sensitive info (DB URL, Prisma internals, stack) leaks to the
+    // client. If you see this firing in prod logs, check for Prisma
+    // client drift (schema ↔ generated client) or a NOT NULL violation.
+    console.error("[POST /api/links] unexpected error:", err);
     return json({ data: null, error: "Failed to create link" }, 500);
   }
 }
