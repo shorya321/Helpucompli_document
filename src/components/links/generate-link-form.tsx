@@ -231,7 +231,13 @@ export function GenerateLinkForm({
             </p>
           )}
 
-          <Button type="submit" disabled={!isValid || submitting}>
+          {/*
+            Generate button stays solid (no disabled opacity) until
+            the request is in flight. Validity is enforced inside
+            onSubmit — if isValid is false we return early, matching
+            the existing server-side guard.
+          */}
+          <Button type="submit" disabled={submitting}>
             {submitting ? "Generating…" : "Generate link"}
           </Button>
 
