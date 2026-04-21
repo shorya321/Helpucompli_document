@@ -1,65 +1,26 @@
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 
 // F12.5 — app-level 404 page. Rendered by Next.js when a route is not
 // matched or when `notFound()` is called. Keep content minimal —
 // HIPAA: no user-controlled input echoed, no stack trace.
 export default function NotFound() {
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "24px",
-        fontFamily: "Inter, system-ui, sans-serif",
-        backgroundColor: "#f8fafc",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: "440px",
-          textAlign: "center",
-          padding: "48px 32px",
-          background: "#ffffff",
-          borderRadius: "12px",
-          boxShadow: "0 1px 3px rgba(15,23,42,0.08)",
-        }}
-      >
-        <h1
-          style={{
-            fontSize: "48px",
-            fontWeight: 600,
-            margin: "0 0 8px",
-            color: "#1e293b",
-          }}
-        >
-          404
-        </h1>
-        <p
-          style={{
-            fontSize: "18px",
-            margin: "0 0 24px",
-            color: "#475569",
-          }}
-        >
-          Page not found.
-        </p>
-        <Link
-          href="/dashboard"
-          style={{
-            display: "inline-block",
-            padding: "10px 20px",
-            background: "#2563EB",
-            color: "#ffffff",
-            textDecoration: "none",
-            borderRadius: "8px",
-            fontWeight: 500,
-          }}
-        >
-          Back to dashboard
-        </Link>
-      </div>
+    <main className="bg-background flex min-h-screen items-center justify-center p-6">
+      <Card className="max-w-md w-full">
+        <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
+          <h1 className="text-foreground font-mono text-5xl font-semibold tabular-nums">
+            404
+          </h1>
+          <p className="text-muted-foreground m-0 text-base">
+            Page not found.
+          </p>
+          <Button asChild>
+            <Link href="/dashboard">Back to dashboard</Link>
+          </Button>
+        </CardContent>
+      </Card>
     </main>
   );
 }

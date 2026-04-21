@@ -25,11 +25,11 @@ const eslintConfig = [
       "src/lib/auth0-branding.ts",
     ],
     rules: {
-      // NOTE: rules start as "warn" during Phase A-C migration. Phase D
-      // cleanup PR flips both to "error" once all modules use semantic
-      // tokens. This keeps `npm run lint` green as migration proceeds.
+      // Phase D cleanup: migration complete, guard is now strict. New
+      // BRAND.colors access or inline color styles in dashboard scope
+      // fail the build.
       "no-restricted-syntax": [
-        "warn",
+        "error",
         {
           selector:
             "MemberExpression[object.name='BRAND'][property.name='colors']",

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 
 // F12.5 — route-segment error boundary. Next.js renders this when an
 // error is thrown during render in any page or layout below the root.
@@ -24,56 +26,27 @@ export default function RouteError({
   }, [error]);
 
   return (
-    <main
-      style={{
-        minHeight: "60vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "24px",
-        fontFamily: "Inter, system-ui, sans-serif",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: "480px",
-          textAlign: "center",
-          padding: "32px",
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
-          borderRadius: "12px",
-        }}
-      >
-        <h2
-          style={{
-            fontSize: "20px",
-            fontWeight: 600,
-            color: "#1e293b",
-            margin: "0 0 12px",
-          }}
-        >
-          Something went wrong.
-        </h2>
-        <p style={{ color: "#475569", margin: "0 0 24px" }}>
-          An unexpected error occurred. Our team has been notified.
-          {error.digest ? ` Reference: ${error.digest}` : ""}
-        </p>
-        <button
-          type="button"
-          onClick={reset}
-          style={{
-            padding: "10px 20px",
-            background: "#2563EB",
-            color: "#ffffff",
-            border: "none",
-            borderRadius: "8px",
-            fontWeight: 500,
-            cursor: "pointer",
-          }}
-        >
-          Try again
-        </button>
-      </div>
+    <main className="bg-background flex min-h-[60vh] items-center justify-center p-6">
+      <Card className="max-w-md w-full">
+        <CardContent className="flex flex-col items-center gap-3 py-8 text-center">
+          <h2 className="text-foreground m-0 text-xl font-semibold">
+            Something went wrong.
+          </h2>
+          <p className="text-muted-foreground m-0">
+            An unexpected error occurred. Our team has been notified.
+            {error.digest ? (
+              <>
+                {" "}
+                Reference:{" "}
+                <span className="font-mono tabular-nums">{error.digest}</span>
+              </>
+            ) : null}
+          </p>
+          <Button type="button" onClick={reset} className="mt-2">
+            Try again
+          </Button>
+        </CardContent>
+      </Card>
     </main>
   );
 }

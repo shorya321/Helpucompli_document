@@ -16,7 +16,13 @@ HIPAA-compliant document repository at `docs.helpucompli.com`. AWS S3 + Auth0 + 
 | Testing | Vitest + Playwright |
 | Logging | Pino |
 
-## Brand: Pink `#E91E8C` | Blue `#2563EB` | Dark `#1E293B` | Font: Inter
+## Design System: shadcn/ui monochrome (zinc OKLCH) + light/dark toggle
+
+Dashboard UI uses the shadcn new-york / baseColor=zinc token system. All design tokens (colors, radius, fonts) live in a single file: `src/app/globals.css` (`:root` = light, `.dark` = dark, `@theme inline` bridges to Tailwind utilities). Components reference tokens ONLY through semantic classes (`bg-background`, `text-foreground`, `border-border`, `bg-card`, `text-muted-foreground`, `bg-primary`, `text-destructive`, etc.). No inline color styles. No hex literals. No `dark:` variants in components. Theme flips via `.dark` class on `<html>` (via `next-themes` ThemeProvider + `<ModeToggle>`).
+
+Brand pink `#E91E8C` / blue `#2563EB` / dark `#1E293B` / light `#F8FAFC` are preserved ONLY in `src/lib/brand.ts`, `src/lib/email.ts` (transactional email — no theme switch), and `src/lib/auth0-branding.ts` (Auth0 tenant branding pushed via Management API). Font: Inter (`--font-sans`) + JetBrains Mono (`--font-mono`, tabular-nums for numerics).
+
+Enforcement: `scripts/lint-tokens.mjs` + ESLint `no-restricted-syntax` block new hex / `BRAND.colors` in dashboard scope.
 
 ---
 

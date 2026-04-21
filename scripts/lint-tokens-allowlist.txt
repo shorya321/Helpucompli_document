@@ -1,8 +1,0 @@
-# Transitional allowlist for lint:tokens.
-# These files still contain raw hex literals OR inline-style color references
-# that will be migrated during Phases B, C, D of the shadcn monochrome
-# redesign. Remove a line once its file is migrated to semantic Tailwind
-# tokens. When this file is empty, delete it and the LINT_TOKENS_ALLOWLIST
-# check in scripts/lint-tokens.mjs.
-#
-# Paths are relative to repo root. Comments (# ...) and blank lines ignored.

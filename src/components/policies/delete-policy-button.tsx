@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { BRAND } from "@/lib/brand";
+import { Button } from "@/components/ui/button";
 
 interface DeletePolicyButtonProps {
   readonly id: string;
@@ -38,22 +38,16 @@ export function DeletePolicyButton({ id, name }: DeletePolicyButtonProps) {
   };
 
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="sm"
       onClick={onClick}
       disabled={isPending}
-      style={{
-        background: "transparent",
-        border: "none",
-        color: BRAND.colors.pink,
-        cursor: isPending ? "wait" : "pointer",
-        fontWeight: 600,
-        fontSize: "0.85rem",
-        padding: 0,
-      }}
       title={error ?? undefined}
+      className="text-destructive hover:text-destructive hover:bg-destructive/10"
     >
       {isPending ? "Deleting…" : "Delete"}
-    </button>
+    </Button>
   );
 }

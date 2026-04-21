@@ -23,9 +23,13 @@ describe("access-denied page", () => {
     expect(out).toMatch(/contact.*admin/i);
   });
 
-  it("uses HelpUcompli pink as the primary color accent", () => {
+  it("uses semantic Tailwind tokens (no raw hex — theme-aware via globals.css)", () => {
+    // After the monochrome redesign, the 403 page reflects the
+    // app-wide .dark/.light token scheme instead of baking pink into
+    // the markup. Guard against accidental reintroduction of hex.
     const out = html();
-    expect(out).toContain(BRAND.colors.pink);
+    expect(out).not.toMatch(/#[0-9A-Fa-f]{3,8}\b/);
+    expect(out).toContain("bg-background");
   });
 
   it("provides a link back to login", () => {
@@ -39,9 +43,7 @@ describe("access-denied page", () => {
 
   it("uses plain <a href> for the login link (not next/link) so Auth0 proxy handles the navigation", async () => {
     const out = html();
-    // No next/link serialized markers
     expect(out).not.toMatch(/data-prefetch/i);
-    // Anchor with href attribute targeting /auth/login
     expect(out).toMatch(/<a[^>]+href="\/auth\/login"/);
   });
 

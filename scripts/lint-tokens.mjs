@@ -10,13 +10,14 @@
  *   src/components/ui/**, src/lib/email.ts, src/lib/auth0-branding.ts,
  *   src/app/globals.css, src/lib/brand.ts.
  *
- * Transitional allowlist (see scripts/lint-tokens-allowlist.txt):
- *   Files still awaiting migration during Phases B/C/D. Lines are removed
- *   as each module is migrated to semantic Tailwind tokens.
- *
  * All design tokens live in src/app/globals.css. Components reference
  * them only through semantic Tailwind classes (bg-background,
  * text-foreground, border-border, etc.).
+ *
+ * The transitional allowlist that tracked unmigrated files during
+ * Phases B-C was deleted in Phase D cleanup once every module was
+ * converted. If a future redesign needs a soft-landing list again,
+ * restore scripts/lint-tokens-allowlist.txt and the branch below.
  */
 
 import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
@@ -155,6 +156,6 @@ if (remaining > 0) {
   );
 } else {
   console.log(
-    "lint:tokens OK — single-source-of-truth fully enforced. Consider deleting scripts/lint-tokens-allowlist.txt.",
+    "lint:tokens OK — single-source-of-truth fully enforced.",
   );
 }

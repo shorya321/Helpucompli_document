@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
+import "./globals.css";
 
 // F12.5 — root error boundary. Renders when the root layout itself
 // crashes (no other boundary catches it). Must be a minimal
-// self-contained tree — layout/providers are NOT available.
+// self-contained tree — layout/providers are NOT available, so we
+// import globals.css directly and use the same semantic tokens as
+// the rest of the app (theme-aware via :root + .dark tokens).
 export default function GlobalError({
   error,
   reset,
@@ -22,54 +25,26 @@ export default function GlobalError({
 
   return (
     <html lang="en">
-      <body
-        style={{
-          minHeight: "100vh",
-          margin: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "24px",
-          fontFamily: "Inter, system-ui, sans-serif",
-          backgroundColor: "#f8fafc",
-        }}
-      >
-        <div
-          style={{
-            maxWidth: "480px",
-            textAlign: "center",
-            padding: "48px 32px",
-            background: "#ffffff",
-            borderRadius: "12px",
-            boxShadow: "0 1px 3px rgba(15,23,42,0.08)",
-          }}
-        >
-          <h1
-            style={{
-              fontSize: "32px",
-              margin: "0 0 8px",
-              color: "#1e293b",
-            }}
-          >
+      <body className="bg-background text-foreground antialiased m-0 flex min-h-screen items-center justify-center p-6 font-sans">
+        <div className="border-border bg-card max-w-md w-full rounded-xl border p-10 text-center shadow-sm">
+          <h1 className="text-foreground mb-2 text-3xl font-semibold tracking-tight">
             Application error
           </h1>
-          <p style={{ color: "#475569", margin: "0 0 24px" }}>
-            The application failed to load. Please refresh the page. If
-            the problem persists, contact support.
-            {error.digest ? ` Reference: ${error.digest}` : ""}
+          <p className="text-muted-foreground mb-6">
+            The application failed to load. Please refresh the page. If the
+            problem persists, contact support.
+            {error.digest ? (
+              <>
+                {" "}
+                Reference:{" "}
+                <span className="font-mono tabular-nums">{error.digest}</span>
+              </>
+            ) : null}
           </p>
           <button
             type="button"
             onClick={reset}
-            style={{
-              padding: "10px 20px",
-              background: "#E91E8C",
-              color: "#ffffff",
-              border: "none",
-              borderRadius: "8px",
-              fontWeight: 500,
-              cursor: "pointer",
-            }}
+            className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-9 items-center justify-center rounded-md px-5 text-sm font-medium transition-colors"
           >
             Reload
           </button>
