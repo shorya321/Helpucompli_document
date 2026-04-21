@@ -15,11 +15,19 @@ export const dynamic = "force-dynamic";
 // 10 requests / 30s per authenticated user. Covers the dashboard
 // summary card mount + a few manual refreshes without throttling
 // normal use. Blocks amplification from stolen tokens or runaway tabs.
-const limiter = createRateLimiter({
-  max: 10,
-  windowMs: 30_000,
-  prefix: "@helpucompli/dashboard-stats",
-});
+// Lazy singleton — construction deferred to first request so `next build`
+// never evaluates Upstash env vars during page-data-collection.
+let _limiter: ReturnType<typeof createRateLimiter> | null = null;
+function getLimiter() {
+  if (!_limiter) {
+    _limiter = createRateLimiter({
+      max: 10,
+      windowMs: 30_000,
+      prefix: "@helpucompli/dashboard-stats",
+    });
+  }
+  return _limiter;
+}
 
 function json<T>(
   body: ApiResponse<T>,
@@ -46,7 +54,7 @@ export async function GET() {
 
   const sub = session.user.sub as string | undefined;
   const identifier = `stats:${sub ?? "anon"}`;
-  const quota = await limiter.limit(identifier);
+  const quota = await getLimiter().limit(identifier);
   if (!quota.success) {
     const retrySec = Math.max(1, Math.ceil((quota.reset - Date.now()) / 1000));
     return json<DashboardStats>(

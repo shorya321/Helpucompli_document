@@ -16,11 +16,19 @@ export const dynamic = "force-dynamic";
 // 10 requests / 30s per authenticated user. With a 30s client-side
 // poll interval the quota covers normal use (~1 hit per window) with
 // headroom for tab refreshes; blocks compromised-token amplification.
-const limiter = createRateLimiter({
-  max: 10,
-  windowMs: 30_000,
-  prefix: "@helpucompli/dashboard-activity",
-});
+// Lazy singleton — construction deferred to first request so `next build`
+// never evaluates Upstash env vars during page-data-collection.
+let _limiter: ReturnType<typeof createRateLimiter> | null = null;
+function getLimiter() {
+  if (!_limiter) {
+    _limiter = createRateLimiter({
+      max: 10,
+      windowMs: 30_000,
+      prefix: "@helpucompli/dashboard-activity",
+    });
+  }
+  return _limiter;
+}
 
 function json<T>(
   body: ApiResponse<T>,
@@ -51,7 +59,7 @@ export async function GET() {
 
   const sub = session.user.sub as string | undefined;
   const identifier = `activity:${sub ?? "anon"}`;
-  const quota = await limiter.limit(identifier);
+  const quota = await getLimiter().limit(identifier);
   if (!quota.success) {
     const retrySec = Math.max(1, Math.ceil((quota.reset - Date.now()) / 1000));
     return json<readonly ActivityEntry[]>(

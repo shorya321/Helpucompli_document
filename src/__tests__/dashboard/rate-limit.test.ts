@@ -66,6 +66,7 @@ describe("createRateLimiter factory", () => {
   const origEnv = { ...process.env };
   afterEach(() => {
     process.env = { ...origEnv };
+    vi.unstubAllEnvs();
     vi.resetModules();
   });
 
@@ -80,10 +81,29 @@ describe("createRateLimiter factory", () => {
   it("throws in production when UPSTASH vars are unset — HIPAA requires durable quota state", () => {
     delete process.env.UPSTASH_REDIS_REST_URL;
     delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    delete process.env.NEXT_PHASE;
     vi.stubEnv("NODE_ENV", "production");
     expect(() => createRateLimiter({ max: 5, windowMs: 1000 })).toThrow(
       /UPSTASH/,
     );
-    vi.unstubAllEnvs();
+  });
+
+  it("does NOT throw during `next build` (NEXT_PHASE=phase-production-build) even without UPSTASH vars — build-time Coolify deploys have no runtime secrets", () => {
+    delete process.env.UPSTASH_REDIS_REST_URL;
+    delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_PHASE", "phase-production-build");
+    const l = createRateLimiter({ max: 5, windowMs: 1000 });
+    expect(typeof l.limit).toBe("function");
+  });
+
+  it("still throws at runtime phase (phase-production-server) when UPSTASH vars are unset", () => {
+    delete process.env.UPSTASH_REDIS_REST_URL;
+    delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_PHASE", "phase-production-server");
+    expect(() => createRateLimiter({ max: 5, windowMs: 1000 })).toThrow(
+      /UPSTASH/,
+    );
   });
 });

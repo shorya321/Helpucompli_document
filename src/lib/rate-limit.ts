@@ -62,14 +62,21 @@ export function createRateLimiter(opts: RateLimiterOptions): RateLimiter {
   const nodeEnv = process.env.NODE_ENV;
 
   if (!url || !token) {
-    if (nodeEnv === "production") {
+    // `next build` evaluates route modules during page-data-collection
+    // with NODE_ENV=production but no runtime secrets. Skip the hard-fail
+    // during build — the in-memory limiter is created but never serves
+    // traffic (build output is discarded after collection). Runtime phase
+    // (`phase-production-server` or unset) still enforces the HIPAA guard.
+    const isBuildPhase =
+      process.env.NEXT_PHASE === "phase-production-build";
+    if (nodeEnv === "production" && !isBuildPhase) {
       throw new Error(
         "Rate limiter requires UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN " +
           "in production. In-memory fallback is not durable across server instances " +
           "and cannot satisfy HIPAA access-control audit requirements.",
       );
     }
-    // Dev + test: in-memory is fine, per-process quotas are enough.
+    // Dev + test + build phase: in-memory is fine.
     return createInMemoryLimiter(opts);
   }
 

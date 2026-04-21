@@ -13,11 +13,20 @@ import type { ApiResponse } from "@/types";
 
 export const dynamic = "force-dynamic";
 
-const limiter = createRateLimiter({
-  max: 30,
-  windowMs: 60_000,
-  prefix: "@helpucompli/audit-list",
-});
+// Lazy singleton — defers Upstash client construction until the first
+// request. Avoids evaluating process.env at module-load time, which runs
+// during `next build` page-data-collection when runtime secrets are absent.
+let _limiter: ReturnType<typeof createRateLimiter> | null = null;
+function getLimiter() {
+  if (!_limiter) {
+    _limiter = createRateLimiter({
+      max: 30,
+      windowMs: 60_000,
+      prefix: "@helpucompli/audit-list",
+    });
+  }
+  return _limiter;
+}
 
 function json<T>(
   body: ApiResponse<T>,
@@ -60,7 +69,7 @@ export async function GET(request: NextRequest) {
   }
 
   const sub = (session.user as { sub?: string }).sub ?? "anon";
-  const quota = await limiter.limit(`audit:${sub}`);
+  const quota = await getLimiter().limit(`audit:${sub}`);
   if (!quota.success) {
     const retrySec = Math.max(1, Math.ceil((quota.reset - Date.now()) / 1000));
     return json<AuditQueryResult>(
