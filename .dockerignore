@@ -1,0 +1,46 @@
+# Keep the Docker build context small — faster builds, smaller images,
+# no secret / local-state leakage into intermediate layers.
+
+# Build outputs
+.next
+dist
+out
+next-env.d.ts
+
+# Deps (reinstalled inside the image)
+node_modules
+.pnpm-store
+
+# Local env + secrets
+.env
+.env.local
+.env.*.local
+
+# Dev + CI scratch
+.git
+.github
+.vscode
+.idea
+.DS_Store
+*.log
+
+# Tests + tooling not needed at runtime
+e2e
+src/__tests__
+coverage
+playwright-report
+test-results
+vitest.config.ts
+playwright.config.ts
+
+# Docs + agent harness
+docs
+CLAUDE.md
+claude-progress.json
+feature_list.json
+.claude
+
+# Misc
+README*.md
+*.md
+!next.config.ts

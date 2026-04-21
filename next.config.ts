@@ -9,6 +9,11 @@ import type { NextConfig } from "next";
 // Reference: next.config.ts `async headers()` applies to every response
 // emitted by Next, including static files under /_next/static.
 const nextConfig: NextConfig = {
+  // Emit a self-contained production bundle (server.js + .next/standalone
+  // + trimmed node_modules) so the Docker image copies only what it
+  // needs to run. Required for the Coolify Dockerfile deploy path.
+  // Docs: https://nextjs.org/docs/app/api-reference/next-config-js/output
+  output: "standalone",
   async headers() {
     return [
       {
