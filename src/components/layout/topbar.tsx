@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -7,7 +8,6 @@ import { ConfigDrawer } from "@/components/layout/config-drawer";
 import { ProfileDropdown } from "@/components/layout/profile-dropdown";
 import { SearchTrigger } from "@/components/layout/search-trigger";
 import { ThemeSwitch } from "@/components/layout/theme-switch";
-import { useScrolled } from "@/hooks/use-scrolled";
 import type { Role } from "@/types";
 
 export interface TopbarUser {
@@ -20,27 +20,50 @@ interface TopbarProps {
   readonly role: Role;
 }
 
+// 1:1 port of satnaing/shadcn-admin src/components/layout/header.tsx.
+// Scroll offset > 10px toggles the frosted-glass after:-pseudo
+// background + elevates a subtle shadow. Scroll is read from the
+// document scrollingElement, matching the reference.
 export function Topbar({ user, role }: TopbarProps) {
-  const scrolled = useScrolled(10);
+  const [offset, setOffset] = useState(0);
+
+  useEffect(() => {
+    const onScroll = () => {
+      setOffset(
+        document.body.scrollTop || document.documentElement.scrollTop,
+      );
+    };
+    document.addEventListener("scroll", onScroll, { passive: true });
+    return () => document.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const isElevated = offset > 10;
 
   return (
     <header
       className={cn(
-        "sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background px-4 transition-[box-shadow,background-color]",
-        scrolled &&
-          "bg-background/20 shadow-sm backdrop-blur-lg supports-[backdrop-filter]:bg-background/60",
+        "header-fixed peer/header z-50 h-16 w-[inherit] sticky top-0",
+        isElevated ? "shadow" : "shadow-none",
       )}
     >
-      <SidebarTrigger className="-ml-1" />
-      <Separator orientation="vertical" className="mr-2 h-4" />
+      <div
+        className={cn(
+          "relative flex h-full items-center gap-3 p-4 sm:gap-4",
+          isElevated &&
+            "after:absolute after:inset-0 after:-z-10 after:bg-background/20 after:backdrop-blur-lg",
+        )}
+      >
+        <SidebarTrigger variant="outline" className="max-md:scale-125" />
+        <Separator orientation="vertical" className="h-6" />
 
-      <div className="me-auto max-w-sm flex-1">
-        <SearchTrigger />
+        <div className="me-auto max-w-sm flex-1">
+          <SearchTrigger />
+        </div>
+
+        <ThemeSwitch />
+        <ConfigDrawer />
+        <ProfileDropdown user={user} role={role} />
       </div>
-
-      <ThemeSwitch />
-      <ConfigDrawer />
-      <ProfileDropdown user={user} role={role} />
     </header>
   );
 }
