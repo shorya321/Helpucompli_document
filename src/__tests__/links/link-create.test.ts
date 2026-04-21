@@ -4,6 +4,7 @@ import {
   generateLinkToken,
   resolveEffectiveSettings,
   DocumentNotFoundError,
+  PerpetualLinkForbiddenError,
   PolicyMismatchError,
   type LinkCreatePrisma,
   type LinkCreateInput,
@@ -227,8 +228,9 @@ describe("createLink", () => {
       ctx,
     );
     const expected = before + 900_000;
-    expect(result.expiresAt.getTime()).toBeGreaterThanOrEqual(expected - 1000);
-    expect(result.expiresAt.getTime()).toBeLessThanOrEqual(expected + 5000);
+    expect(result.expiresAt).not.toBeNull();
+    expect(result.expiresAt!.getTime()).toBeGreaterThanOrEqual(expected - 1000);
+    expect(result.expiresAt!.getTime()).toBeLessThanOrEqual(expected + 5000);
   });
 
   it("rejects when policyId provided but policy missing", async () => {
@@ -260,6 +262,96 @@ describe("createLink", () => {
       data: Record<string, unknown>;
     };
     expect(args.data.presignedUrlHash).toBe(result.token);
+  });
+
+  it("neverExpires=true stores expiresAt=null and ignores TTL override", async () => {
+    const stub = makeStub({ document: baseDoc });
+    const result = await createLink(
+      stub.client,
+      { ...baseInput, neverExpires: true, ttlSecondsOverride: 900 },
+      ctx,
+    );
+    expect(result.expiresAt).toBeNull();
+    expect(result.ttlSeconds).toBeNull();
+    const args = stub.tx.generatedLink.create.mock.calls[0]?.[0] as {
+      data: Record<string, unknown>;
+    };
+    expect(args.data.expiresAt).toBeNull();
+  });
+
+  it("neverExpires=true records neverExpires + null fields in audit metadata", async () => {
+    const stub = makeStub({ document: baseDoc });
+    await createLink(
+      stub.client,
+      { ...baseInput, neverExpires: true },
+      ctx,
+    );
+    const meta = stub.audit[0]?.metadata as Record<string, unknown>;
+    expect(meta.neverExpires).toBe(true);
+    expect(meta.ttlSeconds).toBeNull();
+    expect(meta.expiresAt).toBeNull();
+  });
+
+  it("resolveEffectiveSettings: null policy TTL + null override → ttlSeconds null (perpetual)", () => {
+    const r = resolveEffectiveSettings({
+      policy: { linkTtlSeconds: null, maxDownloads: 10 },
+      ttlOverride: null,
+      maxDownloadsOverride: null,
+    });
+    expect(r.ttlSeconds).toBeNull();
+    expect(r.maxDownloads).toBe(10);
+  });
+
+  it("resolveEffectiveSettings: null policy TTL + finite override → override wins (clamped to global max)", () => {
+    const r = resolveEffectiveSettings({
+      policy: { linkTtlSeconds: null, maxDownloads: null },
+      ttlOverride: 900,
+      maxDownloadsOverride: null,
+    });
+    expect(r.ttlSeconds).toBe(900);
+  });
+
+  it("createLink with policy.linkTtlSeconds=null + no override + non-superadmin → PerpetualLinkForbiddenError", async () => {
+    const stub = makeStub({
+      document: baseDoc,
+      policy: { id: "p-1", linkTtlSeconds: null, maxDownloads: null },
+    });
+    await expect(
+      createLink(
+        stub.client,
+        { ...baseInput, policyId: "p-1" },
+        { ...ctx, callerRole: "admin" },
+      ),
+    ).rejects.toBeInstanceOf(PerpetualLinkForbiddenError);
+    expect(stub.tx.generatedLink.create).not.toHaveBeenCalled();
+  });
+
+  it("createLink with policy.linkTtlSeconds=null + no override + superadmin → perpetual link OK", async () => {
+    const stub = makeStub({
+      document: baseDoc,
+      policy: { id: "p-1", linkTtlSeconds: null, maxDownloads: null },
+    });
+    const result = await createLink(
+      stub.client,
+      { ...baseInput, policyId: "p-1" },
+      { ...ctx, callerRole: "superadmin" },
+    );
+    expect(result.expiresAt).toBeNull();
+    expect(result.ttlSeconds).toBeNull();
+  });
+
+  it("createLink with null policy TTL + finite override by admin → OK (resolved TTL is finite)", async () => {
+    const stub = makeStub({
+      document: baseDoc,
+      policy: { id: "p-1", linkTtlSeconds: null, maxDownloads: null },
+    });
+    const result = await createLink(
+      stub.client,
+      { ...baseInput, policyId: "p-1", ttlSecondsOverride: 900 },
+      { ...ctx, callerRole: "admin" },
+    );
+    expect(result.expiresAt).not.toBeNull();
+    expect(result.ttlSeconds).toBe(900);
   });
 
   it("audit metadata includes documentId + policyId for forensic review", async () => {

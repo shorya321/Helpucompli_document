@@ -81,6 +81,58 @@ Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'
 - Notification: 60-day HIPAA breach notification requirement
 - Review: Post-incident analysis and remediation
 
+### F11.10a — Perpetual ("Never Expires") Share Links and Policies
+
+Links and policies can be created with `expiresAt = NULL` / `linkTtlSeconds = NULL`, meaning they remain valid until explicitly revoked or the download cap is hit. This is a HIPAA-relevant footgun — a bearer token that never expires widens the attack surface for token-leak incidents. The platform gates the capability as follows.
+
+**Superadmin-only — enforced at three layers:**
+
+1. **UI** — `"Never expires"` option is hidden from the TTL `<select>` for non-superadmins.
+   - `src/components/links/generate-link-form.tsx` — conditional `<option value="never">` gated on `canNeverExpire`.
+   - `src/components/policies/policy-form.tsx` — same pattern.
+2. **API** — server 403s regardless of UI:
+   - `POST /api/links` — rejects `neverExpires: true` when role ≠ `superadmin`.
+   - `POST /api/policies` + `PUT /api/policies/[id]` — rejects `linkTtlSeconds: null` when role ≠ `superadmin`.
+   - `src/lib/link-create.ts` `PerpetualLinkForbiddenError` — thrown when the *resolved* link TTL ends up null (e.g. inherited from a null-TTL policy with no override) and the caller isn't superadmin. Closes the null-policy inheritance hole.
+3. **Confirm dialog** — on the UI, picking `"Never expires"` fires a HIPAA warning and reverts on cancel.
+
+**Compliance filter — surface perpetual creations:**
+
+```sql
+-- Every perpetual-link issuance
+SELECT id, user_id, created_at, metadata
+FROM audit_logs
+WHERE action = 'LINK_GENERATE'
+  AND metadata->>'neverExpires' = 'true'
+ORDER BY created_at DESC;
+
+-- Every perpetual-policy creation / update
+SELECT id, user_id, created_at, metadata
+FROM audit_logs
+WHERE action IN ('POLICY_CREATE', 'POLICY_UPDATE')
+  AND metadata->>'linkTtlSeconds' = 'null'
+ORDER BY created_at DESC;
+```
+
+**Incident response:** revoke the link via `DELETE /api/links/admin/[id]` (sets `isRevoked = true`, writes `LINK_REVOKE` audit). For policies, flip `linkTtlSeconds` back to a finite value via `PUT /api/policies/[id]` — existing links already materialized against the policy keep their stored TTL, so you must revoke each one individually.
+
+### F11.10b — Link Token Re-Reveal (Share-Info Endpoint)
+
+`GET /api/links/admin/[id]/share-info` (step 3 of the never-expires feature) lets an admin copy a link's URL or iframe HTML after leaving the generate-link page. Every call **re-reveals a bearer token** so it is audited per-call.
+
+- **Guards:** admin+, UUID-only, 30/min rate limit per user, 410 on revoked/expired/cap-hit.
+- **Audit:** every successful call writes a `LINK_SHARE_INFO_VIEW` row. Audit-write failure returns 500 — no silent reveals.
+
+**Compliance filter:**
+
+```sql
+-- Who re-copied which link, when, from where
+SELECT created_at, user_id, target_id, ip_address, user_agent
+FROM audit_logs
+WHERE action = 'LINK_SHARE_INFO_VIEW'
+ORDER BY created_at DESC;
+```
+
 ### F11.10 — AWS BAA Checklist
 - [ ] Sign AWS BAA via AWS Artifact console (self-service)
 - [ ] Confirm all services used are HIPAA-eligible

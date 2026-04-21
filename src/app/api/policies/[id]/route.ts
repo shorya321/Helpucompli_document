@@ -131,6 +131,13 @@ export async function PUT(req: NextRequest, ctx: RouteCtx) {
   if (role !== "superadmin" && role !== "admin") {
     return json({ data: null, error: "Forbidden" }, 403);
   }
+
+  // Sec-review: flipping a policy to linkTtlSeconds=null converts every
+  // future link under it to perpetual. Gate to superadmin on UPDATE too.
+  if (parsed.data.linkTtlSeconds === null && role !== "superadmin") {
+    return json({ data: null, error: "Forbidden" }, 403);
+  }
+
   const dbUser = await ensureUser(prisma, { session: pre.session, role });
 
   try {

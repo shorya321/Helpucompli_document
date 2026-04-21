@@ -1,0 +1,234 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  getSession: vi.fn(),
+  resolveHasRole: vi.fn(),
+  resolveRole: vi.fn(),
+  ensureUser: vi.fn(),
+  findLink: vi.fn(),
+  auditCreate: vi.fn(),
+  limit: vi.fn(),
+}));
+
+vi.mock("@/lib/auth0", () => ({ auth0: { getSession: mocks.getSession } }));
+vi.mock("@/lib/auth-guard", () => ({
+  resolveHasRole: mocks.resolveHasRole,
+  resolveRole: mocks.resolveRole,
+}));
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    generatedLink: { findUnique: mocks.findLink },
+    auditLog: { create: mocks.auditCreate },
+  },
+}));
+vi.mock("@/lib/ensure-user", () => ({ ensureUser: mocks.ensureUser }));
+vi.mock("@/lib/rate-limit", () => ({
+  createRateLimiter: () => ({ limit: mocks.limit }),
+}));
+
+import { GET } from "@/app/api/links/admin/[id]/share-info/route";
+import { NextRequest } from "next/server";
+
+const ok = { success: true, reset: Date.now() + 30_000 };
+const adminSession = () => ({ user: { sub: "auth0|a" } });
+const params = (id: string) => Promise.resolve({ id });
+const ID = "22222222-2222-4222-8222-222222222222";
+const TOKEN = "abc123TokenValueDefghiJklmnoPqrsTuvwxyz0-_";
+const ORIGIN = "https://docs.example.com";
+
+function req(origin = ORIGIN) {
+  return new NextRequest(`${origin}/api/links/admin/${ID}/share-info`, {
+    method: "GET",
+  });
+}
+
+afterEach(() => {
+  for (const m of Object.values(mocks)) m.mockReset();
+});
+
+beforeEach(() => {
+  mocks.limit.mockResolvedValue(ok);
+  mocks.auditCreate.mockResolvedValue({ id: "a-1" });
+});
+
+describe("GET /api/links/admin/[id]/share-info", () => {
+  it("401 unauthenticated", async () => {
+    mocks.getSession.mockResolvedValueOnce(null);
+    const res = await GET(req(), { params: params(ID) });
+    expect(res.status).toBe(401);
+  });
+
+  it("403 non-admin", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(false);
+    const res = await GET(req(), { params: params(ID) });
+    expect(res.status).toBe(403);
+    expect(mocks.findLink).not.toHaveBeenCalled();
+  });
+
+  it("400 malformed id", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(true);
+    const res = await GET(req(), { params: params("not-uuid") });
+    expect(res.status).toBe(400);
+  });
+
+  it("429 rate-limited", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(true);
+    mocks.limit.mockResolvedValueOnce({
+      success: false,
+      reset: Date.now() + 10_000,
+    });
+    const res = await GET(req(), { params: params(ID) });
+    expect(res.status).toBe(429);
+  });
+
+  it("404 when link missing", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(true);
+    mocks.resolveRole.mockResolvedValueOnce("admin");
+    mocks.ensureUser.mockResolvedValueOnce({ id: "u-1" });
+    mocks.findLink.mockResolvedValueOnce(null);
+    const res = await GET(req(), { params: params(ID) });
+    expect(res.status).toBe(404);
+  });
+
+  it("410 when link revoked", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(true);
+    mocks.resolveRole.mockResolvedValueOnce("admin");
+    mocks.ensureUser.mockResolvedValueOnce({ id: "u-1" });
+    mocks.findLink.mockResolvedValueOnce({
+      id: ID,
+      documentId: "d-1",
+      policyId: null,
+      presignedUrlHash: TOKEN,
+      expiresAt: new Date(Date.now() + 60_000),
+      isRevoked: true,
+      downloadCount: 0,
+      maxDownloads: null,
+    });
+    const res = await GET(req(), { params: params(ID) });
+    expect(res.status).toBe(410);
+  });
+
+  it("410 when link expired", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(true);
+    mocks.resolveRole.mockResolvedValueOnce("admin");
+    mocks.ensureUser.mockResolvedValueOnce({ id: "u-1" });
+    mocks.findLink.mockResolvedValueOnce({
+      id: ID,
+      documentId: "d-1",
+      policyId: null,
+      presignedUrlHash: TOKEN,
+      expiresAt: new Date(Date.now() - 60_000),
+      isRevoked: false,
+      downloadCount: 0,
+      maxDownloads: null,
+    });
+    const res = await GET(req(), { params: params(ID) });
+    expect(res.status).toBe(410);
+  });
+
+  it("410 when download cap hit", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(true);
+    mocks.resolveRole.mockResolvedValueOnce("admin");
+    mocks.ensureUser.mockResolvedValueOnce({ id: "u-1" });
+    mocks.findLink.mockResolvedValueOnce({
+      id: ID,
+      documentId: "d-1",
+      policyId: null,
+      presignedUrlHash: TOKEN,
+      expiresAt: new Date(Date.now() + 60_000),
+      isRevoked: false,
+      downloadCount: 5,
+      maxDownloads: 5,
+    });
+    const res = await GET(req(), { params: params(ID) });
+    expect(res.status).toBe(410);
+  });
+
+  it("200 returns token, shareableUrl, embedCode, expiresAt", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(true);
+    mocks.resolveRole.mockResolvedValueOnce("admin");
+    mocks.ensureUser.mockResolvedValueOnce({ id: "u-1" });
+    const future = new Date(Date.now() + 3_600_000);
+    mocks.findLink.mockResolvedValueOnce({
+      id: ID,
+      documentId: "d-1",
+      policyId: null,
+      presignedUrlHash: TOKEN,
+      expiresAt: future,
+      isRevoked: false,
+      downloadCount: 0,
+      maxDownloads: null,
+    });
+    const res = await GET(req(), { params: params(ID) });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      data: {
+        token: string;
+        shareableUrl: string;
+        embedCode: string;
+        expiresAt: string | null;
+      } | null;
+    };
+    expect(body.data?.token).toBe(TOKEN);
+    expect(body.data?.shareableUrl).toBe(`${ORIGIN}/api/links/${TOKEN}`);
+    expect(body.data?.embedCode).toContain("<iframe");
+    expect(body.data?.embedCode).toContain(TOKEN);
+    expect(body.data?.expiresAt).toBe(future.toISOString());
+  });
+
+  it("200 and expiresAt=null for never-expires link", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(true);
+    mocks.resolveRole.mockResolvedValueOnce("superadmin");
+    mocks.ensureUser.mockResolvedValueOnce({ id: "u-1" });
+    mocks.findLink.mockResolvedValueOnce({
+      id: ID,
+      documentId: "d-1",
+      policyId: null,
+      presignedUrlHash: TOKEN,
+      expiresAt: null,
+      isRevoked: false,
+      downloadCount: 0,
+      maxDownloads: null,
+    });
+    const res = await GET(req(), { params: params(ID) });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      data: { expiresAt: string | null } | null;
+    };
+    expect(body.data?.expiresAt).toBeNull();
+  });
+
+  it("writes LINK_SHARE_INFO_VIEW audit on success", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(true);
+    mocks.resolveRole.mockResolvedValueOnce("admin");
+    mocks.ensureUser.mockResolvedValueOnce({ id: "u-9" });
+    mocks.findLink.mockResolvedValueOnce({
+      id: ID,
+      documentId: "d-1",
+      policyId: "p-1",
+      presignedUrlHash: TOKEN,
+      expiresAt: new Date(Date.now() + 60_000),
+      isRevoked: false,
+      downloadCount: 0,
+      maxDownloads: null,
+    });
+    await GET(req(), { params: params(ID) });
+    expect(mocks.auditCreate).toHaveBeenCalledTimes(1);
+    const call = mocks.auditCreate.mock.calls[0]![0] as {
+      data: { action: string; targetId: string; userId: string };
+    };
+    expect(call.data.action).toBe("LINK_SHARE_INFO_VIEW");
+    expect(call.data.targetId).toBe(ID);
+    expect(call.data.userId).toBe("u-9");
+  });
+});

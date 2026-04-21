@@ -27,6 +27,9 @@ export const linkCreateSchema = z
       .max(99_999)
       .nullable()
       .default(null),
+    // Superadmin-gated on the API route. When true, server stores
+    // expiresAt=null and ttlSecondsOverride is ignored.
+    neverExpires: z.boolean().default(false),
   })
   .strict();
 

@@ -21,7 +21,10 @@ export const policyInputSchema = z
     targetValue: z.string().min(1).max(TARGET_MAX),
     allowedDomains: z.array(domainSchema).max(ARRAY_MAX).default([]),
     allowedIpRanges: z.array(cidrSchema).max(ARRAY_MAX).default([]),
-    linkTtlSeconds: z.number().int().min(TTL_MIN).max(TTL_MAX),
+    // null = "never expires" — superadmin-gated on write. Policy TTL
+    // feeds link-create as the ceiling; null = no ceiling, inherit from
+    // override or fall back to MAX on the access side.
+    linkTtlSeconds: z.number().int().min(TTL_MIN).max(TTL_MAX).nullable(),
     maxDownloads: z
       .number()
       .int()

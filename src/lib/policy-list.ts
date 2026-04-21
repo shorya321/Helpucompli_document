@@ -7,7 +7,8 @@ export interface PolicyListRow {
   readonly targetValue: string;
   readonly allowedDomains: readonly string[];
   readonly allowedIpRanges: readonly string[];
-  readonly linkTtlSeconds: number;
+  // null = policy issues perpetual links (superadmin-gated).
+  readonly linkTtlSeconds: number | null;
   readonly maxDownloads: number | null;
   readonly requireAuth: boolean;
   readonly updatedAt: Date;
@@ -57,7 +58,7 @@ export async function getPolicyList(
       targetValue: row.targetValue as string,
       allowedDomains: (row.allowedDomains as string[]) ?? [],
       allowedIpRanges: (row.allowedIpRanges as string[]) ?? [],
-      linkTtlSeconds: row.linkTtlSeconds as number,
+      linkTtlSeconds: (row.linkTtlSeconds as number | null) ?? null,
       maxDownloads: (row.maxDownloads as number | null) ?? null,
       requireAuth: row.requireAuth as boolean,
       updatedAt: row.updatedAt as Date,
@@ -94,14 +95,17 @@ function ttlLabel(seconds: number): string {
 export interface RestrictionInput {
   readonly allowedDomains: readonly string[];
   readonly allowedIpRanges: readonly string[];
-  readonly linkTtlSeconds: number;
+  // null = policy issues perpetual links (superadmin-gated).
+  readonly linkTtlSeconds: number | null;
   readonly maxDownloads: number | null;
   readonly requireAuth: boolean;
 }
 
 export function summarizeRestrictions(p: RestrictionInput): string {
   const parts: string[] = [];
-  parts.push(`TTL ${ttlLabel(p.linkTtlSeconds)}`);
+  parts.push(
+    `TTL ${p.linkTtlSeconds === null ? "never expires" : ttlLabel(p.linkTtlSeconds)}`,
+  );
   if (p.maxDownloads === null || p.maxDownloads === undefined) {
     parts.push("unlimited downloads");
   } else {

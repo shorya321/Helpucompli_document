@@ -25,6 +25,18 @@ export class PolicyMismatchError extends Error {
   }
 }
 
+// Raised when the resolved link ends up perpetual (ttlSeconds=null) but
+// the caller isn't superadmin. Closes the hole where a null-TTL policy
+// would let a regular admin inherit a perpetual link without setting the
+// explicit neverExpires=true flag that step 5 already gates.
+export class PerpetualLinkForbiddenError extends Error {
+  public readonly status = 403;
+  constructor() {
+    super("Perpetual link requires superadmin");
+    this.name = "PerpetualLinkForbiddenError";
+  }
+}
+
 // 32 random bytes = 256 bits of entropy. base64url encodes to 43 chars
 // (no padding) — URL-safe and meets RFC 4648 §5.
 export function generateLinkToken(): string {
@@ -32,7 +44,8 @@ export function generateLinkToken(): string {
 }
 
 interface PolicyInfo {
-  readonly linkTtlSeconds: number;
+  // null = policy permits "never expires" links (superadmin-gated).
+  readonly linkTtlSeconds: number | null;
   readonly maxDownloads: number | null;
 }
 
@@ -43,7 +56,9 @@ export interface ResolveSettingsInput {
 }
 
 export interface ResolvedSettings {
-  readonly ttlSeconds: number;
+  // null = perpetual link (inherited from a policy with null TTL and no
+  // finite override).
+  readonly ttlSeconds: number | null;
   readonly maxDownloads: number | null;
 }
 
@@ -59,15 +74,30 @@ function clampToRange(n: number, min: number, max: number): number {
 export function resolveEffectiveSettings(
   input: ResolveSettingsInput,
 ): ResolvedSettings {
-  const policyTtl = input.policy?.linkTtlSeconds ?? DEFAULT_TTL;
-  // Override may shorten the TTL (good for one-off shares) but never
-  // extend beyond the policy's ceiling. Without a policy, allow up to
-  // global MAX_GET_TTL.
-  const ceilingTtl = input.policy ? policyTtl : LINK_MAX_TTL_SECONDS;
-  const ttlSeconds =
-    input.ttlOverride !== null
-      ? clampToRange(input.ttlOverride, LINK_MIN_TTL_SECONDS, ceilingTtl)
-      : policyTtl;
+  // Null policy TTL = "no ceiling" on the policy side. Without an
+  // override this produces a perpetual link; with one, the override is
+  // clamped against the SigV4 ceiling only.
+  const policyTtl = input.policy?.linkTtlSeconds ?? null;
+  const ceilingTtl =
+    input.policy === null
+      ? LINK_MAX_TTL_SECONDS
+      : (policyTtl ?? LINK_MAX_TTL_SECONDS);
+  let ttlSeconds: number | null;
+  if (input.ttlOverride !== null) {
+    ttlSeconds = clampToRange(
+      input.ttlOverride,
+      LINK_MIN_TTL_SECONDS,
+      ceilingTtl,
+    );
+  } else if (policyTtl !== null) {
+    ttlSeconds = policyTtl;
+  } else if (input.policy === null) {
+    // No policy + no override → server default TTL (pre-existing behavior).
+    ttlSeconds = DEFAULT_TTL;
+  } else {
+    // Policy present but perpetual + no override → inherit perpetual.
+    ttlSeconds = null;
+  }
 
   const policyCap = input.policy?.maxDownloads ?? null;
   let maxDownloads: number | null;
@@ -90,19 +120,30 @@ export interface LinkCreateInput {
   readonly policyId: string | null;
   readonly ttlSecondsOverride: number | null;
   readonly maxDownloadsOverride: number | null;
+  // Superadmin-gated on the API route. When true, link.expiresAt is
+  // stored as null and TTL-related inputs are ignored. Link remains
+  // bounded by maxDownloads + isRevoked.
+  readonly neverExpires?: boolean;
 }
 
 export interface LinkCreateContext {
   readonly userId: string;
   readonly ipAddress: string;
   readonly userAgent: string;
+  // Caller's role. Defaults to undefined for backwards-compat with
+  // existing tests — when undefined the perpetual-link check is
+  // skipped. Production callers MUST pass it so the superadmin gate
+  // is enforced end-to-end.
+  readonly callerRole?: "superadmin" | "admin" | "viewer";
 }
 
 export interface LinkCreateResult {
   readonly id: string;
   readonly token: string;
-  readonly expiresAt: Date;
-  readonly ttlSeconds: number;
+  // null = never expires (superadmin-gated). Still bounded by
+  // maxDownloads + revoke.
+  readonly expiresAt: Date | null;
+  readonly ttlSeconds: number | null;
   readonly maxDownloads: number | null;
 }
 
@@ -160,14 +201,45 @@ export async function createLink(
       };
     }
 
-    const { ttlSeconds, maxDownloads } = resolveEffectiveSettings({
-      policy,
-      ttlOverride: input.ttlSecondsOverride,
-      maxDownloadsOverride: input.maxDownloadsOverride,
-    });
+    // neverExpires short-circuits TTL resolution entirely — policy TTL
+    // and per-request override are both ignored. maxDownloads precedence
+    // still applies so compliance can cap downloads on a perpetual link.
+    const neverExpires = input.neverExpires === true;
+    let ttlSeconds: number | null;
+    let maxDownloads: number | null;
+    if (neverExpires) {
+      ttlSeconds = null;
+      const resolvedForCap = resolveEffectiveSettings({
+        policy,
+        ttlOverride: null,
+        maxDownloadsOverride: input.maxDownloadsOverride,
+      });
+      maxDownloads = resolvedForCap.maxDownloads;
+    } else {
+      const resolved = resolveEffectiveSettings({
+        policy,
+        ttlOverride: input.ttlSecondsOverride,
+        maxDownloadsOverride: input.maxDownloadsOverride,
+      });
+      ttlSeconds = resolved.ttlSeconds;
+      maxDownloads = resolved.maxDownloads;
+    }
+
+    // Closes the null-TTL-policy hole: if the caller is not superadmin
+    // and the resolved TTL is perpetual, reject. Must run AFTER resolve
+    // (policy inheritance can make a finite-override intent resolve
+    // perpetual).
+    if (
+      ttlSeconds === null &&
+      ctx.callerRole !== undefined &&
+      ctx.callerRole !== "superadmin"
+    ) {
+      throw new PerpetualLinkForbiddenError();
+    }
 
     const token = generateLinkToken();
-    const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
+    const expiresAt: Date | null =
+      ttlSeconds === null ? null : new Date(Date.now() + ttlSeconds * 1000);
 
     const row = await tx.generatedLink.create({
       data: {
@@ -193,7 +265,8 @@ export async function createLink(
           policyId: input.policyId,
           ttlSeconds,
           maxDownloads,
-          expiresAt: expiresAt.toISOString(),
+          expiresAt: expiresAt === null ? null : expiresAt.toISOString(),
+          neverExpires,
         },
         ipAddress: ctx.ipAddress,
         userAgent: ctx.userAgent,

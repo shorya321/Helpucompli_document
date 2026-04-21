@@ -195,9 +195,9 @@ describe("F2.1 — Prisma schema: field types and constraints", () => {
     expect(block).toMatch(/downloadCount\s+Int\s+@default\(0\)/);
   });
 
-  it("AccessPolicy.linkTtlSeconds defaults to 900 (15 min)", () => {
+  it("AccessPolicy.linkTtlSeconds is nullable Int? with default 900 (null = never expires)", () => {
     const block = extractModelBlock(schema, "AccessPolicy");
-    expect(block).toMatch(/linkTtlSeconds\s+Int\s+@default\(900\)/);
+    expect(block).toMatch(/linkTtlSeconds\s+Int\?\s+@default\(900\)/);
   });
 });
 

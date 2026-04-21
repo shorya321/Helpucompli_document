@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Code2, Link2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,8 @@ const nativeSelectClass =
 
 type WireRow = Omit<LinkListRow, "createdAt" | "expiresAt"> & {
   createdAt: string;
-  expiresAt: string;
+  // null = never expires (superadmin-gated).
+  expiresAt: string | null;
 };
 type WirePayload = { rows: WireRow[]; nextCursor: string | null };
 
@@ -106,7 +107,7 @@ async function fetchLinks(qs: string): Promise<LinkListResult> {
     rows: data.rows.map((r) => ({
       ...r,
       createdAt: new Date(r.createdAt),
-      expiresAt: new Date(r.expiresAt),
+      expiresAt: r.expiresAt === null ? null : new Date(r.expiresAt),
     })),
     nextCursor: data.nextCursor,
   };
@@ -127,9 +128,38 @@ async function revokeLink(id: string): Promise<void> {
   }
 }
 
+interface ShareInfo {
+  readonly token: string;
+  readonly shareableUrl: string;
+  readonly embedCode: string;
+  readonly expiresAt: string | null;
+}
+
+// Sec-review: token is fetched on-demand (click) and never cached past
+// this tab's lifetime. Each call writes a LINK_SHARE_INFO_VIEW audit row
+// server-side.
+async function fetchShareInfo(id: string): Promise<ShareInfo> {
+  const res = await fetch(
+    `/api/links/admin/${encodeURIComponent(id)}/share-info`,
+    { cache: "no-store" },
+  );
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const body = (await res.json()) as ApiResponse<ShareInfo>;
+  if (!body.data) throw new Error("No data");
+  return body.data;
+}
+
+type CopyKind = "url" | "embed";
+
 export function LinkTable({ initial }: LinkTableProps) {
   const queryClient = useQueryClient();
   const [revoking, setRevoking] = useState<string | null>(null);
+  const [copying, setCopying] = useState<{ id: string; kind: CopyKind } | null>(
+    null,
+  );
+  const [copied, setCopied] = useState<{ id: string; kind: CopyKind } | null>(
+    null,
+  );
   const onRevoke = async (id: string) => {
     if (!window.confirm("Revoke this link? Anyone holding the URL will get 403.")) {
       return;
@@ -142,6 +172,30 @@ export function LinkTable({ initial }: LinkTableProps) {
       window.alert("Failed to revoke. Try again.");
     } finally {
       setRevoking(null);
+    }
+  };
+
+  // Re-reveal the bearer token via the audited share-info endpoint and
+  // copy the requested artifact (URL or iframe) to the clipboard. Each
+  // call is logged server-side — we never cache tokens in this client.
+  const onCopy = async (id: string, kind: CopyKind) => {
+    setCopying({ id, kind });
+    try {
+      const info = await fetchShareInfo(id);
+      const payload = kind === "url" ? info.shareableUrl : info.embedCode;
+      await navigator.clipboard.writeText(payload);
+      setCopied({ id, kind });
+      window.setTimeout(() => {
+        setCopied((prev) =>
+          prev && prev.id === id && prev.kind === kind ? null : prev,
+        );
+      }, 2000);
+    } catch {
+      window.alert(
+        "Failed to copy. The link may be revoked, expired, or rate-limited.",
+      );
+    } finally {
+      setCopying(null);
     }
   };
   const [status, setStatus] = useState<"all" | LinkStatus>("all");
@@ -282,21 +336,82 @@ export function LinkTable({ initial }: LinkTableProps) {
                   </TableCell>
                   <TableCell
                     className="tabular-nums"
-                    title={row.expiresAt.toISOString()}
+                    title={
+                      row.expiresAt === null
+                        ? "never expires"
+                        : row.expiresAt.toISOString()
+                    }
                   >
-                    {formatDateTime(row.expiresAt)}
+                    {row.expiresAt === null ? (
+                      <span className="text-muted-foreground italic">
+                        Never expires
+                      </span>
+                    ) : (
+                      formatDateTime(row.expiresAt)
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     {row.status === "active" ? (
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => onRevoke(row.id)}
-                        disabled={revoking === row.id}
-                      >
-                        {revoking === row.id ? "Revoking…" : "Revoke"}
-                      </Button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          aria-label="Copy shareable URL"
+                          title="Copy URL — re-reveals the bearer token (audited)"
+                          onClick={() => onCopy(row.id, "url")}
+                          disabled={
+                            copying?.id === row.id && copying.kind === "url"
+                          }
+                        >
+                          {copied?.id === row.id && copied.kind === "url" ? (
+                            <Check aria-hidden="true" className="size-4" />
+                          ) : (
+                            <Link2 aria-hidden="true" className="size-4" />
+                          )}
+                          <span className="ml-1.5">
+                            {copied?.id === row.id && copied.kind === "url"
+                              ? "Copied"
+                              : copying?.id === row.id && copying.kind === "url"
+                                ? "…"
+                                : "URL"}
+                          </span>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          aria-label="Copy iframe embed code"
+                          title="Copy embed HTML — re-reveals the bearer token (audited)"
+                          onClick={() => onCopy(row.id, "embed")}
+                          disabled={
+                            copying?.id === row.id && copying.kind === "embed"
+                          }
+                        >
+                          {copied?.id === row.id && copied.kind === "embed" ? (
+                            <Check aria-hidden="true" className="size-4" />
+                          ) : (
+                            <Code2 aria-hidden="true" className="size-4" />
+                          )}
+                          <span className="ml-1.5">
+                            {copied?.id === row.id && copied.kind === "embed"
+                              ? "Copied"
+                              : copying?.id === row.id &&
+                                  copying.kind === "embed"
+                                ? "…"
+                                : "Embed"}
+                          </span>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => onRevoke(row.id)}
+                          disabled={revoking === row.id}
+                        >
+                          {revoking === row.id ? "Revoking…" : "Revoke"}
+                        </Button>
+                      </div>
                     ) : null}
                   </TableCell>
                 </TableRow>

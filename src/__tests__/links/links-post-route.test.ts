@@ -177,6 +177,40 @@ describe("POST /api/links", () => {
     expect(ctx.userAgent).toBe("TestBot");
   });
 
+  it("403 when admin (non-superadmin) requests neverExpires=true", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(true);
+    mocks.resolveRole.mockResolvedValueOnce("admin");
+    mocks.limit.mockResolvedValueOnce(ok);
+    const res = await POST(jsonReq({ ...VALID_BODY, neverExpires: true }));
+    expect(res.status).toBe(403);
+    expect(mocks.createLink).not.toHaveBeenCalled();
+  });
+
+  it("201 with expiresAt=null when superadmin requests neverExpires=true", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(true);
+    mocks.resolveRole.mockResolvedValueOnce("superadmin");
+    mocks.limit.mockResolvedValueOnce(ok);
+    mocks.ensureUser.mockResolvedValueOnce({ id: "u-s" });
+    mocks.createLink.mockResolvedValueOnce({
+      id: "link-2",
+      token: "tokNoExpire",
+      expiresAt: null,
+      ttlSeconds: null,
+      maxDownloads: null,
+    });
+    const res = await POST(
+      jsonReq({ ...VALID_BODY, neverExpires: true }),
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as {
+      data: { expiresAt: string | null; ttlSeconds: number | null };
+    };
+    expect(body.data.expiresAt).toBeNull();
+    expect(body.data.ttlSeconds).toBeNull();
+  });
+
   it("429 rate limit", async () => {
     mocks.getSession.mockResolvedValueOnce(adminSession());
     mocks.resolveHasRole.mockResolvedValueOnce(true);

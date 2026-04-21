@@ -34,6 +34,7 @@ enum AuditAction {
   LINK_ACCESS
   LINK_DENIED
   LINK_REVOKE
+  LINK_SHARE_INFO_VIEW
   USER_INVITE
   USER_ROLE_CHANGE
   USER_DISABLE
@@ -123,7 +124,9 @@ model AccessPolicy {
   // (@>, unnest, ANY) directly without a JSONB path fragment.
   allowedDomains  String[]         @map("allowed_domains")
   allowedIpRanges String[]         @map("allowed_ip_ranges")
-  linkTtlSeconds  Int              @default(900) @map("link_ttl_seconds")
+  // Nullable = "never expires" — superadmin-gated. Server enforces role
+  // on writes; perpetual tokens still bounded by maxDownloads + revoke.
+  linkTtlSeconds  Int?             @default(900) @map("link_ttl_seconds")
   maxDownloads    Int?             @map("max_downloads")
   requireAuth     Boolean          @default(false) @map("require_auth")
   createdById     String           @map("created_by")
@@ -142,7 +145,9 @@ model GeneratedLink {
   policyId        String?  @map("policy_id")
   generatedById   String   @map("generated_by")
   presignedUrlHash String  @unique @map("presigned_url_hash")
-  expiresAt       DateTime @map("expires_at")
+  // Nullable = "never expires" — superadmin-gated. Access route treats
+  // NULL as "no expiry" while still enforcing revoke + maxDownloads.
+  expiresAt       DateTime? @map("expires_at")
   downloadCount   Int      @default(0) @map("download_count")
   maxDownloads    Int?     @map("max_downloads")
   isRevoked       Boolean  @default(false) @map("is_revoked")

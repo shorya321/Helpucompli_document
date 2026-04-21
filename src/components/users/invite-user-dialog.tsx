@@ -46,7 +46,7 @@ export function InviteUserDialog({ canInviteAdmin }: InviteUserDialogProps) {
   const roleId = useId();
   const router = useRouter();
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
     const data = new FormData(form);

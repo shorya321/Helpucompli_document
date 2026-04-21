@@ -25,6 +25,9 @@ interface PolicyFormProps {
   readonly initial?: Partial<PolicyInput> & { id?: string };
   readonly buckets: ReadonlyArray<{ id: string; name: string }>;
   readonly mode: "create" | "edit";
+  // Gates the "Never expires" TTL option. Server also 403s if a non-
+  // superadmin sends linkTtlSeconds=null.
+  readonly canNeverExpire?: boolean;
 }
 
 const DEFAULT_VALUES: PolicyInput = {
@@ -43,7 +46,12 @@ const DEFAULT_VALUES: PolicyInput = {
 const nativeSelectClass =
   "border-input bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50";
 
-export function PolicyForm({ initial, buckets, mode }: PolicyFormProps) {
+export function PolicyForm({
+  initial,
+  buckets,
+  mode,
+  canNeverExpire = false,
+}: PolicyFormProps) {
   const router = useRouter();
   const [policy, setPolicy] = useState<PolicyInput>(() => {
     // Build the PolicyInput WITHOUT spreading `initial` blindly — the
@@ -74,7 +82,7 @@ export function PolicyForm({ initial, buckets, mode }: PolicyFormProps) {
   );
   const isValid = validation.success;
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const onSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!isValid) return;
     setSubmitting(true);
@@ -174,14 +182,25 @@ export function PolicyForm({ initial, buckets, mode }: PolicyFormProps) {
           <Label htmlFor="policy-ttl">Link expiration</Label>
           <select
             id="policy-ttl"
-            value={policy.linkTtlSeconds}
+            value={policy.linkTtlSeconds === null ? "never" : policy.linkTtlSeconds}
             disabled={submitting}
-            onChange={(e) =>
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw === "never") {
+                // HIPAA footgun guard: a policy with linkTtlSeconds=null
+                // issues perpetual bearer tokens for every link it
+                // governs. Explicit confirm required; cancel reverts.
+                const ok = window.confirm(
+                  "Links governed by this policy will not expire unless revoked or the download cap is hit. Are you sure?",
+                );
+                if (ok) setPolicy({ ...policy, linkTtlSeconds: null });
+                return;
+              }
               setPolicy({
                 ...policy,
-                linkTtlSeconds: Number.parseInt(e.target.value, 10),
-              })
-            }
+                linkTtlSeconds: Number.parseInt(raw, 10),
+              });
+            }}
             className={nativeSelectClass}
           >
             {TTL_PRESETS.map((t) => (
@@ -189,6 +208,11 @@ export function PolicyForm({ initial, buckets, mode }: PolicyFormProps) {
                 {t.label}
               </option>
             ))}
+            {canNeverExpire && (
+              <option value="never">
+                Never expires (superadmin only — audited)
+              </option>
+            )}
           </select>
         </div>
 

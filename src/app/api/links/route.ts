@@ -8,6 +8,7 @@ import {
   asLinkCreatePrisma,
   createLink,
   DocumentNotFoundError,
+  PerpetualLinkForbiddenError,
   PolicyMismatchError,
 } from "@/lib/link-create";
 import {
@@ -156,6 +157,14 @@ export async function POST(req: NextRequest) {
   if (role !== "superadmin" && role !== "admin") {
     return json({ data: null, error: "Forbidden" }, 403);
   }
+
+  // Sec-review: neverExpires produces a perpetual bearer token. Gate to
+  // superadmin only — admins must pick a finite TTL. Server enforces
+  // this regardless of what the client sends.
+  if (parsed.data.neverExpires === true && role !== "superadmin") {
+    return json({ data: null, error: "Forbidden" }, 403);
+  }
+
   const dbUser = await ensureUser(prisma, { session, role });
 
   try {
@@ -163,6 +172,7 @@ export async function POST(req: NextRequest) {
       userId: dbUser.id,
       ipAddress: extractIp(req),
       userAgent: extractUserAgent(req),
+      callerRole: role,
     });
     // Build the shareable URL relative to the *request origin* so test
     // and production hosts both work without a hard-coded domain.
@@ -173,7 +183,8 @@ export async function POST(req: NextRequest) {
           id: result.id,
           token: result.token,
           shareableUrl: `${origin}/api/links/${result.token}`,
-          expiresAt: result.expiresAt.toISOString(),
+          expiresAt:
+            result.expiresAt === null ? null : result.expiresAt.toISOString(),
           ttlSeconds: result.ttlSeconds,
           maxDownloads: result.maxDownloads,
         },
@@ -187,6 +198,9 @@ export async function POST(req: NextRequest) {
     }
     if (err instanceof PolicyMismatchError) {
       return json({ data: null, error: "Policy not found" }, 404);
+    }
+    if (err instanceof PerpetualLinkForbiddenError) {
+      return json({ data: null, error: "Forbidden" }, 403);
     }
     return json({ data: null, error: "Failed to create link" }, 500);
   }

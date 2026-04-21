@@ -49,7 +49,7 @@ export function CreateBucketDialog({
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const onSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
     try {

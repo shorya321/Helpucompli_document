@@ -76,7 +76,11 @@ function extractUserAgent(req: NextRequest): string {
 function effectiveFromStored(
   policy: {
     id?: string;
-    linkTtlSeconds: number;
+    // null = policy permits perpetual tokens. For presign the access
+    // route clamps to MAX_GET_TTL_SECONDS, so "null ceiling" is mapped
+    // to the global ceiling on the EffectivePolicy that downstream
+    // consumers treat as a finite number.
+    linkTtlSeconds: number | null;
     maxDownloads: number | null;
     requireAuth: boolean;
     allowedDomains: string[];
@@ -87,7 +91,7 @@ function effectiveFromStored(
   return {
     source: "object",
     policyId: policy.id ?? null,
-    linkTtlSeconds: policy.linkTtlSeconds,
+    linkTtlSeconds: policy.linkTtlSeconds ?? MAX_GET_TTL_SECONDS,
     maxDownloads: policy.maxDownloads,
     requireAuth: policy.requireAuth,
     allowedDomains: policy.allowedDomains,
@@ -173,7 +177,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
         } | null;
         policy: {
           id: string;
-          linkTtlSeconds: number;
+          linkTtlSeconds: number | null;
           maxDownloads: number | null;
           requireAuth: boolean;
           allowedDomains: string[];
@@ -202,7 +206,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
 
   const status = computeLinkStatus({
     isRevoked: link.isRevoked as boolean,
-    expiresAt: link.expiresAt as Date,
+    expiresAt: (link.expiresAt as Date | null) ?? null,
     downloadCount: link.downloadCount as number,
     maxDownloads: (link.maxDownloads as number | null) ?? null,
   });
@@ -271,26 +275,38 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
   //   - S3 presigned URLs are not revocable once issued (protocol limit).
   //   - The audit row records the access at issuance time.
   //   - revoke() blocks all FUTURE accesses; in-flight URL is fixed.
-  const remainingMs = (link.expiresAt as Date).getTime() - Date.now();
-  const remainingSec = Math.max(0, Math.floor(remainingMs / 1000));
+  //
+  // Never-expires (expiresAt === null): no remaining-life ceiling. S3
+  // SigV4 still caps presign TTL at MAX_GET_TTL_SECONDS (7d). Each
+  // access re-presigns, so perpetual URLs are not a thing — only the
+  // link token is perpetual.
+  const linkExpiresAt = link.expiresAt as Date | null;
   const ABORT_FLOOR_SEC = 30;
-  if (remainingSec < ABORT_FLOOR_SEC) {
-    await writeAudit(
-      "LINK_DENIED",
-      { id: link.id, documentId: link.documentId, policyId: link.policyId },
-      {
-        ipAddress,
-        userAgent,
-        userId: dbUserId,
-        reason: "remaining-ttl-too-low",
-      },
-    );
-    return forbidden();
+  let remainingSecForClamp: number;
+  if (linkExpiresAt === null) {
+    remainingSecForClamp = MAX_GET_TTL_SECONDS;
+  } else {
+    const remainingMs = linkExpiresAt.getTime() - Date.now();
+    const remainingSec = Math.max(0, Math.floor(remainingMs / 1000));
+    if (remainingSec < ABORT_FLOOR_SEC) {
+      await writeAudit(
+        "LINK_DENIED",
+        { id: link.id, documentId: link.documentId, policyId: link.policyId },
+        {
+          ipAddress,
+          userAgent,
+          userId: dbUserId,
+          reason: "remaining-ttl-too-low",
+        },
+      );
+      return forbidden();
+    }
+    remainingSecForClamp = remainingSec;
   }
   const desired = decision.linkTtlSeconds;
   const presignTtl = Math.max(
     MIN_TTL_SECONDS,
-    Math.min(desired, remainingSec, MAX_GET_TTL_SECONDS),
+    Math.min(desired, remainingSecForClamp, MAX_GET_TTL_SECONDS),
   );
 
   // Sec-review M3: atomic conditional increment via updateMany — the
@@ -300,10 +316,13 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
   // presigning so a slow presign cannot leak the URL to a request that
   // failed the count check.
   const cap = link.maxDownloads;
+  const now = new Date();
   const where: Record<string, unknown> = {
     id: link.id,
     isRevoked: false,
-    expiresAt: { gt: new Date() },
+    // Match never-expires (NULL) OR still-in-window rows. Matches the
+    // filter in queryLinks/buildWhere for consistency.
+    OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
   };
   if (cap !== null) where.downloadCount = { lt: cap };
   const updated = await prisma.generatedLink.updateMany({

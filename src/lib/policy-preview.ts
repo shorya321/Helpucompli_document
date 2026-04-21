@@ -5,7 +5,8 @@ export interface PolicyPreviewInput {
   readonly targetValue: string;
   readonly allowedDomains: readonly string[];
   readonly allowedIpRanges: readonly string[];
-  readonly linkTtlSeconds: number;
+  // null = policy issues perpetual links (superadmin-gated).
+  readonly linkTtlSeconds: number | null;
   readonly maxDownloads: number | null;
   readonly requireAuth: boolean;
 }
@@ -42,7 +43,7 @@ function pluralise(n: number, one: string, many: string): string {
 export function describePolicy(p: PolicyPreviewInput): PolicyDescription {
   return {
     target: `${p.targetType} ${p.targetValue || "(unset)"}`,
-    ttl: ttlLabel(p.linkTtlSeconds),
+    ttl: p.linkTtlSeconds === null ? "never expires" : ttlLabel(p.linkTtlSeconds),
     maxDownloads:
       p.maxDownloads === null || p.maxDownloads === undefined
         ? "unlimited"

@@ -181,6 +181,27 @@ describe("POST /api/policies", () => {
     expect(res.status).toBe(429);
   });
 
+  it("403 when admin (non-superadmin) sends linkTtlSeconds=null (perpetual policy)", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(true);
+    mocks.resolveRole.mockResolvedValueOnce("admin");
+    mocks.limitPost.mockResolvedValueOnce(ok);
+    const res = await POST(jsonReq({ ...VALID_BODY, linkTtlSeconds: null }));
+    expect(res.status).toBe(403);
+    expect(mocks.createPolicy).not.toHaveBeenCalled();
+  });
+
+  it("201 when superadmin sends linkTtlSeconds=null", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(true);
+    mocks.resolveRole.mockResolvedValueOnce("superadmin");
+    mocks.limitPost.mockResolvedValueOnce(ok);
+    mocks.ensureUser.mockResolvedValueOnce({ id: "u-s" });
+    mocks.createPolicy.mockResolvedValueOnce({ id: "p-never" });
+    const res = await POST(jsonReq({ ...VALID_BODY, linkTtlSeconds: null }));
+    expect(res.status).toBe(201);
+  });
+
   it("201 on success and passes ipAddress + userId to createPolicy", async () => {
     mocks.getSession.mockResolvedValueOnce(adminSession());
     mocks.resolveHasRole.mockResolvedValueOnce(true);

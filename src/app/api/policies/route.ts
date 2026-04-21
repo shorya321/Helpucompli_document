@@ -127,6 +127,14 @@ export async function POST(req: NextRequest) {
   if (role !== "superadmin" && role !== "admin") {
     return json({ data: null, error: "Forbidden" }, 403);
   }
+
+  // Sec-review: a policy with linkTtlSeconds=null issues perpetual
+  // bearer tokens for every link it governs. Gate to superadmin only.
+  // Server enforces regardless of what the client sends.
+  if (parsed.data.linkTtlSeconds === null && role !== "superadmin") {
+    return json({ data: null, error: "Forbidden" }, 403);
+  }
+
   const dbUser = await ensureUser(prisma, { session, role });
 
   try {

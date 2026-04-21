@@ -13,6 +13,7 @@ export default async function NewPolicyPage() {
   if (!(await resolveHasRole(session, ["superadmin", "admin"]))) {
     redirect("/");
   }
+  const isSuperadmin = await resolveHasRole(session, ["superadmin"]);
 
   let buckets: Array<{ id: string; name: string }> = [];
   try {
@@ -35,7 +36,11 @@ export default async function NewPolicyPage() {
           Define IP, referrer, expiry, and download restrictions.
         </p>
       </header>
-      <PolicyForm buckets={buckets} mode="create" />
+      <PolicyForm
+        buckets={buckets}
+        mode="create"
+        canNeverExpire={isSuperadmin}
+      />
     </section>
   );
 }

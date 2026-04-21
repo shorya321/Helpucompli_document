@@ -2,7 +2,8 @@ export type LinkStatus = "active" | "expired" | "revoked";
 
 export interface LinkStatusInput {
   readonly isRevoked: boolean;
-  readonly expiresAt: Date;
+  // null = never expires. Still bounded by maxDownloads + revoke.
+  readonly expiresAt: Date | null;
   readonly downloadCount: number;
   readonly maxDownloads: number | null;
 }
@@ -12,7 +13,12 @@ export function computeLinkStatus(
   now: Date = new Date(),
 ): LinkStatus {
   if (input.isRevoked) return "revoked";
-  if (input.expiresAt.getTime() <= now.getTime()) return "expired";
+  if (
+    input.expiresAt !== null &&
+    input.expiresAt.getTime() <= now.getTime()
+  ) {
+    return "expired";
+  }
   if (
     input.maxDownloads !== null &&
     input.downloadCount >= input.maxDownloads
@@ -33,7 +39,8 @@ export interface LinkListRow {
   readonly generatedByName: string | null;
   readonly generatedByEmail: string | null;
   readonly createdAt: Date;
-  readonly expiresAt: Date;
+  // null = never expires (superadmin-gated).
+  readonly expiresAt: Date | null;
   readonly downloadCount: number;
   readonly maxDownloads: number | null;
   readonly status: LinkStatus;
@@ -84,7 +91,16 @@ function buildWhere(
 ): Record<string, unknown> {
   switch (status) {
     case "active":
-      return { isRevoked: false, expiresAt: { gt: now } };
+      // Never-expires rows (expiresAt = NULL) count as active while not
+      // revoked or past the download cap. Download-cap filter is not
+      // expressible cleanly in a Prisma WHERE without a raw comparison
+      // of two columns, so we leave that filter to computeLinkStatus in
+      // the mapping step (rows past the cap will be included here but
+      // flipped to "expired" after mapping).
+      return {
+        isRevoked: false,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      };
     case "expired":
       return { isRevoked: false, expiresAt: { lte: now } };
     case "revoked":
@@ -153,13 +169,13 @@ export async function queryLinks(
       generatedByEmail:
         gen?.email && gen.email.length > 0 ? gen.email : null,
       createdAt: row.createdAt as Date,
-      expiresAt: row.expiresAt as Date,
+      expiresAt: (row.expiresAt as Date | null) ?? null,
       downloadCount: row.downloadCount as number,
       maxDownloads: (row.maxDownloads as number | null) ?? null,
       status: computeLinkStatus(
         {
           isRevoked: row.isRevoked as boolean,
-          expiresAt: row.expiresAt as Date,
+          expiresAt: (row.expiresAt as Date | null) ?? null,
           downloadCount: row.downloadCount as number,
           maxDownloads: (row.maxDownloads as number | null) ?? null,
         },

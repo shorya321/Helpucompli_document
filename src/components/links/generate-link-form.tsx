@@ -13,6 +13,7 @@ import {
   LINK_MAX_TTL_SECONDS,
 } from "@/lib/link-create";
 import { formatDateTime } from "@/lib/format-datetime";
+import { buildEmbedCode } from "@/lib/link-embed";
 import type { ApiResponse } from "@/types";
 import { QrCode } from "@/components/links/qr-code";
 
@@ -39,32 +40,42 @@ interface DocumentOption {
 interface PolicyOption {
   readonly id: string;
   readonly name: string;
-  readonly linkTtlSeconds: number;
+  // null = policy allows "never expires" — superadmin-gated on write.
+  readonly linkTtlSeconds: number | null;
   readonly maxDownloads: number | null;
 }
 
 interface GenerateLinkFormProps {
   readonly documents: readonly DocumentOption[];
   readonly policies: readonly PolicyOption[];
+  // Gates the "Never expires" checkbox. Server also enforces this — UI
+  // hide is cosmetic; the POST /api/links handler 403s when a non-
+  // superadmin sends neverExpires=true.
+  readonly canNeverExpire?: boolean;
 }
 
 interface CreateResp {
   readonly id: string;
   readonly token: string;
   readonly shareableUrl: string;
-  readonly expiresAt: string;
-  readonly ttlSeconds: number;
+  readonly expiresAt: string | null;
+  readonly ttlSeconds: number | null;
   readonly maxDownloads: number | null;
 }
 
 export function GenerateLinkForm({
   documents,
   policies,
+  canNeverExpire = false,
 }: GenerateLinkFormProps) {
   const router = useRouter();
   const [documentId, setDocumentId] = useState("");
   const [policyId, setPolicyId] = useState("");
-  const [ttl, setTtl] = useState<number>(900);
+  // "never" sentinel = superadmin-only. Stored in the same state as the
+  // finite presets so the TTL <select> is a single control, not a pair
+  // of widgets. Submit converts "never" → { ttlSecondsOverride: null,
+  // neverExpires: true }.
+  const [ttl, setTtl] = useState<number | "never">(900);
   const [maxDownloads, setMaxDownloads] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<CreateResp | null>(null);
@@ -72,22 +83,14 @@ export function GenerateLinkForm({
   const [copied, setCopied] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
 
-  const embedCode = useMemo(() => {
-    if (!result) return "";
-    return `<iframe
-  src="${result.shareableUrl}"
-  width="100%"
-  height="600"
-  style="border:0"
-  loading="lazy"
-  referrerpolicy="no-referrer-when-downgrade"
-  allow="fullscreen"
-></iframe>`;
-  }, [result]);
+  const embedCode = useMemo(
+    () => (result ? buildEmbedCode(result.shareableUrl) : ""),
+    [result],
+  );
 
   const isValid = documentId !== "";
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const onSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!isValid) return;
     setSubmitting(true);
@@ -100,9 +103,13 @@ export function GenerateLinkForm({
         body: JSON.stringify({
           documentId,
           policyId: policyId === "" ? null : policyId,
-          ttlSecondsOverride: ttl,
+          // "never" sentinel in the TTL select → nullable override +
+          // neverExpires flag. Server still 403s for non-superadmin even
+          // if the client somehow bypasses the hidden <option>.
+          ttlSecondsOverride: ttl === "never" ? null : ttl,
           maxDownloadsOverride:
             maxDownloads === "" ? null : Number.parseInt(maxDownloads, 10),
+          neverExpires: ttl === "never",
         }),
       });
       const body = (await res.json()) as ApiResponse<CreateResp>;
@@ -197,7 +204,20 @@ export function GenerateLinkForm({
               id="gl-ttl"
               value={ttl}
               disabled={submitting}
-              onChange={(e) => setTtl(Number.parseInt(e.target.value, 10))}
+              onChange={(e) => {
+                const raw = e.target.value;
+                if (raw === "never") {
+                  // HIPAA footgun guard: picking "Never expires" produces
+                  // a perpetual bearer token. Require explicit confirm;
+                  // revert to prior preset on cancel.
+                  const ok = window.confirm(
+                    "A non-expiring share link remains valid until it is revoked or the download cap is hit. Are you sure?",
+                  );
+                  if (ok) setTtl("never");
+                  return;
+                }
+                setTtl(Number.parseInt(raw, 10));
+              }}
               className={nativeSelectClass}
             >
               {TTL_PRESETS.map((t) => (
@@ -205,6 +225,11 @@ export function GenerateLinkForm({
                   {t.label}
                 </option>
               ))}
+              {canNeverExpire && (
+                <option value="never">
+                  Never expires (superadmin only — audited)
+                </option>
+              )}
             </select>
           </div>
 
@@ -245,10 +270,19 @@ export function GenerateLinkForm({
           {result && (
             <div className="border-border bg-muted rounded-md border p-3">
               <p className="text-muted-foreground m-0 mb-2 text-xs">
-                Share this link — expires{" "}
-                <span className="tabular-nums">
-                  {formatDateTime(result.expiresAt)}
-                </span>
+                Share this link —{" "}
+                {result.expiresAt === null ? (
+                  <span className="text-foreground font-semibold">
+                    never expires
+                  </span>
+                ) : (
+                  <>
+                    expires{" "}
+                    <span className="tabular-nums">
+                      {formatDateTime(result.expiresAt)}
+                    </span>
+                  </>
+                )}
                 {result.maxDownloads !== null
                   ? ` · ${result.maxDownloads} downloads max`
                   : " · unlimited downloads"}

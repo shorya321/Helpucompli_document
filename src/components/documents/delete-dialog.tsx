@@ -41,7 +41,7 @@ export function DeleteDialog({
   const [err, setErr] = useState<string | null>(null);
   const href = safeHref(closeHref);
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const onSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErr(null);
     setBusy(true);

@@ -50,6 +50,48 @@ describe("computeLinkStatus", () => {
     ).toBe("expired");
   });
 
+  it("null expiresAt treated as active (never expires)", () => {
+    expect(
+      computeLinkStatus(
+        {
+          isRevoked: false,
+          expiresAt: null,
+          downloadCount: 0,
+          maxDownloads: null,
+        },
+        NOW,
+      ),
+    ).toBe("active");
+  });
+
+  it("null expiresAt still bounded by download cap", () => {
+    expect(
+      computeLinkStatus(
+        {
+          isRevoked: false,
+          expiresAt: null,
+          downloadCount: 5,
+          maxDownloads: 5,
+        },
+        NOW,
+      ),
+    ).toBe("expired");
+  });
+
+  it("null expiresAt still revokable", () => {
+    expect(
+      computeLinkStatus(
+        {
+          isRevoked: true,
+          expiresAt: null,
+          downloadCount: 0,
+          maxDownloads: null,
+        },
+        NOW,
+      ),
+    ).toBe("revoked");
+  });
+
   it("active otherwise", () => {
     expect(
       computeLinkStatus(
@@ -108,7 +150,7 @@ describe("queryLinks", () => {
     ]);
   });
 
-  it("filters status=active using where: !revoked && expires>now", async () => {
+  it("filters status=active using where: !revoked && (expires>now OR expires IS NULL)", async () => {
     const stub = makeStub([]);
     await queryLinks(stub.client, {
       status: "active",
@@ -117,7 +159,13 @@ describe("queryLinks", () => {
     });
     const where = stub.calls[0]?.where as Record<string, unknown>;
     expect(where.isRevoked).toBe(false);
-    expect((where.expiresAt as Record<string, unknown>).gt).toBeInstanceOf(Date);
+    const or = where.OR as Array<Record<string, unknown>>;
+    expect(Array.isArray(or)).toBe(true);
+    expect(or).toHaveLength(2);
+    expect(or[0]).toEqual({ expiresAt: null });
+    expect(
+      (or[1]?.expiresAt as Record<string, unknown>).gt,
+    ).toBeInstanceOf(Date);
   });
 
   it("filters status=expired using where: !revoked && expires<=now", async () => {

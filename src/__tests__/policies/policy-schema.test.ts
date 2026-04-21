@@ -100,6 +100,12 @@ describe("policyInputSchema", () => {
     ).toBe(false);
   });
 
+  it("accepts linkTtlSeconds=null (never expires; superadmin-gated on route)", () => {
+    expect(
+      policyInputSchema.safeParse({ ...base, linkTtlSeconds: null }).success,
+    ).toBe(true);
+  });
+
   it("rejects TTL outside [60, 604800]", () => {
     expect(
       policyInputSchema.safeParse({ ...base, linkTtlSeconds: 30 }).success,

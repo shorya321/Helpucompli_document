@@ -19,6 +19,7 @@ export default async function EditPolicyPage({
   if (!(await resolveHasRole(session, ["superadmin", "admin"]))) {
     redirect("/");
   }
+  const isSuperadmin = await resolveHasRole(session, ["superadmin"]);
 
   const { id } = await params;
   // Match the API route's UUID guard (sec-review C1) — refuse to query
@@ -56,6 +57,7 @@ export default async function EditPolicyPage({
       <PolicyForm
         buckets={buckets}
         mode="edit"
+        canNeverExpire={isSuperadmin}
         initial={{
           id: policy.id,
           name: policy.name,

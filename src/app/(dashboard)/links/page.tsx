@@ -26,6 +26,8 @@ export default async function LinksPage() {
   }
 
   const isAdminUp = await resolveHasRole(session, ["superadmin", "admin"]);
+  // "Never expires" for links is superadmin-gated — both UI and API.
+  const isSuperadmin = await resolveHasRole(session, ["superadmin"]);
 
   let documents: Array<{
     id: string;
@@ -35,7 +37,8 @@ export default async function LinksPage() {
   let policies: Array<{
     id: string;
     name: string;
-    linkTtlSeconds: number;
+    // null = policy issues "never expires" links — superadmin-gated on write.
+    linkTtlSeconds: number | null;
     maxDownloads: number | null;
   }> = [];
 
@@ -105,7 +108,11 @@ export default async function LinksPage() {
       {isAdminUp ? (
         <>
           <LinkAnalyticsView stats={analytics} />
-          <GenerateLinkForm documents={documents} policies={policies} />
+          <GenerateLinkForm
+            documents={documents}
+            policies={policies}
+            canNeverExpire={isSuperadmin}
+          />
           <LinkTable initial={initialLinks} />
         </>
       ) : (

@@ -13,9 +13,16 @@ async function main() {
   });
   console.log("LINK:", JSON.stringify(link, null, 2));
   if (link) {
-    console.log("expiresAt:", link.expiresAt.toISOString());
-    console.log("now:      ", new Date().toISOString());
-    console.log("remainingSec:", Math.floor((link.expiresAt.getTime() - Date.now()) / 1000));
+    if (link.expiresAt === null) {
+      console.log("expiresAt: null (never expires)");
+    } else {
+      console.log("expiresAt:", link.expiresAt.toISOString());
+      console.log("now:      ", new Date().toISOString());
+      console.log(
+        "remainingSec:",
+        Math.floor((link.expiresAt.getTime() - Date.now()) / 1000),
+      );
+    }
   }
 
   const audits = await prisma.auditLog.findMany({

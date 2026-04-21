@@ -208,7 +208,10 @@ function DetailsView({
                     <div>
                       <strong className="text-foreground">{p.name}</strong>
                       <div className="text-muted-foreground mt-0.5 text-xs tabular-nums">
-                        TTL {p.linkTtlSeconds}s
+                        TTL{" "}
+                        {p.linkTtlSeconds === null
+                          ? "never expires"
+                          : `${p.linkTtlSeconds}s`}
                         {p.maxDownloads !== null
                           ? ` • max ${p.maxDownloads} downloads`
                           : ""}

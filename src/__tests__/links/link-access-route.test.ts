@@ -294,6 +294,33 @@ describe("GET /api/links/[hash]", () => {
     expect(presignArgs.ttlSeconds).toBe(900);
   });
 
+  it("302 + presign TTL clamped to MAX_GET_TTL when link has null expiresAt (never expires)", async () => {
+    mocks.findLink.mockResolvedValueOnce(linkRow({ expiresAt: null }));
+    mocks.resolvePolicy.mockResolvedValueOnce(defaultEffective);
+    mocks.enforcePolicy.mockReturnValueOnce({
+      ...allow,
+      linkTtlSeconds: 3600,
+    });
+    mocks.updateMany.mockResolvedValueOnce({ count: 1 });
+    mocks.presignGetUrl.mockResolvedValueOnce("https://s3/x?sig=perpetual");
+    const res = await GET(req(), {
+      params: params("tok_abc_with_long_enough_token_value_xyz"),
+    });
+    expect(res.status).toBe(302);
+    // updateMany must match null-expiry rows via OR.
+    const whereArgs = mocks.updateMany.mock.calls[0]?.[0] as {
+      where: Record<string, unknown>;
+    };
+    const or = whereArgs.where.OR as Array<Record<string, unknown>>;
+    expect(or).toHaveLength(2);
+    expect(or[0]).toEqual({ expiresAt: null });
+    const presignArgs = mocks.presignGetUrl.mock.calls[0]?.[0] as {
+      ttlSeconds: number;
+    };
+    // linkTtlSeconds 3600 < MAX_GET_TTL 604800 → chosen.
+    expect(presignArgs.ttlSeconds).toBe(3600);
+  });
+
   it("uses min(decision.ttl, remaining, 7d) as presign TTL when remaining > MIN_TTL", async () => {
     mocks.findLink.mockResolvedValueOnce(
       linkRow({ expiresAt: new Date(Date.now() + 1200 * 1000) }), // 1200s

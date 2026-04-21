@@ -41,7 +41,7 @@ export function DeleteBucketDialog({
   const safeSuccess = safeHref(onSuccessHref, "/buckets");
   const matches = confirmInput === bucketName;
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const onSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!matches) {
       setError("Bucket name does not match.");
