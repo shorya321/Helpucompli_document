@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { BRAND } from "@/lib/brand";
+import { Download } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 import { rowsToCsv, csvFilename } from "@/lib/audit-csv";
 import type { AuditQueryRow } from "@/lib/audit-query";
 import type { ApiResponse } from "@/types";
@@ -91,27 +93,19 @@ export function ExportCsv({ filters }: ExportCsvProps) {
   };
 
   return (
-    <div style={{ display: "inline-flex", flexDirection: "column", gap: "0.25rem" }}>
-      <button
+    <div className="inline-flex flex-col items-end gap-1">
+      <Button
         type="button"
+        variant="outline"
+        size="sm"
         onClick={onClick}
         disabled={busy}
-        style={{
-          padding: "0.5rem 1rem",
-          borderRadius: "0.375rem",
-          border: "none",
-          background: BRAND.colors.dark,
-          color: "#FFFFFF",
-          cursor: busy ? "wait" : "pointer",
-          fontWeight: 600,
-          fontSize: "0.85rem",
-          opacity: busy ? 0.7 : 1,
-        }}
       >
+        <Download aria-hidden="true" />
         {busy ? "Exporting…" : "Export CSV"}
-      </button>
+      </Button>
       {error && (
-        <span role="alert" style={{ color: BRAND.colors.pink, fontSize: "0.75rem" }}>
+        <span role="alert" className="text-destructive text-xs">
           {error}
         </span>
       )}

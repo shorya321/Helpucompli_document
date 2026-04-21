@@ -2,9 +2,28 @@
 
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BRAND } from "@/lib/brand";
+import { ArrowDown, ArrowUp } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import type { ApiResponse } from "@/types";
 import type { LinkListResult, LinkListRow, LinkStatus } from "@/lib/link-list";
+
+// Native <select> styled to match shadcn Input. Filter controls submit
+// client-side state, but we stay on the native DOM element to keep the
+// Radix popover out of the table header row.
+const nativeSelectClass =
+  "border-input bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50";
 
 type WireRow = Omit<LinkListRow, "createdAt" | "expiresAt"> & {
   createdAt: string;
@@ -31,11 +50,36 @@ const SORT_OPTIONS: ReadonlyArray<{
   { value: "downloadCount", label: "Downloads" },
 ];
 
-const STATUS_COLORS: Record<LinkStatus, { bg: string; fg: string }> = {
-  active: { bg: "#16A34A", fg: "#FFFFFF" },
-  expired: { bg: "#D97706", fg: "#FFFFFF" },
-  revoked: { bg: BRAND.colors.pink, fg: "#FFFFFF" },
-};
+function StatusBadge({ status }: { readonly status: LinkStatus }) {
+  if (status === "active") {
+    return (
+      <Badge
+        variant="secondary"
+        className="font-mono text-[0.65rem] uppercase tracking-wide"
+      >
+        active
+      </Badge>
+    );
+  }
+  if (status === "revoked") {
+    return (
+      <Badge
+        variant="destructive"
+        className="font-mono text-[0.65rem] uppercase tracking-wide"
+      >
+        revoked
+      </Badge>
+    );
+  }
+  return (
+    <Badge
+      variant="outline"
+      className="text-muted-foreground font-mono text-[0.65rem] uppercase tracking-wide"
+    >
+      expired
+    </Badge>
+  );
+}
 
 function buildQuery(
   status: "all" | LinkStatus,
@@ -121,274 +165,169 @@ export function LinkTable({ initial }: LinkTableProps) {
   const nextCursor = data?.nextCursor ?? null;
 
   return (
-    <section
-      style={{
-        marginTop: "2rem",
-        fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-        color: BRAND.colors.dark,
-      }}
-    >
-      <header
-        style={{
-          display: "flex",
-          gap: "0.75rem",
-          alignItems: "flex-end",
-          marginBottom: "0.75rem",
-          flexWrap: "wrap",
-        }}
-      >
-        <h2 style={{ fontSize: "1rem", fontWeight: 700, margin: 0, flex: 1 }}>
+    <section className="mt-8 flex flex-col gap-3">
+      <header className="flex flex-wrap items-end gap-3">
+        <h2 className="text-foreground m-0 flex-1 text-base font-bold">
           Generated links
         </h2>
-        <select
-          aria-label="Filter status"
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value as "all" | LinkStatus);
-            setCursor(null);
-          }}
-          style={inputStyle}
-        >
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Sort field"
-          value={sort}
-          onChange={(e) => {
-            setSort(
-              e.target.value as "createdAt" | "expiresAt" | "downloadCount",
-            );
-            setCursor(null);
-          }}
-          style={inputStyle}
-        >
-          {SORT_OPTIONS.map((s) => (
-            <option key={s.value} value={s.value}>
-              Sort: {s.label}
-            </option>
-          ))}
-        </select>
-        <button
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="links-status" className="sr-only">
+            Filter status
+          </Label>
+          <select
+            id="links-status"
+            aria-label="Filter status"
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value as "all" | LinkStatus);
+              setCursor(null);
+            }}
+            className={nativeSelectClass}
+          >
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="links-sort" className="sr-only">
+            Sort field
+          </Label>
+          <select
+            id="links-sort"
+            aria-label="Sort field"
+            value={sort}
+            onChange={(e) => {
+              setSort(
+                e.target.value as "createdAt" | "expiresAt" | "downloadCount",
+              );
+              setCursor(null);
+            }}
+            className={nativeSelectClass}
+          >
+            {SORT_OPTIONS.map((s) => (
+              <option key={s.value} value={s.value}>
+                Sort: {s.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
+          aria-label={dir === "desc" ? "Descending" : "Ascending"}
           onClick={() => {
             setDir(dir === "asc" ? "desc" : "asc");
             setCursor(null);
           }}
-          style={{
-            ...inputStyle,
-            cursor: "pointer",
-            background: BRAND.colors.dark,
-            color: "#FFFFFF",
-            border: "none",
-          }}
         >
-          {dir === "desc" ? "▼" : "▲"}
-        </button>
+          {dir === "desc" ? (
+            <ArrowDown aria-hidden="true" />
+          ) : (
+            <ArrowUp aria-hidden="true" />
+          )}
+        </Button>
       </header>
 
       {isError && (
-        <p role="alert" style={{ color: BRAND.colors.pink }}>
+        <p role="alert" className="text-destructive text-sm">
           Failed to load links.
         </p>
       )}
 
-      <div
-        style={{
-          background: "#FFFFFF",
-          border: `1px solid ${BRAND.colors.dark}1A`,
-          borderRadius: "0.5rem",
-          overflowX: "auto",
-        }}
-      >
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            fontSize: "0.85rem",
-          }}
-        >
-          <thead>
-            <tr>
-              {["Document", "Status", "Created by", "Downloads", "Expires", ""].map(
-                (h) => (
-                  <th
-                    key={h || "actions"}
-                    style={{
-                      textAlign: "left",
-                      padding: "0.75rem 1rem",
-                      borderBottom: `1px solid ${BRAND.colors.dark}1A`,
-                      fontSize: "0.75rem",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                      color: "rgba(30,41,59,0.64)",
-                    }}
-                  >
-                    {h}
-                  </th>
-                ),
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const tone = STATUS_COLORS[row.status];
-              return (
-                <tr key={row.id}>
-                  <td style={cellStyle}>
-                    <span style={{ fontWeight: 600 }}>{row.documentName}</span>
+      {rows.length === 0 && !isFetching ? (
+        <div className="border-border bg-card text-muted-foreground rounded-lg border border-dashed p-6 text-center">
+          No links match the current filter.
+        </div>
+      ) : (
+        <Card className="p-0 overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Document</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Created by</TableHead>
+                <TableHead>Downloads</TableHead>
+                <TableHead>Expires</TableHead>
+                <TableHead className="text-right" aria-label="Actions" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell>
+                    <span className="text-foreground font-semibold">
+                      {row.documentName}
+                    </span>
                     <br />
-                    <span
-                      style={{
-                        fontFamily: "ui-monospace, monospace",
-                        fontSize: "0.7rem",
-                        color: "rgba(30,41,59,0.56)",
-                      }}
-                    >
+                    <span className="text-muted-foreground font-mono text-xs">
                       {row.bucketName}
                     </span>
-                  </td>
-                  <td style={cellStyle}>
-                    <span
-                      style={{
-                        background: tone.bg,
-                        color: tone.fg,
-                        padding: "0.125rem 0.5rem",
-                        borderRadius: "0.375rem",
-                        fontSize: "0.7rem",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {row.status}
-                    </span>
-                  </td>
-                  <td style={cellStyle}>
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge status={row.status} />
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
                     {row.generatedByName ?? row.generatedByEmail ?? "—"}
-                  </td>
-                  <td
-                    style={{
-                      ...cellStyle,
-                      fontVariantNumeric: "tabular-nums",
-                    }}
-                  >
+                  </TableCell>
+                  <TableCell className="font-mono tabular-nums">
                     {row.downloadCount}
                     {row.maxDownloads !== null
                       ? ` / ${row.maxDownloads}`
                       : ""}
-                  </td>
-                  <td
-                    style={{
-                      ...cellStyle,
-                      fontVariantNumeric: "tabular-nums",
-                    }}
+                  </TableCell>
+                  <TableCell
+                    className="font-mono tabular-nums"
                     title={row.expiresAt.toISOString()}
                   >
                     {row.expiresAt.toLocaleString()}
-                  </td>
-                  <td style={{ ...cellStyle, textAlign: "right" }}>
+                  </TableCell>
+                  <TableCell className="text-right">
                     {row.status === "active" ? (
-                      <button
+                      <Button
                         type="button"
+                        variant="destructive"
+                        size="sm"
                         onClick={() => onRevoke(row.id)}
                         disabled={revoking === row.id}
-                        style={{
-                          background: "transparent",
-                          border: "none",
-                          color: BRAND.colors.pink,
-                          cursor:
-                            revoking === row.id ? "wait" : "pointer",
-                          fontWeight: 600,
-                          fontSize: "0.85rem",
-                        }}
                       >
                         {revoking === row.id ? "Revoking…" : "Revoke"}
-                      </button>
+                      </Button>
                     ) : null}
-                  </td>
-                </tr>
-              );
-            })}
-            {rows.length === 0 && !isFetching && (
-              <tr>
-                <td
-                  colSpan={6}
-                  style={{
-                    padding: "2rem",
-                    textAlign: "center",
-                    color: "rgba(30,41,59,0.56)",
-                  }}
-                >
-                  No links match the current filter.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
 
-      <div
-        style={{
-          display: "flex",
-          gap: "0.5rem",
-          padding: "0.75rem 0",
-          alignItems: "center",
-          fontSize: "0.85rem",
-        }}
-      >
-        <button
+      <div className="text-muted-foreground flex items-center gap-2 py-3 text-sm">
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           onClick={() => setCursor(null)}
           disabled={cursor === null || isFetching}
-          style={navBtnStyle(cursor === null || isFetching, false)}
         >
           ⟲ First page
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
           onClick={() => nextCursor && setCursor(nextCursor)}
           disabled={!nextCursor || isFetching}
-          style={navBtnStyle(!nextCursor || isFetching, true)}
         >
           Next page →
-        </button>
-        <span style={{ color: "rgba(30,41,59,0.56)" }}>
+        </Button>
+        <span className="font-mono tabular-nums">
           {isFetching ? "Loading…" : `${rows.length} rows`}
         </span>
       </div>
     </section>
   );
-}
-
-const inputStyle: React.CSSProperties = {
-  padding: "0.4rem 0.6rem",
-  border: `1px solid ${BRAND.colors.dark}33`,
-  borderRadius: "0.375rem",
-  fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-  fontSize: "0.8rem",
-  background: "#FFFFFF",
-  color: BRAND.colors.dark,
-};
-
-const cellStyle: React.CSSProperties = {
-  padding: "0.625rem 1rem",
-  borderBottom: `1px solid ${BRAND.colors.dark}0F`,
-  verticalAlign: "top",
-};
-
-function navBtnStyle(disabled: boolean, primary: boolean): React.CSSProperties {
-  return {
-    padding: "0.5rem 1rem",
-    borderRadius: "0.375rem",
-    border: primary ? "none" : `1px solid ${BRAND.colors.dark}33`,
-    background: primary
-      ? disabled
-        ? "rgba(30,41,59,0.24)"
-        : BRAND.colors.blue
-      : "transparent",
-    color: primary ? "#FFFFFF" : BRAND.colors.dark,
-    cursor: disabled ? "not-allowed" : "pointer",
-  };
 }

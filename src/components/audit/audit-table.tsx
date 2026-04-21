@@ -10,7 +10,18 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
-import { BRAND } from "@/lib/brand";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { actionBadgeTone, type BadgeTone } from "@/lib/activity-feed";
 import { AuditFilters, EMPTY_FILTERS, type AuditFiltersValue } from "@/components/audit/audit-filters";
 import { ExportCsv } from "@/components/audit/export-csv";
@@ -20,11 +31,16 @@ import type { AuditQueryResult, AuditQueryRow } from "@/lib/audit-query";
 type WireRow = Omit<AuditQueryRow, "createdAt"> & { createdAt: string };
 type WirePayload = { rows: WireRow[]; nextCursor: string | null };
 
-const TONE_COLORS: Record<BadgeTone, { bg: string; fg: string }> = {
-  info: { bg: BRAND.colors.blue, fg: "#FFFFFF" },
-  success: { bg: "#16A34A", fg: "#FFFFFF" },
-  warning: { bg: "#D97706", fg: "#FFFFFF" },
-  danger: { bg: BRAND.colors.pink, fg: "#FFFFFF" },
+type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
+
+// Mirrors the TONE_VARIANT mapping in components/dashboard/activity-feed.tsx
+// so the audit table and the dashboard activity feed render the same
+// action with the same Badge variant.
+const TONE_VARIANT: Record<BadgeTone, BadgeVariant> = {
+  info: "secondary",
+  success: "default",
+  warning: "outline",
+  danger: "destructive",
 };
 
 function buildQuery(filters: AuditFiltersValue, cursor: string | null): string {
@@ -89,7 +105,7 @@ export function AuditTable({ initial }: AuditTableProps) {
           return (
             <span
               title={d.toISOString()}
-              style={{ fontVariantNumeric: "tabular-nums" }}
+              className="font-mono tabular-nums text-xs"
             >
               {d.toLocaleString()}
             </span>
@@ -106,34 +122,33 @@ export function AuditTable({ initial }: AuditTableProps) {
         header: "Action",
         cell: ({ getValue }) => {
           const action = getValue<string>();
-          const tone = TONE_COLORS[actionBadgeTone(action as Parameters<typeof actionBadgeTone>[0])];
+          const variant =
+            TONE_VARIANT[actionBadgeTone(action as Parameters<typeof actionBadgeTone>[0])];
           return (
-            <span
-              style={{
-                background: tone.bg,
-                color: tone.fg,
-                padding: "0.125rem 0.5rem",
-                borderRadius: "0.375rem",
-                fontSize: "0.7rem",
-                fontWeight: 700,
-                whiteSpace: "nowrap",
-              }}
+            <Badge
+              variant={variant}
+              className="font-mono text-[0.65rem] uppercase tracking-wide"
             >
               {action}
-            </span>
+            </Badge>
           );
         },
       },
       {
         accessorFn: (r) => `${r.targetType}:${r.targetId}`,
         id: "target",
+        cell: ({ getValue }) => (
+          <span className="font-mono tabular-nums text-xs">
+            {getValue<string>()}
+          </span>
+        ),
         header: "Target",
       },
       {
         accessorKey: "ipAddress",
         header: "IP address",
         cell: ({ getValue }) => (
-          <span style={{ fontFamily: "ui-monospace, monospace" }}>
+          <span className="font-mono tabular-nums text-xs">
             {getValue<string>()}
           </span>
         ),
@@ -163,7 +178,7 @@ export function AuditTable({ initial }: AuditTableProps) {
   };
 
   return (
-    <div>
+    <div className="flex flex-col gap-2">
       <AuditFilters
         value={filters}
         onChange={setFilters}
@@ -171,141 +186,94 @@ export function AuditTable({ initial }: AuditTableProps) {
         onReset={reset}
         disabled={isFetching}
       />
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "flex-end",
-          marginBottom: "0.5rem",
-        }}
-      >
+      <div className="flex justify-end">
         <ExportCsv filters={appliedFilters} />
       </div>
       {isError && (
-        <p role="alert" style={{ color: BRAND.colors.pink }}>
+        <p role="alert" className="text-destructive text-sm">
           Failed to load audit log.
         </p>
       )}
-      <div
-        style={{
-          background: "#FFFFFF",
-          border: `1px solid ${BRAND.colors.dark}1A`,
-          borderRadius: "0.5rem",
-          overflowX: "auto",
-        }}
-      >
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-            fontSize: "0.85rem",
-            color: BRAND.colors.dark,
-          }}
-        >
-          <thead>
+      <Card className="p-0">
+        <Table>
+          <TableHeader>
             {table.getHeaderGroups().map((hg) => (
-              <tr key={hg.id}>
-                {hg.headers.map((h) => (
-                  <th
-                    key={h.id}
-                    onClick={h.column.getToggleSortingHandler()}
-                    style={{
-                      textAlign: "left",
-                      padding: "0.75rem 1rem",
-                      borderBottom: `1px solid ${BRAND.colors.dark}1A`,
-                      cursor: h.column.getCanSort() ? "pointer" : "default",
-                      userSelect: "none",
-                      fontSize: "0.75rem",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                      color: "rgba(30,41,59,0.64)",
-                    }}
-                  >
-                    {flexRender(h.column.columnDef.header, h.getContext())}
-                    {h.column.getIsSorted() === "asc" ? " ▲" : ""}
-                    {h.column.getIsSorted() === "desc" ? " ▼" : ""}
-                  </th>
-                ))}
-              </tr>
+              <TableRow key={hg.id}>
+                {hg.headers.map((h) => {
+                  const canSort = h.column.getCanSort();
+                  const sorted = h.column.getIsSorted();
+                  const ariaSort =
+                    sorted === "asc"
+                      ? "ascending"
+                      : sorted === "desc"
+                        ? "descending"
+                        : canSort
+                          ? "none"
+                          : undefined;
+                  return (
+                    <TableHead
+                      key={h.id}
+                      aria-sort={ariaSort}
+                      onClick={h.column.getToggleSortingHandler()}
+                      className={`text-muted-foreground text-xs uppercase tracking-wide select-none ${
+                        canSort ? "cursor-pointer" : ""
+                      }`}
+                    >
+                      {flexRender(h.column.columnDef.header, h.getContext())}
+                      {sorted === "asc" ? " ▲" : ""}
+                      {sorted === "desc" ? " ▼" : ""}
+                    </TableHead>
+                  );
+                })}
+              </TableRow>
             ))}
-          </thead>
-          <tbody>
+          </TableHeader>
+          <TableBody>
             {table.getRowModel().rows.map((row) => (
-              <tr key={row.id}>
+              <TableRow key={row.id}>
                 {row.getVisibleCells().map((cell) => (
-                  <td
-                    key={cell.id}
-                    style={{
-                      padding: "0.625rem 1rem",
-                      borderBottom: `1px solid ${BRAND.colors.dark}0F`,
-                    }}
-                  >
+                  <TableCell key={cell.id}>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
+                  </TableCell>
                 ))}
-              </tr>
+              </TableRow>
             ))}
             {rows.length === 0 && !isFetching && (
-              <tr>
-                <td
+              <TableRow>
+                <TableCell
                   colSpan={columns.length}
-                  style={{
-                    padding: "2rem",
-                    textAlign: "center",
-                    color: "rgba(30,41,59,0.56)",
-                  }}
+                  className="text-muted-foreground p-6 text-center"
                 >
                   No audit entries match the current filters.
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             )}
-          </tbody>
-        </table>
-      </div>
+          </TableBody>
+        </Table>
+      </Card>
       <div
-        style={{
-          display: "flex",
-          gap: "0.5rem",
-          padding: "0.75rem 0",
-          alignItems: "center",
-          fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-          fontSize: "0.85rem",
-        }}
+        className="text-muted-foreground flex items-center gap-2 py-3 text-sm"
+        aria-live="polite"
       >
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           onClick={() => setCursor(null)}
           disabled={cursor === null || isFetching}
-          style={{
-            padding: "0.5rem 1rem",
-            borderRadius: "0.375rem",
-            border: `1px solid ${BRAND.colors.dark}33`,
-            background: "transparent",
-            cursor:
-              cursor === null || isFetching ? "not-allowed" : "pointer",
-            color: BRAND.colors.dark,
-          }}
         >
           ⟲ First page
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="default"
+          size="sm"
           onClick={() => nextCursor && setCursor(nextCursor)}
           disabled={!nextCursor || isFetching}
-          style={{
-            padding: "0.5rem 1rem",
-            borderRadius: "0.375rem",
-            border: "none",
-            background: nextCursor ? BRAND.colors.blue : "rgba(30,41,59,0.24)",
-            color: "#FFFFFF",
-            cursor: !nextCursor || isFetching ? "not-allowed" : "pointer",
-          }}
         >
           Next page →
-        </button>
-        <span style={{ color: "rgba(30,41,59,0.56)" }}>
-          {isFetching ? "Loading…" : `${rows.length} rows`}
-        </span>
+        </Button>
+        <span>{isFetching ? "Loading…" : `${rows.length} rows`}</span>
       </div>
     </div>
   );

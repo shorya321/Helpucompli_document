@@ -1,6 +1,9 @@
 "use client";
 
-import { BRAND } from "@/lib/brand";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import type { AuditAction } from "@/types";
 import type { AuditTargetType } from "@/lib/audit-query";
 
@@ -52,6 +55,13 @@ const TARGET_TYPES: readonly AuditTargetType[] = [
   "link",
 ];
 
+// Native <select> styled to match shadcn Input. The audit filter form
+// is a controlled form on a client component, but we keep the native
+// element here for consistency with the rest of the dashboard (buckets,
+// users) — shadcn Select is a Radix button+popover, not a form control.
+const nativeSelectClass =
+  "border-input bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50";
+
 interface AuditFiltersProps {
   readonly value: AuditFiltersValue;
   readonly onChange: (next: AuditFiltersValue) => void;
@@ -59,36 +69,6 @@ interface AuditFiltersProps {
   readonly onReset: () => void;
   readonly disabled?: boolean;
 }
-
-const inputStyle: React.CSSProperties = {
-  padding: "0.5rem 0.75rem",
-  border: `1px solid ${BRAND.colors.dark}33`,
-  borderRadius: "0.375rem",
-  fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-  fontSize: "0.85rem",
-  background: "#FFFFFF",
-  color: BRAND.colors.dark,
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.25rem",
-  fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-  fontSize: "0.75rem",
-  fontWeight: 600,
-  color: "rgba(30,41,59,0.72)",
-};
-
-const buttonStyle: React.CSSProperties = {
-  padding: "0.5rem 1rem",
-  borderRadius: "0.375rem",
-  border: "none",
-  cursor: "pointer",
-  fontWeight: 600,
-  fontSize: "0.85rem",
-  fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-};
 
 export function AuditFilters({
   value,
@@ -105,155 +85,111 @@ export function AuditFilters({
   };
 
   return (
-    <form
-      role="search"
-      aria-label="Audit log filters"
-      onSubmit={(e) => {
-        e.preventDefault();
-        onApply();
-      }}
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        gap: "1rem",
-        padding: "1rem",
-        background: "#FFFFFF",
-        border: `1px solid ${BRAND.colors.dark}1A`,
-        borderRadius: "0.5rem",
-        marginBottom: "1rem",
-      }}
-    >
-      <label style={labelStyle}>
-        User ID
-        <input
-          type="text"
-          value={value.userId}
-          maxLength={128}
-          placeholder="auth0|..."
-          onChange={(e) => onChange({ ...value, userId: e.target.value })}
-          style={{ ...inputStyle, minWidth: "12rem" }}
-        />
-      </label>
-
-      <label style={labelStyle}>
-        Target type
-        <select
-          value={value.targetType}
-          onChange={(e) =>
-            onChange({
-              ...value,
-              targetType: e.target.value as AuditTargetType | "",
-            })
-          }
-          style={inputStyle}
-        >
-          <option value="">All</option>
-          {TARGET_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label style={labelStyle}>
-        From
-        <input
-          type="date"
-          value={value.dateFrom}
-          onChange={(e) => onChange({ ...value, dateFrom: e.target.value })}
-          style={inputStyle}
-        />
-      </label>
-
-      <label style={labelStyle}>
-        To
-        <input
-          type="date"
-          value={value.dateTo}
-          onChange={(e) => onChange({ ...value, dateTo: e.target.value })}
-          style={inputStyle}
-        />
-      </label>
-
-      <fieldset
-        style={{
-          flexBasis: "100%",
-          border: `1px solid ${BRAND.colors.dark}1A`,
-          borderRadius: "0.375rem",
-          padding: "0.5rem",
-          margin: 0,
+    <Card className="mb-4 p-4">
+      <form
+        role="search"
+        aria-label="Audit log filters"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onApply();
         }}
+        className="flex flex-col gap-4"
       >
-        <legend
-          style={{
-            ...labelStyle,
-            padding: "0 0.5rem",
-            display: "inline",
-          }}
-        >
-          Actions
-        </legend>
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "0.375rem",
-          }}
-        >
-          {ALL_ACTIONS.map((action) => {
-            const active = value.actions.includes(action);
-            return (
-              <button
-                key={action}
-                type="button"
-                onClick={() => toggleAction(action)}
-                style={{
-                  ...buttonStyle,
-                  fontSize: "0.7rem",
-                  padding: "0.25rem 0.5rem",
-                  background: active ? BRAND.colors.blue : "transparent",
-                  color: active ? "#FFFFFF" : BRAND.colors.dark,
-                  border: `1px solid ${
-                    active ? BRAND.colors.blue : BRAND.colors.dark + "33"
-                  }`,
-                }}
-                aria-pressed={active}
-              >
-                {action}
-              </button>
-            );
-          })}
-        </div>
-      </fieldset>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] items-end gap-3">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="audit-user-id">User ID</Label>
+            <Input
+              id="audit-user-id"
+              type="text"
+              value={value.userId}
+              maxLength={128}
+              placeholder="auth0|..."
+              onChange={(e) => onChange({ ...value, userId: e.target.value })}
+            />
+          </div>
 
-      <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
-        <button
-          type="submit"
-          disabled={disabled}
-          style={{
-            ...buttonStyle,
-            background: BRAND.colors.pink,
-            color: "#FFFFFF",
-            opacity: disabled ? 0.6 : 1,
-          }}
-        >
-          Apply filters
-        </button>
-        <button
-          type="button"
-          onClick={onReset}
-          disabled={disabled}
-          style={{
-            ...buttonStyle,
-            background: "transparent",
-            color: BRAND.colors.dark,
-            border: `1px solid ${BRAND.colors.dark}33`,
-          }}
-        >
-          Reset
-        </button>
-      </div>
-    </form>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="audit-target-type">Target type</Label>
+            <select
+              id="audit-target-type"
+              value={value.targetType}
+              onChange={(e) =>
+                onChange({
+                  ...value,
+                  targetType: e.target.value as AuditTargetType | "",
+                })
+              }
+              className={nativeSelectClass}
+            >
+              <option value="">All</option>
+              {TARGET_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="audit-date-from">From</Label>
+            <Input
+              id="audit-date-from"
+              type="date"
+              value={value.dateFrom}
+              onChange={(e) => onChange({ ...value, dateFrom: e.target.value })}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="audit-date-to">To</Label>
+            <Input
+              id="audit-date-to"
+              type="date"
+              value={value.dateTo}
+              onChange={(e) => onChange({ ...value, dateTo: e.target.value })}
+            />
+          </div>
+        </div>
+
+        <fieldset className="border-border rounded-md border p-2">
+          <legend className="text-muted-foreground px-2 text-xs font-semibold">
+            Actions
+          </legend>
+          <div className="flex flex-wrap gap-1.5">
+            {ALL_ACTIONS.map((action) => {
+              const active = value.actions.includes(action);
+              return (
+                <Button
+                  key={action}
+                  type="button"
+                  size="sm"
+                  variant={active ? "default" : "outline"}
+                  onClick={() => toggleAction(action)}
+                  aria-pressed={active}
+                  className="h-7 px-2 font-mono text-[0.65rem] uppercase tracking-wide"
+                >
+                  {action}
+                </Button>
+              );
+            })}
+          </div>
+        </fieldset>
+
+        <div className="flex items-center gap-2">
+          <Button type="submit" variant="default" size="sm" disabled={disabled}>
+            Apply filters
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onReset}
+            disabled={disabled}
+          >
+            Reset
+          </Button>
+        </div>
+      </form>
+    </Card>
   );
 }

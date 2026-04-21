@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { BRAND } from "@/lib/brand";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface QrCodeProps {
   readonly url: string;
@@ -17,11 +17,13 @@ export function QrCode({ url, size = 192 }: QrCodeProps) {
     let cancelled = false;
     setDataUrl(null);
     setError(null);
+    // QR module colors fall through to defaults (black on white) so the
+    // PNG stays a plain two-tone code — renders correctly in every UI
+    // theme without touching design tokens.
     QRCode.toDataURL(url, {
       errorCorrectionLevel: "M",
       margin: 1,
       width: size,
-      color: { dark: BRAND.colors.dark, light: "#FFFFFF" },
     })
       .then((d) => {
         if (!cancelled) setDataUrl(d);
@@ -35,49 +37,33 @@ export function QrCode({ url, size = 192 }: QrCodeProps) {
   }, [url, size]);
 
   return (
-    <div
-      style={{
-        display: "inline-flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: "0.5rem",
-        padding: "0.75rem",
-        background: "#FFFFFF",
-        border: `1px solid ${BRAND.colors.dark}1A`,
-        borderRadius: "0.5rem",
-      }}
-    >
-      {error && (
-        <span
-          role="alert"
-          style={{ color: BRAND.colors.pink, fontSize: "0.75rem" }}
-        >
-          {error}
-        </span>
-      )}
-      {dataUrl && (
-        <>
-          <img
-            src={dataUrl}
-            alt="QR code for share link"
-            width={size}
-            height={size}
-            style={{ display: "block" }}
-          />
-          <a
-            href={dataUrl}
-            download="share-link-qr.png"
-            style={{
-              fontSize: "0.75rem",
-              color: BRAND.colors.blue,
-              textDecoration: "none",
-              fontWeight: 600,
-            }}
-          >
-            Download PNG
-          </a>
-        </>
-      )}
-    </div>
+    <Card className="inline-block">
+      <CardContent className="flex flex-col items-center gap-2 p-3">
+        {error && (
+          <span role="alert" className="text-destructive text-xs">
+            {error}
+          </span>
+        )}
+        {dataUrl && (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={dataUrl}
+              alt="QR code for share link"
+              width={size}
+              height={size}
+              className="block"
+            />
+            <a
+              href={dataUrl}
+              download="share-link-qr.png"
+              className="text-foreground text-xs font-semibold no-underline hover:underline"
+            >
+              Download PNG
+            </a>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

@@ -2,13 +2,25 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BRAND } from "@/lib/brand";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   LINK_MIN_TTL_SECONDS,
   LINK_MAX_TTL_SECONDS,
 } from "@/lib/link-create";
 import type { ApiResponse } from "@/types";
 import { QrCode } from "@/components/links/qr-code";
+
+// Native <select> styled to match shadcn Input. The policy/TTL/document
+// pickers are driven by local state but stay on native DOM elements so
+// the form behaves predictably for submit/disabled state without pulling
+// in the Radix popover variant.
+const nativeSelectClass =
+  "border-input bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50";
 
 const TTL_PRESETS: ReadonlyArray<{ value: number; label: string }> = [
   { value: 900, label: "15 minutes" },
@@ -43,25 +55,6 @@ interface CreateResp {
   readonly ttlSeconds: number;
   readonly maxDownloads: number | null;
 }
-
-const labelStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.25rem",
-  fontSize: "0.75rem",
-  fontWeight: 600,
-  color: "rgba(30,41,59,0.72)",
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: "0.5rem 0.75rem",
-  border: `1px solid ${BRAND.colors.dark}33`,
-  borderRadius: "0.375rem",
-  fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-  fontSize: "0.85rem",
-  background: "#FFFFFF",
-  color: BRAND.colors.dark,
-};
 
 export function GenerateLinkForm({
   documents,
@@ -148,246 +141,165 @@ export function GenerateLinkForm({
   };
 
   return (
-    <form
-      onSubmit={onSubmit}
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: "1rem",
-        padding: "1rem",
-        background: "#FFFFFF",
-        border: `1px solid ${BRAND.colors.dark}1A`,
-        borderRadius: "0.5rem",
-        fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-        color: BRAND.colors.dark,
-      }}
-    >
-      <h2 style={{ fontSize: "1rem", fontWeight: 700, margin: 0 }}>
-        Generate share link
-      </h2>
-
-      <label style={labelStyle}>
-        Document
-        <select
-          value={documentId}
-          required
-          onChange={(e) => setDocumentId(e.target.value)}
-          disabled={submitting}
-          style={inputStyle}
-        >
-          <option value="">Select document…</option>
-          {documents.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.bucketName} — {d.name}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label style={labelStyle}>
-        Policy (optional)
-        <select
-          value={policyId}
-          onChange={(e) => setPolicyId(e.target.value)}
-          disabled={submitting}
-          style={inputStyle}
-        >
-          <option value="">No policy (default settings)</option>
-          {policies.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-        {policyId === "" && (
-          <span
-            style={{
-              color: BRAND.colors.pink,
-              fontSize: "0.7rem",
-              fontWeight: 500,
-            }}
-          >
-            ⚠ Anonymous unrestricted share — anyone with the URL can download
-            until expiry or revoke.
-          </span>
-        )}
-      </label>
-
-      <label style={labelStyle}>
-        TTL
-        <select
-          value={ttl}
-          disabled={submitting}
-          onChange={(e) => setTtl(Number.parseInt(e.target.value, 10))}
-          style={inputStyle}
-        >
-          {TTL_PRESETS.map((t) => (
-            <option key={t.value} value={t.value}>
-              {t.label}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label style={labelStyle}>
-        Max downloads (optional, blank = unlimited within policy cap)
-        <input
-          type="number"
-          min={1}
-          max={99_999}
-          value={maxDownloads}
-          disabled={submitting}
-          onChange={(e) => setMaxDownloads(e.target.value)}
-          style={inputStyle}
-        />
-      </label>
-
-      {error && (
-        <p role="alert" style={{ color: BRAND.colors.pink, margin: 0 }}>
-          {error}
-        </p>
-      )}
-
-      <button
-        type="submit"
-        disabled={!isValid || submitting}
-        style={{
-          padding: "0.5rem 1rem",
-          background: BRAND.colors.pink,
-          color: "#FFFFFF",
-          border: "none",
-          borderRadius: "0.375rem",
-          cursor: !isValid || submitting ? "not-allowed" : "pointer",
-          opacity: !isValid || submitting ? 0.6 : 1,
-          fontWeight: 600,
-          fontSize: "0.85rem",
-        }}
-      >
-        {submitting ? "Generating…" : "Generate link"}
-      </button>
-
-      {result && (
-        <div
-          style={{
-            padding: "0.75rem",
-            background: "rgba(37,99,235,0.08)",
-            border: `1px solid ${BRAND.colors.blue}33`,
-            borderRadius: "0.375rem",
-          }}
-        >
-          <p
-            style={{
-              margin: "0 0 0.5rem",
-              fontSize: "0.75rem",
-              color: "rgba(30,41,59,0.72)",
-            }}
-          >
-            Share this link — expires{" "}
-            {new Date(result.expiresAt).toLocaleString()}
-            {result.maxDownloads !== null
-              ? ` · ${result.maxDownloads} downloads max`
-              : " · unlimited downloads"}
-          </p>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <input
-              type="text"
-              readOnly
-              value={result.shareableUrl}
-              onFocus={(e) => e.currentTarget.select()}
-              aria-label="Generated link URL"
-              style={{
-                ...inputStyle,
-                flex: 1,
-                fontFamily: "ui-monospace, monospace",
-                fontSize: "0.75rem",
-              }}
-            />
-            <button
-              type="button"
-              onClick={onCopy}
-              style={{
-                padding: "0.5rem 1rem",
-                background: BRAND.colors.dark,
-                color: "#FFFFFF",
-                border: "none",
-                borderRadius: "0.375rem",
-                cursor: "pointer",
-                fontWeight: 600,
-                fontSize: "0.85rem",
-                whiteSpace: "nowrap",
-              }}
+    <Card>
+      <CardHeader>
+        <CardTitle>Generate share link</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={onSubmit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="gl-document">Document</Label>
+            <select
+              id="gl-document"
+              value={documentId}
+              required
+              onChange={(e) => setDocumentId(e.target.value)}
+              disabled={submitting}
+              className={nativeSelectClass}
             >
-              {copied ? "Copied!" : "Copy URL"}
-            </button>
+              <option value="">Select document…</option>
+              {documents.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.bucketName} — {d.name}
+                </option>
+              ))}
+            </select>
           </div>
-          <div
-            style={{
-              display: "flex",
-              gap: "0.5rem",
-              marginTop: "0.5rem",
-              alignItems: "flex-start",
-            }}
-          >
-            <textarea
-              readOnly
-              value={embedCode}
-              onFocus={(e) => e.currentTarget.select()}
-              aria-label="Iframe embed code"
-              rows={6}
-              style={{
-                ...inputStyle,
-                flex: 1,
-                fontFamily: "ui-monospace, monospace",
-                fontSize: "0.7rem",
-                resize: "vertical",
-                whiteSpace: "pre",
-              }}
-            />
-            <button
-              type="button"
-              onClick={onCopyEmbed}
-              style={{
-                padding: "0.5rem 1rem",
-                background: BRAND.colors.blue,
-                color: "#FFFFFF",
-                border: "none",
-                borderRadius: "0.375rem",
-                cursor: "pointer",
-                fontWeight: 600,
-                fontSize: "0.85rem",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {embedCopied ? "Copied!" : "Copy embed"}
-            </button>
-          </div>
-          <p
-            style={{
-              margin: "0.25rem 0 0",
-              fontSize: "0.7rem",
-              color: "rgba(30,41,59,0.56)",
-            }}
-          >
-            Paste the embed snippet into any HTML page. If a policy with
-            Allowed Domains is attached, the page must be hosted on one
-            of those domains so the browser sends a matching Referer.
-          </p>
-          <div style={{ marginTop: "0.75rem" }}>
-            <QrCode url={result.shareableUrl} />
-          </div>
-        </div>
-      )}
 
-      <p
-        style={{
-          margin: 0,
-          fontSize: "0.7rem",
-          color: "rgba(30,41,59,0.56)",
-        }}
-      >
-        TTL must be {LINK_MIN_TTL_SECONDS}s–{LINK_MAX_TTL_SECONDS}s. Policy TTL
-        caps the override.
-      </p>
-    </form>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="gl-policy">Policy (optional)</Label>
+            <select
+              id="gl-policy"
+              value={policyId}
+              onChange={(e) => setPolicyId(e.target.value)}
+              disabled={submitting}
+              className={nativeSelectClass}
+            >
+              <option value="">No policy (default settings)</option>
+              {policies.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            {policyId === "" && (
+              <span className="border-border bg-muted text-muted-foreground rounded-md border px-3 py-2 text-xs">
+                ⚠ Anonymous unrestricted share — anyone with the URL can
+                download until expiry or revoke.
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="gl-ttl">TTL</Label>
+            <select
+              id="gl-ttl"
+              value={ttl}
+              disabled={submitting}
+              onChange={(e) => setTtl(Number.parseInt(e.target.value, 10))}
+              className={nativeSelectClass}
+            >
+              {TTL_PRESETS.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="gl-max">
+              Max downloads{" "}
+              <span className="text-muted-foreground font-normal">
+                (optional, blank = unlimited within policy cap)
+              </span>
+            </Label>
+            <Input
+              id="gl-max"
+              type="number"
+              min={1}
+              max={99_999}
+              value={maxDownloads}
+              disabled={submitting}
+              onChange={(e) => setMaxDownloads(e.target.value)}
+            />
+          </div>
+
+          {error && (
+            <p role="alert" className="text-destructive m-0 text-sm">
+              {error}
+            </p>
+          )}
+
+          <Button type="submit" disabled={!isValid || submitting}>
+            {submitting ? "Generating…" : "Generate link"}
+          </Button>
+
+          {result && (
+            <div className="border-border bg-muted rounded-md border p-3">
+              <p className="text-muted-foreground m-0 mb-2 text-xs">
+                Share this link — expires{" "}
+                <span className="font-mono tabular-nums">
+                  {new Date(result.expiresAt).toLocaleString()}
+                </span>
+                {result.maxDownloads !== null
+                  ? ` · ${result.maxDownloads} downloads max`
+                  : " · unlimited downloads"}
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  type="text"
+                  readOnly
+                  value={result.shareableUrl}
+                  onFocus={(e) => e.currentTarget.select()}
+                  aria-label="Generated link URL"
+                  className="flex-1 font-mono text-xs"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={onCopy}
+                  className="whitespace-nowrap"
+                >
+                  {copied ? "Copied!" : "Copy URL"}
+                </Button>
+              </div>
+              <div className="mt-2 flex items-start gap-2">
+                <Textarea
+                  readOnly
+                  value={embedCode}
+                  onFocus={(e) => e.currentTarget.select()}
+                  aria-label="Iframe embed code"
+                  rows={6}
+                  className="flex-1 whitespace-pre resize-y font-mono text-xs"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={onCopyEmbed}
+                  className="whitespace-nowrap"
+                >
+                  {embedCopied ? "Copied!" : "Copy embed"}
+                </Button>
+              </div>
+              <p className="text-muted-foreground mt-1 mb-0 text-xs">
+                Paste the embed snippet into any HTML page. If a policy
+                with Allowed Domains is attached, the page must be hosted
+                on one of those domains so the browser sends a matching
+                Referer.
+              </p>
+              <div className="mt-3">
+                <QrCode url={result.shareableUrl} />
+              </div>
+            </div>
+          )}
+
+          <p className="text-muted-foreground m-0 text-xs">
+            TTL must be {LINK_MIN_TTL_SECONDS}s–{LINK_MAX_TTL_SECONDS}s.
+            Policy TTL caps the override.
+          </p>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

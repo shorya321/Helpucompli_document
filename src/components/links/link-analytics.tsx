@@ -1,19 +1,17 @@
-import { BRAND } from "@/lib/brand";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import type { LinkAnalytics } from "@/lib/link-analytics";
 
 interface LinkAnalyticsProps {
   readonly stats: LinkAnalytics;
 }
 
-const STAT_COLORS: Record<string, string> = {
-  Total: BRAND.colors.dark,
-  Active: "#16A34A",
-  Expired: "#D97706",
-  Revoked: BRAND.colors.pink,
-};
+interface StatCard {
+  readonly label: string;
+  readonly value: number;
+}
 
 export function LinkAnalyticsView({ stats }: LinkAnalyticsProps) {
-  const cards: Array<{ label: string; value: number }> = [
+  const cards: readonly StatCard[] = [
     { label: "Total", value: stats.total },
     { label: "Active", value: stats.active },
     { label: "Expired", value: stats.expired },
@@ -21,110 +19,54 @@ export function LinkAnalyticsView({ stats }: LinkAnalyticsProps) {
   ];
 
   return (
-    <section
-      style={{
-        marginBottom: "1.5rem",
-        fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-        color: BRAND.colors.dark,
-      }}
-    >
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(8rem, 1fr))",
-          gap: "0.75rem",
-          marginBottom: "1rem",
-        }}
+    <section className="mb-6 flex flex-col gap-4">
+      <ul
+        role="list"
+        className="m-0 grid list-none grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-3 p-0"
       >
         {cards.map((c) => (
-          <div
-            key={c.label}
-            style={{
-              padding: "0.75rem 1rem",
-              background: "#FFFFFF",
-              border: `1px solid ${BRAND.colors.dark}1A`,
-              borderRadius: "0.5rem",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "0.7rem",
-                fontWeight: 700,
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                color: STAT_COLORS[c.label] ?? BRAND.colors.dark,
-              }}
-            >
-              {c.label}
-            </div>
-            <div
-              style={{
-                fontSize: "1.5rem",
-                fontWeight: 700,
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
-              {c.value}
-            </div>
-          </div>
+          <li key={c.label}>
+            <Card className="h-full">
+              <CardHeader className="pb-2">
+                <p className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">
+                  {c.label}
+                </p>
+              </CardHeader>
+              <CardContent>
+                <p className="text-foreground font-mono text-2xl font-bold tabular-nums">
+                  {c.value}
+                </p>
+              </CardContent>
+            </Card>
+          </li>
         ))}
-      </div>
+      </ul>
 
       {stats.topDocuments.length > 0 && (
-        <div
-          style={{
-            padding: "0.75rem 1rem",
-            background: "#FFFFFF",
-            border: `1px solid ${BRAND.colors.dark}1A`,
-            borderRadius: "0.5rem",
-          }}
-        >
-          <h3
-            style={{
-              fontSize: "0.7rem",
-              fontWeight: 700,
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-              color: "rgba(30,41,59,0.64)",
-              margin: "0 0 0.5rem",
-            }}
-          >
-            Most-shared documents
-          </h3>
-          <ol
-            style={{
-              margin: 0,
-              padding: 0,
-              listStyle: "none",
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.25rem",
-            }}
-          >
-            {stats.topDocuments.map((d) => (
-              <li
-                key={d.documentId}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  fontSize: "0.85rem",
-                }}
-              >
-                <span style={{ fontFamily: "ui-monospace, monospace" }}>
-                  {d.filename}
-                </span>
-                <span
-                  style={{
-                    color: "rgba(30,41,59,0.64)",
-                    fontVariantNumeric: "tabular-nums",
-                  }}
+        <Card>
+          <CardHeader className="pb-2">
+            <h3 className="text-muted-foreground m-0 text-xs font-semibold uppercase tracking-wider">
+              Most-shared documents
+            </h3>
+          </CardHeader>
+          <CardContent>
+            <ol className="m-0 flex list-none flex-col gap-1 p-0">
+              {stats.topDocuments.map((d) => (
+                <li
+                  key={d.documentId}
+                  className="flex justify-between text-sm"
                 >
-                  {d.linkCount} link{d.linkCount === 1 ? "" : "s"}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </div>
+                  <span className="text-foreground font-mono">
+                    {d.filename}
+                  </span>
+                  <span className="text-muted-foreground font-mono tabular-nums">
+                    {d.linkCount} link{d.linkCount === 1 ? "" : "s"}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </CardContent>
+        </Card>
       )}
     </section>
   );
