@@ -32,6 +32,13 @@ export const metadata: Metadata = {
   description: "HIPAA-compliant document management platform",
 };
 
+// Runs before React hydrates. Reads localStorage + matchMedia, sets
+// the .dark class on <html>. Prevents theme flash without needing
+// next-themes's <ThemeScript>, which React 19 flags because it ships
+// a <script> tag inside a Client Component tree. This is a server-
+// rendered inline script, which React 19 accepts.
+const themeInitScript = `(function(){try{var t=localStorage.getItem('theme')||'system';var d=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);var c=document.documentElement.classList;c.toggle('dark',d);c.toggle('light',!d);document.documentElement.style.colorScheme=d?'dark':'light';}catch(e){}})();`;
+
 export default async function RootLayout({
   children,
 }: Readonly<{
@@ -52,6 +59,12 @@ export default async function RootLayout({
         } as React.CSSProperties
       }
     >
+      <head>
+        <script
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: themeInitScript }}
+        />
+      </head>
       <body
         className={`${inter.variable} ${manrope.variable} ${jetbrainsMono.variable} font-sans antialiased`}
       >
