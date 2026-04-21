@@ -12,6 +12,14 @@ import {
 } from "@/lib/policy-list";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { DeletePolicyButton } from "@/components/policies/delete-policy-button";
 
 export const dynamic = "force-dynamic";
@@ -59,44 +67,39 @@ export default async function PoliciesPage() {
         </div>
       ) : (
         <Card className="overflow-x-auto p-0">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="bg-muted/50">
-                {["Name", "Target", "Restrictions", "Updated", ""].map((h) => (
-                  <th
-                    key={h}
-                    className="text-muted-foreground border-border border-b px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Target</TableHead>
+                <TableHead>Restrictions</TableHead>
+                <TableHead>Updated</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {rows.map((row) => (
-                <tr key={row.id} className="border-border/50 border-b">
-                  <td className="text-foreground px-4 py-2.5 font-semibold">
-                    {row.name}
-                  </td>
-                  <td className="text-foreground px-4 py-2.5 font-mono text-sm tabular-nums">
+                <TableRow key={row.id}>
+                  <TableCell className="font-semibold">{row.name}</TableCell>
+                  <TableCell className="font-mono text-sm tabular-nums">
                     {row.targetType}:{row.targetValue}
-                  </td>
-                  <td className="text-muted-foreground px-4 py-2.5">
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
                     {summarizeRestrictions(row)}
-                  </td>
-                  <td className="text-muted-foreground px-4 py-2.5 font-mono tabular-nums">
+                  </TableCell>
+                  <TableCell className="text-muted-foreground font-mono tabular-nums">
                     {row.updatedAt.toLocaleDateString()}
-                  </td>
-                  <td className="px-4 py-2.5 text-right">
+                  </TableCell>
+                  <TableCell className="text-right">
                     <Button asChild variant="ghost" size="sm">
                       <Link href={`/policies/${row.id}`}>Edit</Link>
                     </Button>
                     <DeletePolicyButton id={row.id} name={row.name} />
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </Card>
       )}
     </section>
