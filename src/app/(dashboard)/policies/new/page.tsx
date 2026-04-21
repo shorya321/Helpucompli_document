@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
+
 import { auth0 } from "@/lib/auth0";
 import { resolveHasRole } from "@/lib/auth-guard";
-import { BRAND } from "@/lib/brand";
 import { prisma } from "@/lib/prisma";
 import { PolicyForm } from "@/components/policies/policy-form";
 
@@ -26,24 +26,16 @@ export default async function NewPolicyPage() {
   }
 
   return (
-    <main
-      style={{
-        padding: "2rem",
-        maxWidth: "80rem",
-        margin: "0 auto",
-        fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-        color: BRAND.colors.dark,
-      }}
-    >
-      <header style={{ marginBottom: "1.5rem" }}>
-        <h1 style={{ fontSize: "1.5rem", fontWeight: 700, margin: 0 }}>
+    <section className="flex flex-col gap-6">
+      <header>
+        <h1 className="text-foreground m-0 text-2xl font-bold tracking-tight">
           New access policy
         </h1>
-        <p style={{ color: "rgba(30,41,59,0.64)", margin: "0.25rem 0 0" }}>
+        <p className="text-muted-foreground mt-1">
           Define IP, referrer, expiry, and download restrictions.
         </p>
       </header>
       <PolicyForm buckets={buckets} mode="create" />
-    </main>
+    </section>
   );
 }

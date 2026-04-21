@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { BRAND } from "@/lib/brand";
+import { X } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { addCidr, removeAt } from "@/lib/policy-input-helpers";
 
 interface IpRangeInputProps {
@@ -36,32 +39,17 @@ export function IpRangeInput({
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+    <div className="flex flex-col gap-2">
       <div
         role="list"
         aria-label="Allowed IP ranges"
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "0.375rem",
-          minHeight: "1.5rem",
-        }}
+        className="flex min-h-6 flex-wrap gap-1.5"
       >
         {value.map((cidr) => (
           <span
             key={cidr}
             role="listitem"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.375rem",
-              background: BRAND.colors.dark,
-              color: "#FFFFFF",
-              padding: "0.25rem 0.5rem",
-              borderRadius: "0.375rem",
-              fontSize: "0.75rem",
-              fontFamily: "ui-monospace, monospace",
-            }}
+            className="bg-secondary text-secondary-foreground inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-xs tabular-nums"
           >
             {cidr}
             <button
@@ -69,23 +57,15 @@ export function IpRangeInput({
               onClick={() => remove(cidr)}
               disabled={disabled}
               aria-label={`Remove ${cidr}`}
-              style={{
-                background: "transparent",
-                border: "none",
-                color: "#FFFFFF",
-                cursor: disabled ? "not-allowed" : "pointer",
-                padding: 0,
-                fontSize: "0.85rem",
-                lineHeight: 1,
-              }}
+              className="text-secondary-foreground/80 hover:text-secondary-foreground inline-flex h-4 w-4 items-center justify-center rounded-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
-              ×
+              <X className="h-3 w-3" />
             </button>
           </span>
         ))}
       </div>
-      <div style={{ display: "flex", gap: "0.5rem" }}>
-        <input
+      <div className="flex gap-2">
+        <Input
           id={id}
           type="text"
           value={draft}
@@ -103,42 +83,24 @@ export function IpRangeInput({
           }}
           disabled={disabled}
           aria-invalid={error !== null}
-          style={{
-            flex: 1,
-            padding: "0.5rem 0.75rem",
-            border: `1px solid ${
-              error ? BRAND.colors.pink : BRAND.colors.dark + "33"
-            }`,
-            borderRadius: "0.375rem",
-            fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-            fontSize: "0.85rem",
-          }}
+          className={
+            error
+              ? "border-destructive focus-visible:ring-destructive flex-1 font-mono tabular-nums"
+              : "flex-1 font-mono tabular-nums"
+          }
         />
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
           onClick={add}
           disabled={disabled || draft.length === 0}
-          style={{
-            padding: "0.5rem 1rem",
-            background: BRAND.colors.dark,
-            color: "#FFFFFF",
-            border: "none",
-            borderRadius: "0.375rem",
-            cursor:
-              disabled || draft.length === 0 ? "not-allowed" : "pointer",
-            opacity: disabled || draft.length === 0 ? 0.5 : 1,
-            fontWeight: 600,
-            fontSize: "0.85rem",
-          }}
         >
           Add
-        </button>
+        </Button>
       </div>
       {error && (
-        <span
-          role="alert"
-          style={{ color: BRAND.colors.pink, fontSize: "0.75rem" }}
-        >
+        <span role="alert" className="text-destructive text-xs">
           {error}
         </span>
       )}

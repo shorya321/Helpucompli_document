@@ -2,14 +2,17 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BRAND } from "@/lib/brand";
-import type { PolicyTargetType } from "@/types";
-import type { PolicyInput } from "@/lib/policy-schema";
-import { policyInputSchema } from "@/lib/policy-schema";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { DomainInput } from "@/components/policies/domain-input";
 import { IpRangeInput } from "@/components/policies/ip-range-input";
-import { TargetPicker } from "@/components/policies/target-picker";
 import { PolicyPreview } from "@/components/policies/policy-preview";
+import { TargetPicker } from "@/components/policies/target-picker";
+import type { PolicyInput } from "@/lib/policy-schema";
+import { policyInputSchema } from "@/lib/policy-schema";
+import type { PolicyTargetType } from "@/types";
 
 const TTL_PRESETS: ReadonlyArray<{ value: number; label: string }> = [
   { value: 900, label: "15 minutes" },
@@ -35,24 +38,10 @@ const DEFAULT_VALUES: PolicyInput = {
   requireAuth: false,
 };
 
-const labelStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.25rem",
-  fontSize: "0.75rem",
-  fontWeight: 600,
-  color: "rgba(30,41,59,0.72)",
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: "0.5rem 0.75rem",
-  border: `1px solid ${BRAND.colors.dark}33`,
-  borderRadius: "0.375rem",
-  fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-  fontSize: "0.85rem",
-  background: "#FFFFFF",
-  color: BRAND.colors.dark,
-};
+// Native <select> styled to match shadcn Input. Used for the TTL preset
+// where the GET-form / Radix popover tradeoffs favor the native control.
+const nativeSelectClass =
+  "border-input bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50";
 
 export function PolicyForm({ initial, buckets, mode }: PolicyFormProps) {
   const router = useRouter();
@@ -117,29 +106,21 @@ export function PolicyForm({ initial, buckets, mode }: PolicyFormProps) {
   return (
     <form
       onSubmit={onSubmit}
-      style={{
-        display: "grid",
-        gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)",
-        gap: "1.5rem",
-        fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-        color: BRAND.colors.dark,
-      }}
+      className="text-foreground grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-        <label style={labelStyle}>
-          Policy name
-          <input
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="policy-name">Policy name</Label>
+          <Input
+            id="policy-name"
             type="text"
             value={policy.name}
-            onChange={(e) =>
-              setPolicy({ ...policy, name: e.target.value })
-            }
+            onChange={(e) => setPolicy({ ...policy, name: e.target.value })}
             required
             maxLength={128}
             disabled={submitting}
-            style={inputStyle}
           />
-        </label>
+        </div>
 
         <TargetPicker
           targetType={policy.targetType}
@@ -155,31 +136,44 @@ export function PolicyForm({ initial, buckets, mode }: PolicyFormProps) {
           }
         />
 
-        <label style={labelStyle}>
-          Allowed domains (optional, referrer)
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="policy-domains">
+            Allowed domains{" "}
+            <span className="text-muted-foreground font-normal">
+              (optional, referrer)
+            </span>
+          </Label>
           <DomainInput
+            id="policy-domains"
             value={policy.allowedDomains}
             onChange={(allowedDomains) =>
               setPolicy({ ...policy, allowedDomains: [...allowedDomains] })
             }
             disabled={submitting}
           />
-        </label>
+        </div>
 
-        <label style={labelStyle}>
-          Allowed IP ranges (optional, CIDR)
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="policy-ips">
+            Allowed IP ranges{" "}
+            <span className="text-muted-foreground font-normal">
+              (optional, CIDR)
+            </span>
+          </Label>
           <IpRangeInput
+            id="policy-ips"
             value={policy.allowedIpRanges}
             onChange={(allowedIpRanges) =>
               setPolicy({ ...policy, allowedIpRanges: [...allowedIpRanges] })
             }
             disabled={submitting}
           />
-        </label>
+        </div>
 
-        <label style={labelStyle}>
-          Link expiration
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="policy-ttl">Link expiration</Label>
           <select
+            id="policy-ttl"
             value={policy.linkTtlSeconds}
             disabled={submitting}
             onChange={(e) =>
@@ -188,7 +182,7 @@ export function PolicyForm({ initial, buckets, mode }: PolicyFormProps) {
                 linkTtlSeconds: Number.parseInt(e.target.value, 10),
               })
             }
-            style={inputStyle}
+            className={nativeSelectClass}
           >
             {TTL_PRESETS.map((t) => (
               <option key={t.value} value={t.value}>
@@ -196,11 +190,17 @@ export function PolicyForm({ initial, buckets, mode }: PolicyFormProps) {
               </option>
             ))}
           </select>
-        </label>
+        </div>
 
-        <label style={labelStyle}>
-          Max downloads (blank = unlimited)
-          <input
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="policy-max-downloads">
+            Max downloads{" "}
+            <span className="text-muted-foreground font-normal">
+              (blank = unlimited)
+            </span>
+          </Label>
+          <Input
+            id="policy-max-downloads"
             type="number"
             min={1}
             max={99_999}
@@ -213,18 +213,11 @@ export function PolicyForm({ initial, buckets, mode }: PolicyFormProps) {
                 maxDownloads: raw === "" ? null : Number.parseInt(raw, 10),
               });
             }}
-            style={inputStyle}
+            className="tabular-nums"
           />
-        </label>
+        </div>
 
-        <label
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.5rem",
-            fontSize: "0.85rem",
-          }}
-        >
+        <Label className="inline-flex cursor-pointer items-center gap-2 text-sm font-normal">
           <input
             type="checkbox"
             checked={policy.requireAuth}
@@ -232,53 +225,33 @@ export function PolicyForm({ initial, buckets, mode }: PolicyFormProps) {
             onChange={(e) =>
               setPolicy({ ...policy, requireAuth: e.target.checked })
             }
+            className="accent-primary"
           />
           Require Auth0 session to access generated link
-        </label>
+        </Label>
 
         {serverError && (
-          <p role="alert" style={{ color: BRAND.colors.pink, margin: 0 }}>
+          <p role="alert" className="text-destructive m-0 text-sm">
             Save failed: {serverError}
           </p>
         )}
 
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          <button
-            type="submit"
-            disabled={!isValid || submitting}
-            style={{
-              padding: "0.5rem 1rem",
-              background: BRAND.colors.pink,
-              color: "#FFFFFF",
-              border: "none",
-              borderRadius: "0.375rem",
-              cursor: !isValid || submitting ? "not-allowed" : "pointer",
-              opacity: !isValid || submitting ? 0.6 : 1,
-              fontWeight: 600,
-              fontSize: "0.85rem",
-            }}
-          >
+        <div className="flex gap-2">
+          <Button type="submit" disabled={!isValid || submitting}>
             {submitting
               ? "Saving…"
               : mode === "edit"
                 ? "Save changes"
                 : "Create policy"}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="outline"
             onClick={() => router.push("/policies")}
             disabled={submitting}
-            style={{
-              padding: "0.5rem 1rem",
-              background: "transparent",
-              border: `1px solid ${BRAND.colors.dark}33`,
-              borderRadius: "0.375rem",
-              cursor: submitting ? "not-allowed" : "pointer",
-              fontSize: "0.85rem",
-            }}
           >
             Cancel
-          </button>
+          </Button>
         </div>
       </div>
 

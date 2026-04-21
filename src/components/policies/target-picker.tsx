@@ -1,6 +1,7 @@
 "use client";
 
-import { BRAND } from "@/lib/brand";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import type { PolicyTargetType } from "@/types";
 
 interface TargetPickerProps {
@@ -20,16 +21,11 @@ const TYPES: ReadonlyArray<{ value: PolicyTargetType; label: string }> = [
   { value: "object", label: "Single object" },
 ];
 
-const inputStyle: React.CSSProperties = {
-  padding: "0.5rem 0.75rem",
-  border: `1px solid ${BRAND.colors.dark}33`,
-  borderRadius: "0.375rem",
-  fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-  fontSize: "0.85rem",
-  background: "#FFFFFF",
-  color: BRAND.colors.dark,
-  width: "100%",
-};
+// Native <select> styled to match shadcn Input. Kept as a native control
+// so the surrounding form semantics (disabled, keyboard submit) behave
+// the same way they did before the shadcn migration.
+const nativeSelectClass =
+  "border-input bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50";
 
 export function TargetPicker({
   targetType,
@@ -39,36 +35,17 @@ export function TargetPicker({
   disabled,
 }: TargetPickerProps) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-      <fieldset
-        style={{
-          display: "flex",
-          gap: "0.5rem",
-          border: "none",
-          padding: 0,
-          margin: 0,
-        }}
-      >
-        <legend
-          style={{
-            fontSize: "0.75rem",
-            fontWeight: 600,
-            color: "rgba(30,41,59,0.72)",
-            marginBottom: "0.25rem",
-          }}
-        >
+    <div className="flex flex-col gap-2">
+      <fieldset className="m-0 flex flex-wrap gap-3 border-none p-0">
+        <legend className="text-muted-foreground mb-1 text-xs font-semibold">
           Apply to
         </legend>
         {TYPES.map((t) => (
-          <label
+          <Label
             key={t.value}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.375rem",
-              fontSize: "0.85rem",
-              cursor: disabled ? "not-allowed" : "pointer",
-            }}
+            className={`inline-flex items-center gap-1.5 text-sm font-normal ${
+              disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+            }`}
           >
             <input
               type="radio"
@@ -77,9 +54,10 @@ export function TargetPicker({
               checked={targetType === t.value}
               disabled={disabled}
               onChange={() => onChange({ targetType: t.value, targetValue: "" })}
+              className="accent-primary"
             />
             {t.label}
-          </label>
+          </Label>
         ))}
       </fieldset>
 
@@ -91,7 +69,7 @@ export function TargetPicker({
           onChange={(e) =>
             onChange({ targetType, targetValue: e.target.value })
           }
-          style={inputStyle}
+          className={nativeSelectClass}
         >
           <option value="">Select bucket…</option>
           {buckets.map((b) => (
@@ -101,7 +79,7 @@ export function TargetPicker({
           ))}
         </select>
       ) : (
-        <input
+        <Input
           type="text"
           aria-label={
             targetType === "prefix" ? "Folder prefix" : "Object key"
@@ -117,10 +95,7 @@ export function TargetPicker({
           onChange={(e) =>
             onChange({ targetType, targetValue: e.target.value })
           }
-          style={{
-            ...inputStyle,
-            fontFamily: "ui-monospace, monospace",
-          }}
+          className="font-mono"
         />
       )}
     </div>

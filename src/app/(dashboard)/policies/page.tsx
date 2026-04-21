@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+
 import { auth0 } from "@/lib/auth0";
 import { resolveHasRole } from "@/lib/auth-guard";
-import { BRAND } from "@/lib/brand";
 import { prisma } from "@/lib/prisma";
 import {
   asPolicyListPrisma,
@@ -10,6 +10,8 @@ import {
   summarizeRestrictions,
   type PolicyListRow,
 } from "@/lib/policy-list";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { DeletePolicyButton } from "@/components/policies/delete-policy-button";
 
 export const dynamic = "force-dynamic";
@@ -30,169 +32,73 @@ export default async function PoliciesPage() {
   }
 
   return (
-    <main
-      style={{
-        padding: "2rem",
-        maxWidth: "80rem",
-        margin: "0 auto",
-        fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-        color: BRAND.colors.dark,
-      }}
-    >
-      <header
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "1.5rem",
-        }}
-      >
+    <section className="flex flex-col gap-6">
+      <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 style={{ fontSize: "1.5rem", fontWeight: 700, margin: 0 }}>
+          <h1 className="text-foreground m-0 text-2xl font-bold tracking-tight">
             Access policies
           </h1>
-          <p style={{ color: "rgba(30,41,59,0.64)", margin: "0.25rem 0 0" }}>
+          <p className="text-muted-foreground mt-1">
             Restrict link sharing by IP, referrer, expiry, and download count.
           </p>
         </div>
-        <Link
-          href="/policies/new"
-          style={{
-            padding: "0.5rem 1rem",
-            background: BRAND.colors.pink,
-            color: "#FFFFFF",
-            borderRadius: "0.375rem",
-            textDecoration: "none",
-            fontWeight: 600,
-            fontSize: "0.85rem",
-          }}
-        >
-          + New policy
-        </Link>
+        <Button asChild>
+          <Link href="/policies/new">+ New policy</Link>
+        </Button>
       </header>
 
       {loadError && (
-        <p role="alert" style={{ color: BRAND.colors.pink }}>
+        <p role="alert" className="text-destructive text-sm">
           Unable to load policies. Try again.
         </p>
       )}
 
-      <div
-        style={{
-          background: "#FFFFFF",
-          border: `1px solid ${BRAND.colors.dark}1A`,
-          borderRadius: "0.5rem",
-          overflowX: "auto",
-        }}
-      >
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            fontSize: "0.85rem",
-          }}
-        >
-          <thead>
-            <tr>
-              {["Name", "Target", "Restrictions", "Updated", ""].map((h) => (
-                <th
-                  key={h}
-                  style={{
-                    textAlign: "left",
-                    padding: "0.75rem 1rem",
-                    borderBottom: `1px solid ${BRAND.colors.dark}1A`,
-                    fontSize: "0.75rem",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                    color: "rgba(30,41,59,0.64)",
-                  }}
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id}>
-                <td
-                  style={{
-                    padding: "0.625rem 1rem",
-                    borderBottom: `1px solid ${BRAND.colors.dark}0F`,
-                    fontWeight: 600,
-                  }}
-                >
-                  {row.name}
-                </td>
-                <td
-                  style={{
-                    padding: "0.625rem 1rem",
-                    borderBottom: `1px solid ${BRAND.colors.dark}0F`,
-                    fontFamily: "ui-monospace, monospace",
-                    fontSize: "0.8rem",
-                  }}
-                >
-                  {row.targetType}:{row.targetValue}
-                </td>
-                <td
-                  style={{
-                    padding: "0.625rem 1rem",
-                    borderBottom: `1px solid ${BRAND.colors.dark}0F`,
-                    color: "rgba(30,41,59,0.72)",
-                  }}
-                >
-                  {summarizeRestrictions(row)}
-                </td>
-                <td
-                  style={{
-                    padding: "0.625rem 1rem",
-                    borderBottom: `1px solid ${BRAND.colors.dark}0F`,
-                    color: "rgba(30,41,59,0.56)",
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {row.updatedAt.toLocaleDateString()}
-                </td>
-                <td
-                  style={{
-                    padding: "0.625rem 1rem",
-                    borderBottom: `1px solid ${BRAND.colors.dark}0F`,
-                    textAlign: "right",
-                  }}
-                >
-                  <Link
-                    href={`/policies/${row.id}`}
-                    style={{
-                      marginRight: "0.5rem",
-                      color: BRAND.colors.blue,
-                      textDecoration: "none",
-                      fontWeight: 600,
-                    }}
+      {rows.length === 0 && !loadError ? (
+        <div className="border-border bg-card text-muted-foreground rounded-lg border border-dashed p-6 text-center">
+          No policies yet. Create one to start restricting link sharing.
+        </div>
+      ) : (
+        <Card className="overflow-x-auto p-0">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="bg-muted/50">
+                {["Name", "Target", "Restrictions", "Updated", ""].map((h) => (
+                  <th
+                    key={h}
+                    className="text-muted-foreground border-border border-b px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider"
                   >
-                    Edit
-                  </Link>
-                  <DeletePolicyButton id={row.id} name={row.name} />
-                </td>
+                    {h}
+                  </th>
+                ))}
               </tr>
-            ))}
-            {rows.length === 0 && !loadError && (
-              <tr>
-                <td
-                  colSpan={5}
-                  style={{
-                    padding: "2rem",
-                    textAlign: "center",
-                    color: "rgba(30,41,59,0.56)",
-                  }}
-                >
-                  No policies yet. Create one to start restricting link
-                  sharing.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </main>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.id} className="border-border/50 border-b">
+                  <td className="text-foreground px-4 py-2.5 font-semibold">
+                    {row.name}
+                  </td>
+                  <td className="text-foreground px-4 py-2.5 font-mono text-sm tabular-nums">
+                    {row.targetType}:{row.targetValue}
+                  </td>
+                  <td className="text-muted-foreground px-4 py-2.5">
+                    {summarizeRestrictions(row)}
+                  </td>
+                  <td className="text-muted-foreground px-4 py-2.5 font-mono tabular-nums">
+                    {row.updatedAt.toLocaleDateString()}
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    <Button asChild variant="ghost" size="sm">
+                      <Link href={`/policies/${row.id}`}>Edit</Link>
+                    </Button>
+                    <DeletePolicyButton id={row.id} name={row.name} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+    </section>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { BRAND } from "@/lib/brand";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   describePolicy,
   type PolicyPreviewInput,
@@ -25,58 +25,34 @@ const ROWS: ReadonlyArray<{
 export function PolicyPreview({ policy }: PolicyPreviewProps) {
   const desc = describePolicy(policy);
   return (
-    <aside
-      aria-label="Policy preview"
-      style={{
-        padding: "1rem",
-        background: "#FFFFFF",
-        border: `1px solid ${BRAND.colors.dark}1A`,
-        borderRadius: "0.5rem",
-        fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-        color: BRAND.colors.dark,
-        fontSize: "0.85rem",
-      }}
-    >
-      <h3
-        style={{
-          fontSize: "0.75rem",
-          fontWeight: 700,
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-          color: "rgba(30,41,59,0.64)",
-          margin: "0 0 0.75rem",
-        }}
-      >
-        Policy preview
-      </h3>
-      <dl
-        style={{
-          display: "grid",
-          gridTemplateColumns: "auto 1fr",
-          gap: "0.5rem 1rem",
-          margin: 0,
-        }}
-      >
-        {ROWS.map((row) => (
-          <div
-            key={row.key}
-            style={{ display: "contents" }}
-          >
-            <dt style={{ color: "rgba(30,41,59,0.64)", fontWeight: 600 }}>
-              {row.label}
-            </dt>
-            <dd
-              style={{
-                margin: 0,
-                fontFamily:
-                  row.key === "target" ? "ui-monospace, monospace" : undefined,
-              }}
-            >
-              {desc[row.key]}
-            </dd>
-          </div>
-        ))}
-      </dl>
+    <aside aria-label="Policy preview" className="contents">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-muted-foreground text-xs font-bold uppercase tracking-wider">
+            Policy preview
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+            {ROWS.map((row) => (
+              <div key={row.key} className="contents">
+                <dt className="text-muted-foreground font-semibold">
+                  {row.label}
+                </dt>
+                <dd
+                  className={
+                    row.key === "target"
+                      ? "text-foreground m-0 font-mono tabular-nums"
+                      : "text-foreground m-0"
+                  }
+                >
+                  {desc[row.key]}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </CardContent>
+      </Card>
     </aside>
   );
 }

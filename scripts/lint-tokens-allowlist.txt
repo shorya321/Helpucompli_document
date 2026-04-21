@@ -7,14 +7,6 @@
 #
 # Paths are relative to repo root. Comments (# ...) and blank lines ignored.
 
-# Phase C4 — policies
-src/components/policies/policy-form.tsx
-src/components/policies/policy-preview.tsx
-src/components/policies/target-picker.tsx
-src/components/policies/ip-range-input.tsx
-src/components/policies/domain-input.tsx
-src/app/(dashboard)/policies/page.tsx
-
 # Phase C5 — users
 src/components/users/user-table.tsx
 src/components/users/invite-user-dialog.tsx
