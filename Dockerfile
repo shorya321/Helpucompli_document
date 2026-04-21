@@ -71,4 +71,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
 
 # Apply pending migrations, then start the Next server. Migration failure
 # aborts boot so we never serve a request against a drifted schema.
-CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy && node server.js"]
+# Invoke prisma CLI directly via `node` — the standalone runner image does
+# not include the `node_modules/.bin/` symlinks (only the `prisma` package
+# dir is copied), so calling `node_modules/.bin/prisma` fails at boot.
+CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node server.js"]
