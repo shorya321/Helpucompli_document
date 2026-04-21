@@ -46,18 +46,20 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs \
  && adduser  --system --uid 1001 nextjs
 
-# Static assets + standalone server bundle + Prisma client.
+# Static assets + standalone server bundle.
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 # Schema + migrations so `prisma migrate deploy` can run at boot.
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-# Generated Prisma client (query engine binary + JS client).
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
-# `prisma` CLI so `migrate deploy` works at boot — we copy only the
-# compiled CLI, not the whole dev dep graph.
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
+# Full node_modules from the builder stage. Prisma CLI pulls in transitive
+# deps (@prisma/config → effect, c12, deepmerge-ts, empathic) that are
+# hoisted to top-level node_modules and NOT traced by Next.js standalone.
+# A narrow @prisma/prisma/.prisma subset left `effect` missing and the
+# container crashed at boot. One full copy removes the whack-a-mole risk
+# as Prisma's dep graph evolves. Standalone's traced node_modules files
+# under .next/standalone/node_modules are preserved where they exist.
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 
 USER nextjs
 EXPOSE 3000
