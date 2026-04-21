@@ -11,6 +11,7 @@ export function buildDocumentMenu({
   bucketId,
   s3Key,
   canHardDelete,
+  canGenerateLink,
   basePath = "/documents",
 }: {
   readonly bucket: string;
@@ -18,6 +19,7 @@ export function buildDocumentMenu({
   readonly bucketId: string;
   readonly s3Key: string;
   readonly canHardDelete: boolean;
+  readonly canGenerateLink: boolean;
   readonly basePath?: string;
 }): ReadonlyArray<ContextMenuItem> {
   // Preserve current browse state (bucket + prefix) in every action href
@@ -31,17 +33,27 @@ export function buildDocumentMenu({
     `${basePath}?${browse}&op=${op}` +
     `&bucketId=${encodeURIComponent(bucketId)}` +
     `&s3Key=${encodeURIComponent(s3Key)}`;
+  // "Generate link" jumps to the /links page with the source document
+  // preselected. Only admin+superadmin see the item — the /links page
+  // renders an empty state for viewers, so hiding the entry here keeps
+  // the menu honest instead of offering a dead click.
+  const linkHref =
+    `/links?fromBucketId=${encodeURIComponent(bucketId)}` +
+    `&fromS3Key=${encodeURIComponent(s3Key)}`;
   return [
     { key: "preview", label: "View details", href: q("preview") },
     { key: "download", label: "Download", href: q("download") },
     { key: "move", label: "Move to…", href: q("move") },
     { key: "copy", label: "Copy to…", href: q("copy") },
-    {
-      key: "link",
-      label: "Generate link",
-      href: q("link"),
-      disabled: true, // F9 wires the link engine
-    },
+    ...(!canGenerateLink
+      ? []
+      : [
+          {
+            key: "link",
+            label: "Generate link",
+            href: linkHref,
+          } as ContextMenuItem,
+        ]),
     { key: "delete", label: "Delete", href: q("delete"), danger: true },
     ...(!canHardDelete
       ? []

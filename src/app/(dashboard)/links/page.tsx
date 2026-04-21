@@ -18,7 +18,13 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export default async function LinksPage() {
+interface LinksPageProps {
+  readonly searchParams: Promise<
+    Record<string, string | string[] | undefined>
+  >;
+}
+
+export default async function LinksPage({ searchParams }: LinksPageProps) {
   const session = await auth0.getSession();
   if (!session) redirect("/auth/login");
   if (!(await resolveHasRole(session, ["superadmin", "admin", "viewer"]))) {
@@ -28,6 +34,12 @@ export default async function LinksPage() {
   const isAdminUp = await resolveHasRole(session, ["superadmin", "admin"]);
   // "Never expires" for links is superadmin-gated — both UI and API.
   const isSuperadmin = await resolveHasRole(session, ["superadmin"]);
+
+  const params = await searchParams;
+  const fromBucketId =
+    typeof params.fromBucketId === "string" ? params.fromBucketId : undefined;
+  const fromS3Key =
+    typeof params.fromS3Key === "string" ? params.fromS3Key : undefined;
 
   let documents: Array<{
     id: string;
@@ -50,6 +62,27 @@ export default async function LinksPage() {
     revoked: 0,
     topDocuments: [],
   };
+  // Resolve the source document from the context-menu deeplink
+  // (?fromBucketId=X&fromS3Key=Y). isDeleted excluded so stale links
+  // from the doc browser cannot preselect a hidden row. Failure is
+  // silent — the form just opens without a preselection.
+  let initialDocumentId: string | undefined;
+  if (isAdminUp && fromBucketId && fromS3Key) {
+    try {
+      const doc = await prisma.document.findFirst({
+        where: {
+          bucketId: fromBucketId,
+          s3Key: fromS3Key,
+          isDeleted: false,
+        },
+        select: { id: true },
+      });
+      if (doc) initialDocumentId = doc.id;
+    } catch {
+      initialDocumentId = undefined;
+    }
+  }
+
   if (isAdminUp) {
     try {
       const [docRows, polRows, linkRes, analyticsRes] = await Promise.all([
@@ -112,6 +145,7 @@ export default async function LinksPage() {
             documents={documents}
             policies={policies}
             canNeverExpire={isSuperadmin}
+            initialDocumentId={initialDocumentId}
           />
           <LinkTable initial={initialLinks} />
         </>

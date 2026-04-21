@@ -213,6 +213,7 @@ export default async function DocumentsPage({ searchParams }: PageProps) {
               bucket={inScope.name}
               bucketId={inScope.id}
               canHardDelete={role === "superadmin"}
+              canGenerateLink={role === "superadmin" || role === "admin"}
               prefix={q.prefix}
               entries={entries}
               view={q.view}

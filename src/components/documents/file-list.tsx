@@ -23,6 +23,7 @@ interface FileListProps {
   readonly bucket: string;
   readonly bucketId?: string;
   readonly canHardDelete?: boolean;
+  readonly canGenerateLink?: boolean;
   readonly prefix: string;
   readonly entries: ReadonlyArray<FileListEntry>;
   readonly view: "grid" | "list";
@@ -35,6 +36,7 @@ interface FileRowProps {
   readonly bucketId?: string;
   readonly prefix: string;
   readonly canHardDelete: boolean;
+  readonly canGenerateLink: boolean;
 }
 
 function rowClass(view: "grid" | "list"): string {
@@ -52,6 +54,7 @@ function FileRow({
   bucketId,
   prefix,
   canHardDelete,
+  canGenerateLink,
 }: FileRowProps) {
   const inner = (
     <>
@@ -83,6 +86,7 @@ function FileRow({
           bucketId,
           s3Key: entry.key,
           canHardDelete,
+          canGenerateLink,
         })}
       >
         <span className="flex w-full flex-wrap items-baseline justify-between gap-3">
@@ -108,6 +112,7 @@ export function FileList({
   bucket,
   bucketId,
   canHardDelete = false,
+  canGenerateLink = false,
   prefix,
   entries,
   view,
@@ -199,6 +204,7 @@ export function FileList({
                 bucketId={bucketId}
                 prefix={prefix}
                 canHardDelete={canHardDelete}
+                canGenerateLink={canGenerateLink}
               />
             ),
           )}

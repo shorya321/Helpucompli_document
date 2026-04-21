@@ -52,6 +52,11 @@ interface GenerateLinkFormProps {
   // hide is cosmetic; the POST /api/links handler 403s when a non-
   // superadmin sends neverExpires=true.
   readonly canNeverExpire?: boolean;
+  // Preselect the document dropdown when the user arrives from the
+  // doc browser right-click "Generate link" action. Must match one of
+  // the `documents[].id` values — unmatched IDs are ignored and the
+  // form opens with the placeholder.
+  readonly initialDocumentId?: string;
 }
 
 interface CreateResp {
@@ -67,9 +72,14 @@ export function GenerateLinkForm({
   documents,
   policies,
   canNeverExpire = false,
+  initialDocumentId,
 }: GenerateLinkFormProps) {
   const router = useRouter();
-  const [documentId, setDocumentId] = useState("");
+  const [documentId, setDocumentId] = useState(
+    initialDocumentId && documents.some((d) => d.id === initialDocumentId)
+      ? initialDocumentId
+      : "",
+  );
   const [policyId, setPolicyId] = useState("");
   // "never" sentinel = superadmin-only. Stored in the same state as the
   // finite presets so the TTL <select> is a single control, not a pair

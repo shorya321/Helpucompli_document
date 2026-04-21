@@ -5,16 +5,30 @@ import { ContextMenu } from "@/components/documents/context-menu";
 import { buildDocumentMenu } from "@/components/documents/context-menu-items";
 
 describe("buildDocumentMenu", () => {
-  it("produces the standard action set", () => {
+  it("produces the standard action set when admin+ (includes link)", () => {
     const menu = buildDocumentMenu({
       bucket: "my-bucket",
       prefix: "",
       bucketId: "b1",
       s3Key: "abc-report.pdf",
       canHardDelete: false,
+      canGenerateLink: true,
     });
     const keys = menu.map((m) => m.key);
     expect(keys).toEqual(["preview", "download", "move", "copy", "link", "delete"]);
+  });
+
+  it("omits link action for viewers (canGenerateLink=false)", () => {
+    const menu = buildDocumentMenu({
+      bucket: "my-bucket",
+      prefix: "",
+      bucketId: "b1",
+      s3Key: "abc-report.pdf",
+      canHardDelete: false,
+      canGenerateLink: false,
+    });
+    const keys = menu.map((m) => m.key);
+    expect(keys).toEqual(["preview", "download", "move", "copy", "delete"]);
   });
 
   it("appends hard-delete when canHardDelete=true", () => {
@@ -24,19 +38,24 @@ describe("buildDocumentMenu", () => {
       bucketId: "b1",
       s3Key: "abc-report.pdf",
       canHardDelete: true,
+      canGenerateLink: true,
     });
     expect(menu.at(-1)?.key).toBe("hard-delete");
   });
 
-  it("disables generate-link until F9 ships", () => {
+  it("link action targets /links page with fromBucketId + fromS3Key", () => {
     const menu = buildDocumentMenu({
       bucket: "my-bucket",
       prefix: "",
-      bucketId: "b1",
-      s3Key: "abc-report.pdf",
+      bucketId: "b 1",
+      s3Key: "a b/c.pdf",
       canHardDelete: false,
+      canGenerateLink: true,
     });
-    expect(menu.find((m) => m.key === "link")?.disabled).toBe(true);
+    const link = menu.find((m) => m.key === "link")!;
+    expect(link.disabled).toBeUndefined();
+    expect(link.href).toContain("/links?fromBucketId=b%201");
+    expect(link.href).toContain("fromS3Key=a%20b%2Fc.pdf");
   });
 
   it("encodes bucketId + s3Key in query", () => {
@@ -46,6 +65,7 @@ describe("buildDocumentMenu", () => {
       bucketId: "b 1",
       s3Key: "a b/c.pdf",
       canHardDelete: false,
+      canGenerateLink: false,
     });
     expect(menu[0]!.href).toContain("bucketId=b%201");
     expect(menu[0]!.href).toContain("s3Key=a%20b%2Fc.pdf");
@@ -58,6 +78,7 @@ describe("buildDocumentMenu", () => {
       bucketId: "b1",
       s3Key: "file.pdf",
       canHardDelete: false,
+      canGenerateLink: false,
     });
     const moveHref = menu.find((m) => m.key === "move")!.href!;
     expect(moveHref).toContain("bucket=my-bucket");
@@ -72,6 +93,7 @@ describe("buildDocumentMenu", () => {
       bucketId: "b1",
       s3Key: "file.pdf",
       canHardDelete: false,
+      canGenerateLink: false,
     });
     const moveHref = menu.find((m) => m.key === "move")!.href!;
     expect(moveHref).toContain("bucket=my-bucket");
@@ -85,6 +107,7 @@ describe("buildDocumentMenu", () => {
       bucketId: "b1",
       s3Key: "k",
       canHardDelete: true,
+      canGenerateLink: false,
     });
     expect(menu.find((m) => m.key === "delete")?.danger).toBe(true);
     expect(menu.find((m) => m.key === "hard-delete")?.danger).toBe(true);
