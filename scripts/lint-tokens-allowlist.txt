@@ -7,11 +7,6 @@
 #
 # Paths are relative to repo root. Comments (# ...) and blank lines ignored.
 
-# Phase C1 — dashboard home
-src/components/dashboard/summary-cards.tsx
-src/components/dashboard/quick-actions.tsx
-src/components/dashboard/activity-feed.tsx
-
 # Phase C2 — buckets
 src/components/buckets/bucket-card.tsx
 src/components/buckets/create-bucket-dialog.tsx

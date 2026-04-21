@@ -1,6 +1,5 @@
 import { auth0 } from "@/lib/auth0";
 import { resolveHasRole, resolveRole } from "@/lib/auth-guard";
-import { BRAND } from "@/lib/brand";
 import { prisma } from "@/lib/prisma";
 import { asStatsPrisma, getDashboardStats } from "@/lib/dashboard-stats";
 import type { DashboardStats } from "@/lib/dashboard-stats";
@@ -39,20 +38,12 @@ export default async function DashboardHomePage() {
   }
 
   return (
-    <section
-      style={{
-        fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-        color: BRAND.colors.dark,
-        display: "flex",
-        flexDirection: "column",
-        gap: "1.5rem",
-      }}
-    >
+    <section className="flex flex-col gap-6">
       <header>
-        <h1 style={{ margin: 0, fontSize: "1.5rem", fontWeight: 700 }}>
+        <h1 className="text-foreground m-0 text-2xl font-bold tracking-tight">
           Dashboard
         </h1>
-        <p style={{ marginTop: "0.25rem", color: "rgba(30,41,59,0.72)" }}>
+        <p className="text-muted-foreground mt-1">
           {canSeeAggregate
             ? "Activity summary for the last 7 days."
             : "Welcome back. Use the sidebar to browse the documents and links you can access."}
@@ -61,19 +52,13 @@ export default async function DashboardHomePage() {
       {role ? <QuickActions role={role} /> : null}
       {canSeeAggregate && stats ? <SummaryCards stats={stats} /> : null}
       {canSeeAggregate && loadError ? (
-        <p role="alert" style={{ color: BRAND.colors.pink }}>
+        <p role="alert" className="text-destructive">
           Unable to load dashboard metrics. Please try again.
         </p>
       ) : null}
       {canSeeAggregate && !loadError ? (
         <section>
-          <h2
-            style={{
-              margin: "0 0 0.75rem",
-              fontSize: "1.125rem",
-              fontWeight: 600,
-            }}
-          >
+          <h2 className="text-foreground mb-3 text-lg font-semibold">
             Recent activity
           </h2>
           <ActivityFeed initial={activity} />

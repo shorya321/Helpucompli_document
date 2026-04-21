@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BRAND } from "@/lib/brand";
+import { Button } from "@/components/ui/button";
 import {
   DASHBOARD_QUICK_ACTIONS,
   filterQuickActionsForRole,
@@ -11,21 +11,8 @@ interface QuickActionsProps {
   readonly role: Role;
 }
 
-function toneStyle(action: QuickAction): React.CSSProperties {
-  const primary = action.tone === "primary";
-  return {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "0.625rem 1rem",
-    borderRadius: "0.5rem",
-    textDecoration: "none",
-    fontWeight: 600,
-    fontSize: "0.875rem",
-    background: primary ? BRAND.colors.pink : "#FFFFFF",
-    color: primary ? BRAND.colors.light : BRAND.colors.dark,
-    border: primary ? "none" : `1px solid ${BRAND.colors.blue}`,
-  };
+function buttonVariant(action: QuickAction): "default" | "outline" {
+  return action.tone === "primary" ? "default" : "outline";
 }
 
 export function QuickActions({ role }: QuickActionsProps) {
@@ -37,21 +24,13 @@ export function QuickActions({ role }: QuickActionsProps) {
     <ul
       role="list"
       aria-label="Quick actions"
-      style={{
-        listStyle: "none",
-        padding: 0,
-        margin: 0,
-        display: "flex",
-        flexWrap: "wrap",
-        gap: "0.5rem",
-        fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-      }}
+      className="m-0 flex list-none flex-wrap gap-2 p-0"
     >
       {actions.map((action) => (
         <li key={action.id}>
-          <Link href={action.href} style={toneStyle(action)}>
-            {action.label}
-          </Link>
+          <Button variant={buttonVariant(action)} size="sm" asChild>
+            <Link href={action.href}>{action.label}</Link>
+          </Button>
         </li>
       ))}
     </ul>

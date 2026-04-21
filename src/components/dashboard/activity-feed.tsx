@@ -2,7 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BRAND } from "@/lib/brand";
+import { AlertTriangle, CheckCircle2, Info, ShieldAlert } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   actionBadgeTone,
   type ActivityEntry,
@@ -16,11 +20,14 @@ interface ActivityFeedProps {
 
 const REFETCH_INTERVAL_MS = 30_000;
 
-const TONE_COLORS: Record<BadgeTone, { bg: string; fg: string }> = {
-  info: { bg: BRAND.colors.blue, fg: BRAND.colors.light },
-  success: { bg: "#16A34A", fg: BRAND.colors.light },
-  warning: { bg: "#D97706", fg: BRAND.colors.light },
-  danger: { bg: BRAND.colors.pink, fg: BRAND.colors.light },
+const TONE_VARIANT: Record<
+  BadgeTone,
+  { variant: "default" | "secondary" | "destructive" | "outline"; Icon: LucideIcon }
+> = {
+  info: { variant: "secondary", Icon: Info },
+  success: { variant: "default", Icon: CheckCircle2 },
+  warning: { variant: "outline", Icon: AlertTriangle },
+  danger: { variant: "destructive", Icon: ShieldAlert },
 };
 
 class ActivityFetchError extends Error {
@@ -35,14 +42,10 @@ class ActivityFetchError extends Error {
 async function fetchActivity(): Promise<readonly ActivityEntry[]> {
   const res = await fetch("/api/dashboard/activity", { cache: "no-store" });
   if (!res.ok) {
-    // Don't swallow 401/403/500 — surface via useQuery.isError so the
-    // UI can flag session-expiry vs. empty state. Body is ignored
-    // because `error` is always a generic string (API redaction).
     throw new ActivityFetchError(res.status, `HTTP ${res.status}`);
   }
   const body = (await res.json()) as ApiResponse<readonly ActivityEntry[]>;
   const raw = body.data ?? [];
-  // Wire-format: createdAt is serialised as ISO string, coerce back.
   return raw.map((e) => ({
     ...e,
     createdAt: new Date(e.createdAt as unknown as string),
@@ -60,8 +63,6 @@ function formatRelative(when: Date, now: Date = new Date()): string {
 }
 
 export function ActivityFeed({ initial }: ActivityFeedProps) {
-  // Lock initialDataUpdatedAt to mount time so the first refetch waits
-  // staleTime ms instead of firing immediately on hydration.
   const [initialUpdatedAt] = useState(() => Date.now());
   const { data, dataUpdatedAt, isError } = useQuery({
     queryKey: ["dashboard", "activity"],
@@ -70,7 +71,6 @@ export function ActivityFeed({ initial }: ActivityFeedProps) {
     initialDataUpdatedAt: initialUpdatedAt,
     refetchInterval: REFETCH_INTERVAL_MS,
     staleTime: REFETCH_INTERVAL_MS / 2,
-    // Don't retry 4xx — 401/403 won't succeed on the 2nd/3rd attempt.
     retry: (failureCount, error) => {
       if (error instanceof ActivityFetchError && error.status < 500) {
         return false;
@@ -79,8 +79,6 @@ export function ActivityFeed({ initial }: ActivityFeedProps) {
     },
   });
   const entries = (data ?? initial) as readonly ActivityEntry[];
-  // Pin `now` per data snapshot — prevents SSR/client hydration drift
-  // from `new Date()` being called at two different instants.
   const now = useMemo(
     () => new Date(dataUpdatedAt || initialUpdatedAt),
     [dataUpdatedAt, initialUpdatedAt],
@@ -88,13 +86,7 @@ export function ActivityFeed({ initial }: ActivityFeedProps) {
 
   if (isError && entries.length === 0) {
     return (
-      <p
-        role="alert"
-        style={{
-          color: BRAND.colors.pink,
-          fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-        }}
-      >
+      <p role="alert" className="text-destructive">
         Unable to refresh activity. Your session may have expired.
       </p>
     );
@@ -102,75 +94,42 @@ export function ActivityFeed({ initial }: ActivityFeedProps) {
 
   if (entries.length === 0) {
     return (
-      <p
-        style={{
-          color: "rgba(30,41,59,0.64)",
-          fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-        }}
-      >
-        No recent activity to show.
-      </p>
+      <p className="text-muted-foreground">No recent activity to show.</p>
     );
   }
 
   return (
     <ul
       role="list"
-      style={{
-        listStyle: "none",
-        padding: 0,
-        margin: 0,
-        display: "flex",
-        flexDirection: "column",
-        gap: "0.5rem",
-        fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-      }}
+      className="m-0 flex list-none flex-col gap-2 p-0"
     >
       {entries.map((entry) => {
-        const tone = TONE_COLORS[actionBadgeTone(entry.action)];
+        const { variant, Icon } = TONE_VARIANT[actionBadgeTone(entry.action)];
         return (
-          <li
-            key={entry.id}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.75rem",
-              padding: "0.75rem 1rem",
-              background: "#FFFFFF",
-              border: `1px solid ${BRAND.colors.dark}1A`,
-              borderRadius: "0.5rem",
-              color: BRAND.colors.dark,
-            }}
-          >
-            <span
-              style={{
-                background: tone.bg,
-                color: tone.fg,
-                padding: "0.125rem 0.5rem",
-                borderRadius: "0.375rem",
-                fontSize: "0.7rem",
-                fontWeight: 700,
-                whiteSpace: "nowrap",
-              }}
-            >
-              {entry.action}
-            </span>
-            <span style={{ fontWeight: 500 }}>
-              {entry.userName ?? "System"}
-            </span>
-            <span style={{ color: "rgba(30,41,59,0.64)" }}>
-              {entry.targetType}:{entry.targetId}
-            </span>
-            <span
-              style={{
-                marginLeft: "auto",
-                color: "rgba(30,41,59,0.56)",
-                fontSize: "0.8rem",
-              }}
-              title={entry.createdAt.toISOString()}
-            >
-              {formatRelative(entry.createdAt, now)}
-            </span>
+          <li key={entry.id}>
+            <Card>
+              <CardContent className="flex items-center gap-3 px-4 py-3">
+                <Badge
+                  variant={variant}
+                  className="gap-1 whitespace-nowrap font-mono text-[0.65rem] uppercase tracking-wide"
+                >
+                  <Icon aria-hidden="true" className="h-3 w-3" />
+                  {entry.action}
+                </Badge>
+                <span className="text-foreground font-medium">
+                  {entry.userName ?? "System"}
+                </span>
+                <span className="text-muted-foreground font-mono text-sm">
+                  {entry.targetType}:{entry.targetId}
+                </span>
+                <span
+                  className="text-muted-foreground ml-auto text-sm tabular-nums"
+                  title={entry.createdAt.toISOString()}
+                >
+                  {formatRelative(entry.createdAt, now)}
+                </span>
+              </CardContent>
+            </Card>
           </li>
         );
       })}

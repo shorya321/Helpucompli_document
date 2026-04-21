@@ -1,4 +1,4 @@
-import { BRAND } from "@/lib/brand";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   RECENT_WINDOW_DAYS,
   type DashboardStats,
@@ -8,14 +8,14 @@ interface SummaryCardsProps {
   readonly stats: DashboardStats;
 }
 
-interface Card {
+interface SummaryCard {
   readonly label: string;
   readonly value: number;
   readonly sub?: string;
 }
 
 export function SummaryCards({ stats }: SummaryCardsProps) {
-  const cards: readonly Card[] = [
+  const cards: readonly SummaryCard[] = [
     { label: "Documents", value: stats.totalDocuments },
     { label: "Buckets", value: stats.totalBuckets },
     {
@@ -34,59 +34,27 @@ export function SummaryCards({ stats }: SummaryCardsProps) {
   return (
     <ul
       role="list"
-      style={{
-        listStyle: "none",
-        padding: 0,
-        margin: 0,
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(12rem, 1fr))",
-        gap: "1rem",
-        fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-      }}
+      className="m-0 grid list-none grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-4 p-0"
     >
       {cards.map((card) => (
-        <li
-          key={card.label}
-          style={{
-            background: "#FFFFFF",
-            border: `1px solid ${BRAND.colors.dark}1A`,
-            borderRadius: "0.75rem",
-            padding: "1.25rem",
-            color: BRAND.colors.dark,
-          }}
-        >
-          <p
-            style={{
-              margin: 0,
-              fontSize: "0.75rem",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              color: BRAND.colors.blue,
-              fontWeight: 600,
-            }}
-          >
-            {card.label}
-          </p>
-          <p
-            style={{
-              margin: "0.25rem 0 0",
-              fontSize: "1.75rem",
-              fontWeight: 700,
-            }}
-          >
-            {card.value}
-          </p>
-          {card.sub ? (
-            <p
-              style={{
-                margin: "0.25rem 0 0",
-                fontSize: "0.75rem",
-                color: "rgba(30,41,59,0.64)",
-              }}
-            >
-              {card.sub}
-            </p>
-          ) : null}
+        <li key={card.label}>
+          <Card className="h-full">
+            <CardHeader className="pb-2">
+              <p className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">
+                {card.label}
+              </p>
+            </CardHeader>
+            <CardContent>
+              <p className="text-foreground font-mono text-3xl font-bold tabular-nums">
+                {card.value}
+              </p>
+              {card.sub ? (
+                <p className="text-muted-foreground mt-1 text-xs">
+                  {card.sub}
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
         </li>
       ))}
     </ul>
