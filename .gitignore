@@ -17,7 +17,28 @@ build/
 
 # misc
 .DS_Store
+Thumbs.db
 *.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.jks
+secrets/
+credentials/
+*.secret
+*.secrets
+
+# logs + tmp
+*.log
+tmp/
+.tmp/
+
+# build caches
+.turbo/
+.cache/
+.swc/
+.parcel-cache/
 
 # debug
 npm-debug.log*
@@ -49,3 +70,6 @@ prisma/migrations/*.sql.bak
 # local agent scratch + resolved skill cache (rehydrated from skills-lock.json)
 .agents/
 .claude/skills/
+
+# per-developer session progress log — noisy diffs, not needed in history
+claude-progress.json
