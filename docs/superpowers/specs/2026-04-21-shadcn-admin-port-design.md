@@ -85,12 +85,17 @@ Scope was confirmed with the user:
 
 - `src/components/layout/breadcrumbs.tsx` — reads `usePathname()`, splits on `/`, maps segment → label via a small lookup table colocated in the file (or derived from `dashboard-nav.ts`). Renders a shadcn Breadcrumb component (install if not present).
 - `src/components/layout/top-nav.tsx` — horizontal tabbed nav for deep pages. Accepts `links: { href, label, isActive? }[]`. Used on `/buckets/[id]` initially.
-- `src/app/(dashboard)/buckets/[id]/page.tsx` gets a `<TopNav links={...}>` beneath the existing header, with tabs: Overview / Policies / Compliance / Documents. These map to anchors / query-string tabs on the existing page (no new routes yet).
-- `react-top-loading-bar@3` (or `nprogress` via `nextjs-toploader@3`) added. Wired via a `src/components/layout/top-loader.tsx` client component mounted in the root layout. Tracks `useRouter` events / App Router `loading.tsx`.
+- `src/app/(dashboard)/buckets/[id]/page.tsx` gets a `<TopNav links={...}>` beneath the existing header, with tabs driven by the `?tab=` query string: `?tab=overview` (default), `?tab=policies`, `?tab=compliance`, `?tab=documents`. Each tab value renders a different subset of the existing page sections:
+  - `overview` → metrics grid + description card (current default landing).
+  - `policies` → "Access policies" section only.
+  - `compliance` → "HIPAA compliance" section + ComplianceVerifier.
+  - `documents` → "Recent documents" section.
+  No new routes are added; the existing page.tsx reads `searchParams.tab` and conditionally renders. Deep linking continues to work.
+- `nextjs-toploader@3` added (App-Router-native — no manual event wiring). Mounted once as `<NextTopLoader color="var(--primary)" height={2} showSpinner={false} />` inside `src/app/layout.tsx` — the primary token is OKLCH, so the color value is passed through as-is (no `hsl()` wrapper). Shows on every `router.push()` and cooperates with `loading.tsx` boundaries automatically. No `router.events` polyfill required (that API does not exist in the App Router).
 
 ### Command palette (E3)
 
-- Install `cmdk@1`. shadcn `Command` is already present from Phase A.
+- `cmdk@1.1.1` is already installed (came in with shadcn `Command` during Phase A). No install step needed.
 - `src/components/layout/command-menu.tsx` — client component; `CommandDialog` wraps `CommandInput` + `CommandList` with sections:
   - **Navigation** — every role-allowed nav item from `DASHBOARD_NAV_ITEMS`, with its Lucide icon.
   - **Theme** — Light / Dark / System.
@@ -103,15 +108,15 @@ Scope was confirmed with the user:
 
 - New route: `/settings` under `src/app/(dashboard)/settings/`.
 - `settings/layout.tsx` — renders a left vertical nav using `Sidebar`-style tokens, tabs by `pathname`.
+- **E4 is UI-only: every persisted field writes to `localStorage`. No new API routes, no Prisma schema change, no server-side write.** This keeps the Non-goals intact. Server-side persistence of preferences is explicitly deferred to a later PR.
 - Sub-routes (each server-component page rendering a client form):
   - `/settings/profile` — display name + email (read-only from Auth0 session), avatar (read-only for now — upload deferred).
-  - `/settings/account` — timezone, date format, language select. Persists to `User` row via a new Zod-validated PATCH `/api/users/:id/preferences` (thin endpoint; needs a Prisma field `preferences Json?` — skipped if we avoid schema changes, see open questions).
-  - `/settings/appearance` — theme picker (light/dark/system — wraps next-themes), font picker (Inter / JetBrains Mono / Manrope — writes to `localStorage` + applies `document.documentElement.style.setProperty('--font-sans', ...)`; client-only, not persisted server-side).
+  - `/settings/account` — timezone, date format, language select. Writes to `localStorage` under key `helpucompli:settings:account`. No API call.
+  - `/settings/appearance` — theme picker (light/dark/system — wraps `next-themes` `useTheme()`), font picker (Inter / JetBrains Mono / Manrope — writes to `localStorage` + applies `document.documentElement.style.setProperty('--font-sans', ...)`; client-only).
   - `/settings/display` — feature-toggle checkboxes that persist to `localStorage` (density, show-role-badges, etc.).
-  - `/settings/notifications` — email-notification prefs. Defers to backend — UI only in this spec.
-- Forms use `react-hook-form` (already installed) + `zodResolver` + shadcn Form components.
-
-**Open question (settings):** do we add a `User.preferences Json?` Prisma column for server-side persistence, or restrict Settings to localStorage-only for this PR? See Open Questions.
+  - `/settings/notifications` — email-notification prefs — UI-only placeholder writing to `localStorage`; copy reads "changes saved locally; server sync coming soon".
+- Forms use `react-hook-form` (already installed) + `zodResolver` + shadcn Form components. Validation still runs client-side via `zod` even though persistence is `localStorage`.
+- Future PR (out of scope): if/when we add server persistence, the endpoint will be `/api/users/me/preferences` (no path-id — IDOR-safe; the server resolves the caller from the Auth0 session).
 
 ### Data-table primitives (E5)
 
@@ -127,15 +132,22 @@ Scope was confirmed with the user:
 - Retrofit (no new routes):
   - `src/components/users/user-table.tsx` — replace the current simple table with `DataTable<User>` + role-filter facet + status-filter facet + bulk-disable action.
   - `src/components/audit/audit-table.tsx` — add action-filter facet (select from all `AuditAction`s), target-type facet, user facet. Bulk actions: export selected to CSV.
-  - `src/components/documents/file-list.tsx` — switch to `DataTable<Document>` on the list view (keep grid view as an alt render); filters for content-type + bucket.
   - `src/components/links/link-table.tsx` — status facet (active / expired / revoked), bucket facet.
+- **Documents is descoped from E5.** `src/components/documents/file-list.tsx` is load-bearing — it owns folder navigation, drag-drop uploads via `upload-zone.tsx`, the `context-menu.tsx` right-click surface, and the `file-tree.tsx` sibling. Migrating it to `DataTable` would require preserving all of those behaviors, which is a non-trivial UX rework outside the "chrome + primitives" scope. Documents stays on its current shadcn Card + Table shape (migrated in Phase C3). Track a data-table view of Documents as a separate post-E5 PR if desired.
 
 ### Illustrated error pages (E5)
 
 - New route group `src/app/(errors)/` with layout wrapping each page in a full-viewport shell.
 - Pages: `/errors/401`, `/errors/403`, `/errors/404`, `/errors/500`, `/errors/503` (each a server page).
-- Shared component `src/components/layout/error-illustration.tsx` renders: large Lucide icon (unique per status — `Lock`, `Ban`, `Search`, `ServerCrash`, `PlugZap`), status code, title, description, primary action button.
-- Existing `src/app/error.tsx`, `global-error.tsx`, `not-found.tsx` get rewritten to render `ErrorIllustration` with the matching status. `src/app/(auth)/access-denied/page.tsx` rewrites to `ErrorIllustration status="403"` while keeping the existing `BRAND.name` mention + force-dynamic + mailto admin link.
+- Shared component `src/components/layout/error-illustration.tsx` renders: large Lucide icon (unique per status), status code, title, description, primary action button.
+- Icon selection (avoids collision with `Search` used for the E3 command palette trigger, and with `Shield*` icons used for role badges):
+  - 401 Unauthorized → `LockKeyhole`
+  - 403 Forbidden → `ShieldOff`
+  - 404 Not Found → `FileQuestion`
+  - 500 Server Error → `ServerCrash`
+  - 503 Service Unavailable → `PlugZap`
+- Existing `src/app/error.tsx`, `global-error.tsx`, `not-found.tsx` get rewritten to render `ErrorIllustration` with the matching status. Root `global-error.tsx` still imports `globals.css` directly (no layout available).
+- `src/app/(auth)/access-denied/page.tsx` stays under `(auth)` (preserves whatever layout that group provides for unauthenticated users) and is rewritten to render `ErrorIllustration status="403"` while keeping the existing `BRAND.name` mention, `export const dynamic = "force-dynamic"`, and the mailto admin link. It does **not** move to `(errors)` — moving would change route semantics.
 
 ## Data flow
 
@@ -149,7 +161,7 @@ No changes to data flow. All new components are presentational wrappers around e
 
 - Command palette: if a role-gated quick action is selected by a user who lacks role (defensive — we hide them at render time too), the server route still 403s.
 - Data-table filters: invalid URL param values are ignored and state falls back to default.
-- TopLoader: errors in a route do not leave the loader pinned — mount a cleanup effect that finishes the bar on `router.events.routeChangeError` (App Router equivalent: `useRouter` subscribe to `router.push` promise rejection).
+- TopLoader: `nextjs-toploader` handles completion and error states automatically against App Router `loading.tsx` boundaries — no manual event wiring needed.
 - Settings forms: server errors surface via `text-destructive` under the field + a sonner toast.
 
 ## Testing
@@ -179,20 +191,19 @@ No changes to data flow. All new components are presentational wrappers around e
 
 Every phase flagged-out behind a feature flag is **not** required — phases are additive and each ends in a green build. User can stop after any phase.
 
+## Decisions locked in-spec
+
+Answered upstream so they do not re-open at implementation time:
+
+1. **E4 persistence — localStorage only.** Server sync is explicitly out of scope for this PR series. Decided above in §E4.
+2. **E5 data-table filter state — `useSearchParams()` + manual serialisation.** No new dep; matches the existing `/buckets` filter form pattern.
+3. **E4 Appearance font picker — localStorage only.** Same rationale as #1.
+4. **Top loader library — `nextjs-toploader`.** App-Router-native, no event wiring. Decided above in §E2.
+5. **Breadcrumb source of truth — inline map in `breadcrumbs.tsx`.** Keeps `src/lib/dashboard-nav.ts` a single-responsibility role-filter config. The map handles the 7 top-level routes plus `/settings` sub-routes and the common `[id]` dynamic segments.
+
 ## Open questions
 
-1. **Server persistence for Settings (E4).** Three options:
-   - (a) localStorage only — zero schema changes, fastest, but settings don't follow user across devices.
-   - (b) Add `User.preferences Json?` Prisma column + thin `/api/users/me/preferences` endpoint. Requires a migration.
-   - (c) Defer server persistence to a later PR — ship E4 as UI-only on localStorage.
-   Recommend (c) for this spec; revisit after E4 lands.
-2. **Data-table filter state — URL params vs client state (E5).** Reference uses TanStack Router `useSearch()` for typed params. Options:
-   - (a) Use `useSearchParams()` + manual serialisation. Works, no new dep.
-   - (b) Add `nuqs` for typed search-param state management.
-   Recommend (a) — no new dep, matches the existing `/buckets` filter form pattern.
-3. **Font picker persistence (E4 Appearance).** localStorage only for this spec; revisit if users want it to follow their session.
-4. **Top loader library.** `nextjs-toploader` vs `react-top-loading-bar`. Recommend `nextjs-toploader` — App-Router-native, no event wiring needed.
-5. **Breadcrumb source of truth.** Map inline in `breadcrumbs.tsx` vs extend `DASHBOARD_NAV_ITEMS`. Recommend inline — keeps `dashboard-nav.ts` a single-responsibility role-filter config.
+_(none remaining — all prior open questions resolved above)_
 
 ## Verification checklist (run after each phase)
 
@@ -237,7 +248,6 @@ Every phase flagged-out behind a feature flag is **not** required — phases are
 - `src/app/(dashboard)/buckets/[id]/page.tsx` — add `<TopNav>` (E2).
 - `src/components/users/user-table.tsx` — switch to `DataTable` (E5).
 - `src/components/audit/audit-table.tsx` — switch to `DataTable` (E5).
-- `src/components/documents/file-list.tsx` — add `DataTable` list render (E5).
 - `src/components/links/link-table.tsx` — switch to `DataTable` (E5).
 - `src/app/error.tsx`, `global-error.tsx`, `not-found.tsx`, `(auth)/access-denied/page.tsx` — render `ErrorIllustration` (E5).
 
