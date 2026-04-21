@@ -2,7 +2,17 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { BRAND } from "@/lib/brand";
+
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface DeleteBucketDialogProps {
   readonly bucketId: string;
@@ -61,145 +71,58 @@ export function DeleteBucketDialog({
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="delete-bucket-title"
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(30,41,59,0.48)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "1rem",
-        zIndex: 50,
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) router.push(safeClose);
       }}
     >
-      <form
-        onSubmit={onSubmit}
-        style={{
-          background: "#FFFFFF",
-          borderRadius: "0.75rem",
-          padding: "1.5rem",
-          maxWidth: "32rem",
-          width: "100%",
-          color: BRAND.colors.dark,
-          fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-          display: "flex",
-          flexDirection: "column",
-          gap: "1rem",
-        }}
-      >
-        <h2
-          id="delete-bucket-title"
-          style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700 }}
-        >
-          Delete bucket
-        </h2>
+      <DialogContent className="sm:max-w-lg">
+        <form onSubmit={onSubmit} className="flex flex-col gap-4">
+          <DialogHeader>
+            <DialogTitle>Delete bucket</DialogTitle>
+          </DialogHeader>
 
-        <p
-          style={{
-            margin: 0,
-            padding: "0.75rem 1rem",
-            background: `${BRAND.colors.pink}12`,
-            color: BRAND.colors.pink,
-            borderRadius: "0.5rem",
-            fontSize: "0.8125rem",
-          }}
-        >
-          This deactivates the PostgreSQL row and deletes the S3 bucket. It
-          cannot be undone. The bucket must already be empty (no active
-          documents). A BUCKET_DELETE audit entry is recorded.
-        </p>
-
-        <label
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "0.375rem",
-            fontSize: "0.75rem",
-            textTransform: "uppercase",
-            letterSpacing: "0.06em",
-            color: BRAND.colors.blue,
-            fontWeight: 600,
-          }}
-        >
-          Type <code>{bucketName}</code> to confirm
-          <input
-            required
-            name="confirmName"
-            value={confirmInput}
-            onChange={(e) => setConfirmInput(e.target.value)}
-            placeholder={bucketName}
-            style={{
-              padding: "0.5rem 0.625rem",
-              fontSize: "0.875rem",
-              fontWeight: 500,
-              color: BRAND.colors.dark,
-              background: "#FFFFFF",
-              border: `1px solid ${BRAND.colors.dark}33`,
-              borderRadius: "0.375rem",
-              fontFamily: "inherit",
-            }}
-          />
-        </label>
-
-        {error ? (
-          <p
-            role="alert"
-            style={{
-              margin: 0,
-              color: BRAND.colors.pink,
-              fontSize: "0.875rem",
-            }}
-          >
-            {error}
+          <p className="border-destructive/40 bg-destructive/10 text-destructive rounded-md border px-3 py-2 text-sm">
+            This deactivates the PostgreSQL row and deletes the S3 bucket. It
+            cannot be undone. The bucket must already be empty (no active
+            documents). A BUCKET_DELETE audit entry is recorded.
           </p>
-        ) : null}
 
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: "0.5rem",
-          }}
-        >
-          <a
-            href={safeClose}
-            style={{
-              padding: "0.5rem 0.875rem",
-              fontSize: "0.875rem",
-              fontWeight: 600,
-              color: BRAND.colors.dark,
-              textDecoration: "none",
-              borderRadius: "0.5rem",
-              border: `1px solid ${BRAND.colors.dark}33`,
-            }}
-          >
-            Cancel
-          </a>
-          <button
-            type="submit"
-            disabled={pending || !matches}
-            style={{
-              background:
-                pending || !matches
-                  ? `${BRAND.colors.pink}80`
-                  : BRAND.colors.pink,
-              color: "#FFFFFF",
-              padding: "0.5rem 0.875rem",
-              fontSize: "0.875rem",
-              fontWeight: 600,
-              borderRadius: "0.5rem",
-              border: "none",
-              cursor: pending || !matches ? "not-allowed" : "pointer",
-            }}
-          >
-            {pending ? "Deleting…" : "Delete bucket"}
-          </button>
-        </div>
-      </form>
-    </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="confirm-name">
+              Type <code className="font-mono">{bucketName}</code> to confirm
+            </Label>
+            <Input
+              id="confirm-name"
+              required
+              name="confirmName"
+              value={confirmInput}
+              onChange={(e) => setConfirmInput(e.target.value)}
+              placeholder={bucketName}
+            />
+          </div>
+
+          {error ? (
+            <p role="alert" className="text-destructive text-sm">
+              {error}
+            </p>
+          ) : null}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" asChild>
+              <a href={safeClose}>Cancel</a>
+            </Button>
+            <Button
+              type="submit"
+              variant="destructive"
+              disabled={pending || !matches}
+            >
+              {pending ? "Deleting…" : "Delete bucket"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

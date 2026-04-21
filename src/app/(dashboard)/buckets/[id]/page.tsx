@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
+import { ArrowLeft, CheckCircle2, XCircle } from "lucide-react";
+
 import { auth0 } from "@/lib/auth0";
 import { resolveRole } from "@/lib/auth-guard";
-import { BRAND } from "@/lib/brand";
 import { prisma } from "@/lib/prisma";
 import {
   asBucketDetailsPrisma,
@@ -17,6 +18,9 @@ import { formatStorage } from "@/components/buckets/bucket-card";
 import { ComplianceVerifier } from "@/components/buckets/compliance-verifier";
 import { DeleteBucketDialog } from "@/components/buckets/delete-bucket-dialog";
 import { createRateLimiter } from "@/lib/rate-limit";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 const idSchema = z.string().min(1).max(64);
 
@@ -49,9 +53,7 @@ export default async function BucketDetailsPage({
   const role = await resolveRole(session);
   if (!role) return <AccessDenied />;
 
-  // Missing sub must not bypass the rate-limit — resolve sub before
-  // the limiter so a malformed session token cannot drive unbounded
-  // SSR Prisma work.
+  // Missing sub must not bypass the rate-limit.
   const sub = session?.user.sub as string | undefined;
   if (!sub) return <AccessDenied />;
 
@@ -59,10 +61,7 @@ export default async function BucketDetailsPage({
   if (!quota.success) {
     return (
       <Shell>
-        <p
-          role="alert"
-          style={{ color: BRAND.colors.pink, textAlign: "center" }}
-        >
+        <p role="alert" className="text-destructive text-center">
           You are refreshing too fast. Please wait a moment.
         </p>
       </Shell>
@@ -93,7 +92,7 @@ export default async function BucketDetailsPage({
     if (err instanceof BucketNotFoundError) notFound();
     return (
       <Shell>
-        <p role="alert" style={{ color: BRAND.colors.pink }}>
+        <p role="alert" className="text-destructive">
           Unable to load bucket details. Please try again.
         </p>
       </Shell>
@@ -134,123 +133,85 @@ function DetailsView({
 }) {
   return (
     <Shell>
-      <nav style={{ marginBottom: "1rem", fontSize: "0.875rem" }}>
-        <Link href="/buckets" style={{ color: BRAND.colors.blue }}>
-          ← All buckets
+      <nav className="mb-4 text-sm">
+        <Link
+          href="/buckets"
+          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 no-underline"
+        >
+          <ArrowLeft aria-hidden="true" className="h-3.5 w-3.5" />
+          All buckets
         </Link>
       </nav>
 
-      <header
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "1rem",
-          flexWrap: "wrap",
-          marginBottom: "1.5rem",
-        }}
-      >
+      <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: "1.5rem",
-              fontWeight: 700,
-              wordBreak: "break-all",
-            }}
-          >
+          <h1 className="text-foreground m-0 break-all text-2xl font-bold tracking-tight">
             {details.name}
           </h1>
-          <p style={{ marginTop: "0.25rem", color: "rgba(30,41,59,0.72)" }}>
+          <p className="text-muted-foreground mt-1 font-mono text-sm tabular-nums">
             Created {details.createdAt.toISOString().slice(0, 10)} •{" "}
             {details.region}
           </p>
         </div>
-        <div
-          style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}
-        >
-          <StatusBadge isActive={details.isActive} />
+        <div className="flex items-center gap-2">
+          <Badge variant={details.isActive ? "secondary" : "outline"}>
+            {details.isActive ? "Active" : "Inactive"}
+          </Badge>
           {canDelete && details.isActive ? (
-            <a
-              href={`/buckets/${details.id}?delete=1`}
-              style={{
-                fontSize: "0.75rem",
-                fontWeight: 600,
-                padding: "0.375rem 0.75rem",
-                borderRadius: "0.5rem",
-                border: `1px solid ${BRAND.colors.pink}`,
-                color: BRAND.colors.pink,
-                textDecoration: "none",
-              }}
-            >
-              Delete bucket
-            </a>
+            <Button variant="outline" size="sm" asChild>
+              <a href={`/buckets/${details.id}?delete=1`}>Delete bucket</a>
+            </Button>
           ) : null}
         </div>
       </header>
 
       {details.description ? (
-        <p
-          style={{
-            margin: "0 0 1.5rem",
-            padding: "0.75rem 1rem",
-            background: "#FFFFFF",
-            border: `1px solid ${BRAND.colors.dark}1A`,
-            borderRadius: "0.5rem",
-            color: "rgba(30,41,59,0.8)",
-          }}
-        >
-          {details.description}
-        </p>
+        <Card className="mb-6">
+          <CardContent className="text-muted-foreground px-4 py-3 text-sm">
+            {details.description}
+          </CardContent>
+        </Card>
       ) : null}
 
       <MetricsGrid details={details} />
       <Section title="HIPAA compliance (enforced by design)">
         <ComplianceList compliance={details.hipaaCompliance} />
         {canVerify ? (
-          <div style={{ marginTop: "0.75rem" }}>
+          <div className="mt-3">
             <ComplianceVerifier bucketId={details.id} />
           </div>
         ) : null}
       </Section>
-      <Section
-        title={`Access policies (${details.accessPolicies.length})`}
-      >
+      <Section title={`Access policies (${details.accessPolicies.length})`}>
         {details.accessPolicies.length === 0 ? (
           <EmptyLine message="No bucket-level policies defined." />
         ) : (
-          <ul style={listStyle}>
+          <ul className="m-0 flex list-none flex-col gap-2 p-0">
             {details.accessPolicies.map((p) => (
-              <li key={p.id} style={rowStyle}>
-                <div>
-                  <strong>{p.name}</strong>
-                  <div
-                    style={{
-                      fontSize: "0.75rem",
-                      color: "rgba(30,41,59,0.64)",
-                    }}
-                  >
-                    TTL {p.linkTtlSeconds}s
-                    {p.maxDownloads !== null
-                      ? ` • max ${p.maxDownloads} downloads`
-                      : ""}
-                    {p.requireAuth ? " • requires auth" : ""}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    fontSize: "0.75rem",
-                    color: "rgba(30,41,59,0.64)",
-                  }}
-                >
-                  {p.allowedDomains.length
-                    ? `${p.allowedDomains.length} domain${p.allowedDomains.length === 1 ? "" : "s"}`
-                    : "any domain"}{" "}
-                  •{" "}
-                  {p.allowedIpRanges.length
-                    ? `${p.allowedIpRanges.length} IP range${p.allowedIpRanges.length === 1 ? "" : "s"}`
-                    : "any IP"}
-                </div>
+              <li key={p.id}>
+                <Card>
+                  <CardContent className="flex items-center justify-between gap-4 px-4 py-3">
+                    <div>
+                      <strong className="text-foreground">{p.name}</strong>
+                      <div className="text-muted-foreground mt-0.5 font-mono text-xs tabular-nums">
+                        TTL {p.linkTtlSeconds}s
+                        {p.maxDownloads !== null
+                          ? ` • max ${p.maxDownloads} downloads`
+                          : ""}
+                        {p.requireAuth ? " • requires auth" : ""}
+                      </div>
+                    </div>
+                    <div className="text-muted-foreground text-xs">
+                      {p.allowedDomains.length
+                        ? `${p.allowedDomains.length} domain${p.allowedDomains.length === 1 ? "" : "s"}`
+                        : "any domain"}{" "}
+                      •{" "}
+                      {p.allowedIpRanges.length
+                        ? `${p.allowedIpRanges.length} IP range${p.allowedIpRanges.length === 1 ? "" : "s"}`
+                        : "any IP"}
+                    </div>
+                  </CardContent>
+                </Card>
               </li>
             ))}
           </ul>
@@ -262,33 +223,27 @@ function DetailsView({
         {details.recentDocuments.length === 0 ? (
           <EmptyLine message="No documents uploaded yet." />
         ) : (
-          <ul style={listStyle}>
+          <ul className="m-0 flex list-none flex-col gap-2 p-0">
             {details.recentDocuments.map((d) => (
-              <li key={d.id} style={rowStyle}>
-                <div>
-                  <strong style={{ wordBreak: "break-all" }}>
-                    {d.filename}
-                  </strong>
-                  <div
-                    style={{
-                      fontSize: "0.75rem",
-                      color: "rgba(30,41,59,0.64)",
-                    }}
-                  >
-                    {d.contentType ?? "unknown"} • {formatStorage(d.sizeBytes)}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    fontSize: "0.75rem",
-                    color: "rgba(30,41,59,0.64)",
-                    textAlign: "right",
-                  }}
-                >
-                  {d.uploadedAt.toISOString().slice(0, 10)}
-                  <br />
-                  {d.uploadedByName ?? "unknown"}
-                </div>
+              <li key={d.id}>
+                <Card>
+                  <CardContent className="flex items-center justify-between gap-4 px-4 py-3">
+                    <div>
+                      <strong className="text-foreground break-all">
+                        {d.filename}
+                      </strong>
+                      <div className="text-muted-foreground mt-0.5 font-mono text-xs">
+                        {d.contentType ?? "unknown"} •{" "}
+                        {formatStorage(d.sizeBytes)}
+                      </div>
+                    </div>
+                    <div className="text-muted-foreground text-right font-mono text-xs tabular-nums">
+                      {d.uploadedAt.toISOString().slice(0, 10)}
+                      <br />
+                      {d.uploadedByName ?? "unknown"}
+                    </div>
+                  </CardContent>
+                </Card>
               </li>
             ))}
           </ul>
@@ -302,19 +257,15 @@ function MetricsGrid({ details }: { readonly details: BucketDetails }) {
   return (
     <ul
       role="list"
-      style={{
-        listStyle: "none",
-        padding: 0,
-        margin: "0 0 1.5rem",
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(12rem, 1fr))",
-        gap: "1rem",
-      }}
+      className="m-0 mb-6 grid list-none grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-4 p-0"
     >
       <Metric label="Documents" value={String(details.documentCount)} />
       <Metric label="Storage" value={formatStorage(details.storageBytes)} />
       <Metric label="Region" value={details.region} />
-      <Metric label="Status" value={details.isActive ? "Active" : "Inactive"} />
+      <Metric
+        label="Status"
+        value={details.isActive ? "Active" : "Inactive"}
+      />
     </ul>
   );
 }
@@ -327,31 +278,19 @@ function Metric({
   readonly value: string;
 }) {
   return (
-    <li
-      style={{
-        background: "#FFFFFF",
-        border: `1px solid ${BRAND.colors.dark}1A`,
-        borderRadius: "0.75rem",
-        padding: "1rem",
-      }}
-    >
-      <p
-        style={{
-          margin: 0,
-          fontSize: "0.6875rem",
-          textTransform: "uppercase",
-          letterSpacing: "0.06em",
-          color: BRAND.colors.blue,
-          fontWeight: 600,
-        }}
-      >
-        {label}
-      </p>
-      <p
-        style={{ margin: "0.25rem 0 0", fontSize: "1.25rem", fontWeight: 700 }}
-      >
-        {value}
-      </p>
+    <li>
+      <Card>
+        <CardHeader className="pb-2">
+          <p className="text-muted-foreground m-0 text-[0.65rem] font-semibold uppercase tracking-wider">
+            {label}
+          </p>
+        </CardHeader>
+        <CardContent>
+          <p className="text-foreground font-mono text-xl font-bold tabular-nums">
+            {value}
+          </p>
+        </CardContent>
+      </Card>
     </li>
   );
 }
@@ -374,28 +313,32 @@ function ComplianceList({
     },
   ];
   return (
-    <ul style={listStyle}>
-      {items.map((it) => (
-        <li key={it.label} style={rowStyle}>
-          <span>{it.label}</span>
-          <span
-            style={{
-              fontSize: "0.6875rem",
-              fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-              color: it.ok ? BRAND.colors.blue : BRAND.colors.pink,
-              background: it.ok
-                ? `${BRAND.colors.blue}14`
-                : `${BRAND.colors.pink}14`,
-              padding: "0.25rem 0.5rem",
-              borderRadius: "999px",
-            }}
-          >
-            {it.ok ? "Enforced" : "Missing"}
-          </span>
-        </li>
-      ))}
+    <ul className="m-0 flex list-none flex-col gap-2 p-0">
+      {items.map((it) => {
+        const Icon = it.ok ? CheckCircle2 : XCircle;
+        return (
+          <li key={it.label}>
+            <Card>
+              <CardContent className="flex items-center justify-between gap-4 px-4 py-3">
+                <span className="flex items-center gap-2 text-sm">
+                  <Icon
+                    aria-hidden="true"
+                    className={
+                      it.ok
+                        ? "text-foreground h-4 w-4"
+                        : "text-destructive h-4 w-4"
+                    }
+                  />
+                  {it.label}
+                </span>
+                <Badge variant={it.ok ? "secondary" : "destructive"}>
+                  {it.ok ? "Enforced" : "Missing"}
+                </Badge>
+              </CardContent>
+            </Card>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -408,55 +351,16 @@ function Section({
   readonly children: React.ReactNode;
 }) {
   return (
-    <section style={{ marginBottom: "1.5rem" }}>
-      <h2
-        style={{
-          margin: "0 0 0.75rem",
-          fontSize: "1.125rem",
-          fontWeight: 600,
-        }}
-      >
-        {title}
-      </h2>
+    <section className="mb-6">
+      <h2 className="text-foreground mb-3 text-lg font-semibold">{title}</h2>
       {children}
     </section>
   );
 }
 
-function StatusBadge({ isActive }: { readonly isActive: boolean }) {
-  return (
-    <span
-      style={{
-        background: isActive
-          ? `${BRAND.colors.blue}14`
-          : `${BRAND.colors.dark}14`,
-        color: isActive ? BRAND.colors.blue : BRAND.colors.dark,
-        fontSize: "0.75rem",
-        fontWeight: 600,
-        textTransform: "uppercase",
-        letterSpacing: "0.06em",
-        padding: "0.375rem 0.75rem",
-        borderRadius: "999px",
-      }}
-    >
-      {isActive ? "Active" : "Inactive"}
-    </span>
-  );
-}
-
 function EmptyLine({ message }: { readonly message: string }) {
   return (
-    <p
-      style={{
-        margin: 0,
-        padding: "1rem",
-        background: "#FFFFFF",
-        border: `1px dashed ${BRAND.colors.dark}33`,
-        borderRadius: "0.5rem",
-        color: "rgba(30,41,59,0.64)",
-        fontSize: "0.875rem",
-      }}
-    >
+    <p className="border-border bg-card text-muted-foreground m-0 rounded-md border border-dashed px-4 py-3 text-sm">
       {message}
     </p>
   );
@@ -465,10 +369,7 @@ function EmptyLine({ message }: { readonly message: string }) {
 function AccessDenied() {
   return (
     <Shell>
-      <p
-        role="alert"
-        style={{ color: BRAND.colors.pink, textAlign: "center" }}
-      >
+      <p role="alert" className="text-destructive text-center">
         You do not have access to this bucket.
       </p>
     </Shell>
@@ -476,34 +377,5 @@ function AccessDenied() {
 }
 
 function Shell({ children }: { readonly children: React.ReactNode }) {
-  return (
-    <section
-      style={{
-        fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-        color: BRAND.colors.dark,
-      }}
-    >
-      {children}
-    </section>
-  );
+  return <section className="text-foreground">{children}</section>;
 }
-
-const listStyle: React.CSSProperties = {
-  listStyle: "none",
-  padding: 0,
-  margin: 0,
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.5rem",
-};
-
-const rowStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: "1rem",
-  padding: "0.75rem 1rem",
-  background: "#FFFFFF",
-  border: `1px solid ${BRAND.colors.dark}1A`,
-  borderRadius: "0.5rem",
-};

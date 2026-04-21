@@ -7,14 +7,6 @@
 #
 # Paths are relative to repo root. Comments (# ...) and blank lines ignored.
 
-# Phase C2 — buckets
-src/components/buckets/bucket-card.tsx
-src/components/buckets/create-bucket-dialog.tsx
-src/components/buckets/delete-bucket-dialog.tsx
-src/components/buckets/compliance-verifier.tsx
-src/app/(dashboard)/buckets/page.tsx
-src/app/(dashboard)/buckets/[id]/page.tsx
-
 # Phase C3 — documents
 src/components/documents/upload-zone.tsx
 src/components/documents/file-list.tsx

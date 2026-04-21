@@ -2,7 +2,26 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { BRAND } from "@/lib/brand";
+
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import {
   AWS_REGIONS,
   HIPAA_BUCKET_NAME_PREFIX,
@@ -50,7 +69,6 @@ export function CreateBucketDialog({
         setError(body?.error ?? `Request failed (${res.status})`);
         return;
       }
-      // Close + refresh the bucket list so the new row shows up.
       startTransition(() => {
         router.push(closeHref);
         router.refresh();
@@ -61,189 +79,94 @@ export function CreateBucketDialog({
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="create-bucket-title"
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(30,41,59,0.48)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "1rem",
-        zIndex: 50,
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) router.push(closeHref);
       }}
     >
-      <form
-        onSubmit={onSubmit}
-        style={{
-          background: "#FFFFFF",
-          borderRadius: "0.75rem",
-          padding: "1.5rem",
-          maxWidth: "32rem",
-          width: "100%",
-          color: BRAND.colors.dark,
-          fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-          display: "flex",
-          flexDirection: "column",
-          gap: "1rem",
-        }}
-      >
-        <h2
-          id="create-bucket-title"
-          style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700 }}
-        >
-          Create bucket
-        </h2>
-        <p style={{ margin: 0, fontSize: "0.8125rem", color: "rgba(30,41,59,0.72)" }}>
-          HIPAA settings (SSE-KMS, versioning, public-access block, HTTPS
-          policy, CloudTrail data events) are applied automatically.
-        </p>
-        <p
-          style={{
-            margin: 0,
-            padding: "0.625rem 0.75rem",
-            background: `${BRAND.colors.pink}12`,
-            color: BRAND.colors.pink,
-            borderRadius: "0.5rem",
-            fontSize: "0.75rem",
-            fontWeight: 500,
-          }}
-        >
-          Do not enter patient names, MRNs, birthdates, or any PHI in the
-          bucket name or description. Both fields are stored in cleartext
-          and surfaced in audit logs.
-        </p>
+      <DialogContent className="sm:max-w-lg">
+        <form onSubmit={onSubmit} className="flex flex-col gap-4">
+          <DialogHeader>
+            <DialogTitle>Create bucket</DialogTitle>
+            <DialogDescription>
+              HIPAA settings (SSE-KMS, versioning, public-access block,
+              HTTPS policy, CloudTrail data events) are applied automatically.
+            </DialogDescription>
+          </DialogHeader>
 
-        <label style={fieldLabel}>
-          Bucket name
-          <input
-            required
-            name="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            pattern="^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$"
-            minLength={3}
-            maxLength={63}
-            style={fieldInput}
-            placeholder={`${HIPAA_BUCKET_NAME_PREFIX}tenant-name`}
-          />
-          <span style={fieldHelp}>
-            Must start with <code>{HIPAA_BUCKET_NAME_PREFIX}</code>. Lowercase,
-            digits, hyphens only. 3–63 chars.
-          </span>
-        </label>
-
-        <label style={fieldLabel}>
-          AWS region
-          <select
-            name="awsRegion"
-            value={awsRegion}
-            onChange={(e) => setAwsRegion(e.target.value)}
-            style={fieldInput}
-          >
-            {AWS_REGIONS.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label style={fieldLabel}>
-          Description <span style={{ opacity: 0.6 }}>(optional)</span>
-          <textarea
-            name="description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            maxLength={2048}
-            rows={3}
-            style={{ ...fieldInput, fontFamily: "inherit" }}
-          />
-        </label>
-
-        {error ? (
-          <p
-            role="alert"
-            style={{ margin: 0, color: BRAND.colors.pink, fontSize: "0.875rem" }}
-          >
-            {error}
+          <p className="border-border bg-muted text-muted-foreground rounded-md border px-3 py-2 text-xs">
+            Do not enter patient names, MRNs, birthdates, or any PHI in the
+            bucket name or description. Both fields are stored in cleartext
+            and surfaced in audit logs.
           </p>
-        ) : null}
 
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: "0.5rem",
-          }}
-        >
-          <a
-            href={closeHref}
-            style={{
-              padding: "0.5rem 0.875rem",
-              fontSize: "0.875rem",
-              fontWeight: 600,
-              color: BRAND.colors.dark,
-              textDecoration: "none",
-              borderRadius: "0.5rem",
-              border: `1px solid ${BRAND.colors.dark}33`,
-            }}
-          >
-            Cancel
-          </a>
-          <button
-            type="submit"
-            disabled={pending}
-            style={{
-              background: pending
-                ? `${BRAND.colors.pink}80`
-                : BRAND.colors.pink,
-              color: "#FFFFFF",
-              padding: "0.5rem 0.875rem",
-              fontSize: "0.875rem",
-              fontWeight: 600,
-              borderRadius: "0.5rem",
-              border: "none",
-              cursor: pending ? "wait" : "pointer",
-            }}
-          >
-            {pending ? "Creating…" : "Create bucket"}
-          </button>
-        </div>
-      </form>
-    </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="bucket-name">Bucket name</Label>
+            <Input
+              id="bucket-name"
+              required
+              name="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              pattern="^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$"
+              minLength={3}
+              maxLength={63}
+              placeholder={`${HIPAA_BUCKET_NAME_PREFIX}tenant-name`}
+            />
+            <p className="text-muted-foreground text-xs">
+              Must start with <code className="font-mono">{HIPAA_BUCKET_NAME_PREFIX}</code>.
+              Lowercase, digits, hyphens only. 3–63 chars.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="aws-region">AWS region</Label>
+            <Select value={awsRegion} onValueChange={setAwsRegion}>
+              <SelectTrigger id="aws-region">
+                <SelectValue placeholder="Choose a region" />
+              </SelectTrigger>
+              <SelectContent>
+                {AWS_REGIONS.map((r) => (
+                  <SelectItem key={r} value={r}>
+                    {r}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="bucket-description">
+              Description{" "}
+              <span className="text-muted-foreground font-normal">(optional)</span>
+            </Label>
+            <Textarea
+              id="bucket-description"
+              name="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              maxLength={2048}
+              rows={3}
+            />
+          </div>
+
+          {error ? (
+            <p role="alert" className="text-destructive text-sm">
+              {error}
+            </p>
+          ) : null}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" asChild>
+              <a href={closeHref}>Cancel</a>
+            </Button>
+            <Button type="submit" disabled={pending}>
+              {pending ? "Creating…" : "Create bucket"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
-
-const fieldLabel: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.375rem",
-  fontSize: "0.75rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-  color: BRAND.colors.blue,
-  fontWeight: 600,
-};
-
-const fieldInput: React.CSSProperties = {
-  padding: "0.5rem 0.625rem",
-  fontSize: "0.875rem",
-  fontWeight: 500,
-  color: BRAND.colors.dark,
-  background: "#FFFFFF",
-  border: `1px solid ${BRAND.colors.dark}33`,
-  borderRadius: "0.375rem",
-  fontFamily: "inherit",
-};
-
-const fieldHelp: React.CSSProperties = {
-  fontSize: "0.6875rem",
-  textTransform: "none",
-  letterSpacing: 0,
-  color: "rgba(30,41,59,0.64)",
-  fontWeight: 400,
-};

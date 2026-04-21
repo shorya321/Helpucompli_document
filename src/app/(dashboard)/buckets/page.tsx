@@ -1,6 +1,5 @@
 import { auth0 } from "@/lib/auth0";
 import { resolveRole } from "@/lib/auth-guard";
-import { BRAND } from "@/lib/brand";
 import { prisma } from "@/lib/prisma";
 import {
   asBucketListPrisma,
@@ -11,7 +10,17 @@ import {
   type BucketSummary,
 } from "@/lib/bucket-list";
 import { createRateLimiter } from "@/lib/rate-limit";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { BucketCard } from "@/components/buckets/bucket-card";
+
+// Native <select> styled to match shadcn Input. The bucket filter form
+// submits via GET, so we need the DOM element, not the Radix-based
+// shadcn Select (which is a button + popover, not a form control).
+const nativeSelectClass =
+  "border-input bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50";
 import { CreateBucketDialog } from "@/components/buckets/create-bucket-dialog";
 
 export const dynamic = "force-dynamic";
@@ -26,8 +35,6 @@ const pageLimiter = createRateLimiter({
   prefix: "@helpucompli/buckets-page",
 });
 
-// Search-params shape forwarded by Next.js App Router. Values may be
-// string | string[] | undefined — delegated to `parseBucketListQuery`.
 interface PageProps {
   readonly searchParams: Promise<
     Record<string, string | string[] | undefined>
@@ -36,15 +43,11 @@ interface PageProps {
 
 export default async function BucketsPage({ searchParams }: PageProps) {
   const session = await auth0.getSession();
-  // Layout already guards session + role — but defensive resolution keeps
-  // the page safe if layout is bypassed by a future refactor.
   const role = await resolveRole(session ?? null);
   if (!role) {
     return <EmptyState message="You do not have access to the bucket manager." />;
   }
 
-  // SSR rate-limit — hard-caps the Prisma aggregate calls even when the
-  // user refresh-spams the page directly (bypasses the API route limit).
   const sub = session?.user.sub as string | undefined;
   if (sub) {
     const quota = await pageLimiter.limit(`buckets-page:${sub}`);
@@ -82,7 +85,6 @@ export default async function BucketsPage({ searchParams }: PageProps) {
   try {
     list = await getBucketList(asBucketListPrisma(prisma), scope, options);
   } catch {
-    // Engine errors can embed DATABASE_URL (F2.2 sec-review M2).
     loadError = true;
   }
 
@@ -116,117 +118,86 @@ function BucketsView({ role, buckets, options, loadError }: BucketsViewProps) {
   const status = options.filters?.status ?? "active";
 
   return (
-    <section
-      style={{
-        fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-        color: BRAND.colors.dark,
-        display: "flex",
-        flexDirection: "column",
-        gap: "1.5rem",
-      }}
-    >
-      <header
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "1rem",
-          flexWrap: "wrap",
-        }}
-      >
+    <section className="flex flex-col gap-6">
+      <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 style={{ margin: 0, fontSize: "1.5rem", fontWeight: 700 }}>
+          <h1 className="text-foreground m-0 text-2xl font-bold tracking-tight">
             Buckets
           </h1>
-          <p style={{ marginTop: "0.25rem", color: "rgba(30,41,59,0.72)" }}>
+          <p className="text-muted-foreground mt-1">
             {role === "viewer"
               ? "Buckets you have access to."
               : "All managed document buckets."}
           </p>
         </div>
         {canCreate ? (
-          <a
-            href="/buckets?new=1"
-            style={{
-              background: BRAND.colors.pink,
-              color: "#FFFFFF",
-              padding: "0.625rem 1rem",
-              borderRadius: "0.5rem",
-              fontSize: "0.875rem",
-              fontWeight: 600,
-              textDecoration: "none",
-            }}
-          >
-            Create bucket
-          </a>
+          <Button asChild>
+            <a href="/buckets?new=1">Create bucket</a>
+          </Button>
         ) : null}
       </header>
 
-      <form
-        method="GET"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(10rem, 1fr))",
-          gap: "0.75rem",
-          alignItems: "end",
-          padding: "1rem",
-          background: "#FFFFFF",
-          border: `1px solid ${BRAND.colors.dark}1A`,
-          borderRadius: "0.75rem",
-        }}
-      >
-        <label style={labelStyle}>
-          Sort
-          <select name="sort" defaultValue={sortField} style={selectStyle}>
-            <option value="name">Name</option>
-            <option value="createdAt">Created date</option>
-            <option value="documentCount">Document count</option>
-          </select>
-        </label>
-        <label style={labelStyle}>
-          Direction
-          <select name="dir" defaultValue={sortDir} style={selectStyle}>
-            <option value="asc">Ascending</option>
-            <option value="desc">Descending</option>
-          </select>
-        </label>
-        <label style={labelStyle}>
-          Region
-          <input
-            name="region"
-            defaultValue={region}
-            placeholder="us-east-1"
-            maxLength={32}
-            style={selectStyle}
-          />
-        </label>
-        <label style={labelStyle}>
-          Status
-          <select name="status" defaultValue={status} style={selectStyle}>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="all">All</option>
-          </select>
-        </label>
-        <button
-          type="submit"
-          style={{
-            background: BRAND.colors.blue,
-            color: "#FFFFFF",
-            padding: "0.5rem 0.875rem",
-            borderRadius: "0.5rem",
-            fontSize: "0.875rem",
-            fontWeight: 600,
-            border: "none",
-            cursor: "pointer",
-          }}
+      <Card className="p-4">
+        <form
+          method="GET"
+          className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] items-end gap-3"
         >
-          Apply
-        </button>
-      </form>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="sort">Sort</Label>
+            <select
+              id="sort"
+              name="sort"
+              defaultValue={sortField}
+              className={nativeSelectClass}
+            >
+              <option value="name">Name</option>
+              <option value="createdAt">Created date</option>
+              <option value="documentCount">Document count</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="dir">Direction</Label>
+            <select
+              id="dir"
+              name="dir"
+              defaultValue={sortDir}
+              className={nativeSelectClass}
+            >
+              <option value="asc">Ascending</option>
+              <option value="desc">Descending</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="region">Region</Label>
+            <Input
+              id="region"
+              name="region"
+              defaultValue={region}
+              placeholder="us-east-1"
+              maxLength={32}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="status">Status</Label>
+            <select
+              id="status"
+              name="status"
+              defaultValue={status}
+              className={nativeSelectClass}
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="all">All</option>
+            </select>
+          </div>
+          <Button type="submit" variant="secondary" size="sm">
+            Apply
+          </Button>
+        </form>
+      </Card>
 
       {loadError ? (
-        <p role="alert" style={{ color: BRAND.colors.pink }}>
+        <p role="alert" className="text-destructive">
           Unable to load buckets. Please try again.
         </p>
       ) : buckets.length === 0 ? (
@@ -240,14 +211,7 @@ function BucketsView({ role, buckets, options, loadError }: BucketsViewProps) {
       ) : (
         <ul
           role="list"
-          style={{
-            listStyle: "none",
-            padding: 0,
-            margin: 0,
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(18rem, 1fr))",
-            gap: "1rem",
-          }}
+          className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(18rem,1fr))] gap-4 p-0"
         >
           {buckets.map((b) => (
             <li key={b.id}>
@@ -262,40 +226,8 @@ function BucketsView({ role, buckets, options, loadError }: BucketsViewProps) {
 
 function EmptyState({ message }: { readonly message: string }) {
   return (
-    <div
-      style={{
-        padding: "2rem",
-        background: "#FFFFFF",
-        border: `1px dashed ${BRAND.colors.dark}33`,
-        borderRadius: "0.75rem",
-        textAlign: "center",
-        color: "rgba(30,41,59,0.72)",
-        fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-      }}
-    >
+    <div className="border-border bg-card text-muted-foreground rounded-lg border border-dashed p-8 text-center">
       {message}
     </div>
   );
 }
-
-const labelStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.25rem",
-  fontSize: "0.75rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-  color: BRAND.colors.blue,
-  fontWeight: 600,
-};
-
-const selectStyle: React.CSSProperties = {
-  padding: "0.4375rem 0.5rem",
-  fontSize: "0.875rem",
-  fontWeight: 500,
-  color: BRAND.colors.dark,
-  background: "#FFFFFF",
-  border: `1px solid ${BRAND.colors.dark}26`,
-  borderRadius: "0.375rem",
-  fontFamily: "inherit",
-};

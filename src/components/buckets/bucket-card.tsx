@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { BRAND } from "@/lib/brand";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { BucketSummary } from "@/lib/bucket-list";
 
 const KB = BigInt(1024);
@@ -15,8 +16,6 @@ export function formatStorage(bytes: bigint): string {
   if (bytes < MB) return `${(Number(bytes) / Number(KB)).toFixed(1)} KB`;
   if (bytes < GB) return `${(Number(bytes) / Number(MB)).toFixed(1)} MB`;
   if (bytes < TB) return `${(Number(bytes) / Number(GB)).toFixed(1)} GB`;
-  // Approx TB — once beyond TB we divide BigInt → Number which is
-  // safe because bytes/TB cannot exceed ~9k in any realistic tenant.
   return `${(Number(bytes / GB) / 1024).toFixed(1)} TB`;
 }
 
@@ -25,85 +24,36 @@ interface BucketCardProps {
 }
 
 export function BucketCard({ bucket }: BucketCardProps) {
-  const statusLabel = bucket.isActive ? "Active" : "Inactive";
-  const statusBg = bucket.isActive
-    ? `${BRAND.colors.blue}14`
-    : `${BRAND.colors.dark}14`;
-  const statusFg = bucket.isActive ? BRAND.colors.blue : BRAND.colors.dark;
-
   return (
     <Link
       href={`/buckets/${bucket.id}`}
-      style={{
-        display: "block",
-        background: "#FFFFFF",
-        border: `1px solid ${BRAND.colors.dark}1A`,
-        borderRadius: "0.75rem",
-        padding: "1.25rem",
-        color: BRAND.colors.dark,
-        textDecoration: "none",
-        fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-      }}
+      className="block no-underline"
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "0.75rem",
-        }}
-      >
-        <h3
-          style={{
-            margin: 0,
-            fontSize: "1rem",
-            fontWeight: 600,
-            wordBreak: "break-all",
-          }}
-        >
-          {bucket.name}
-        </h3>
-        <span
-          style={{
-            background: statusBg,
-            color: statusFg,
-            fontSize: "0.6875rem",
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "0.06em",
-            padding: "0.25rem 0.5rem",
-            borderRadius: "999px",
-            flexShrink: 0,
-          }}
-        >
-          {statusLabel}
-        </span>
-      </div>
-
-      {bucket.description ? (
-        <p
-          style={{
-            margin: "0.5rem 0 0",
-            fontSize: "0.8125rem",
-            color: "rgba(30,41,59,0.72)",
-          }}
-        >
-          {bucket.description}
-        </p>
-      ) : null}
-
-      <dl
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-          gap: "0.75rem",
-          margin: "1rem 0 0",
-        }}
-      >
-        <Metric label="Region" value={bucket.region} />
-        <Metric label="Documents" value={String(bucket.documentCount)} />
-        <Metric label="Storage" value={formatStorage(bucket.storageBytes)} />
-      </dl>
+      <Card className="hover:bg-accent/30 h-full transition-colors">
+        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-3">
+          <CardTitle className="break-all text-base font-semibold">
+            {bucket.name}
+          </CardTitle>
+          <Badge
+            variant={bucket.isActive ? "secondary" : "outline"}
+            className="shrink-0 font-mono text-[0.6rem] uppercase tracking-wide"
+          >
+            {bucket.isActive ? "Active" : "Inactive"}
+          </Badge>
+        </CardHeader>
+        <CardContent>
+          {bucket.description ? (
+            <p className="text-muted-foreground mb-4 text-sm">
+              {bucket.description}
+            </p>
+          ) : null}
+          <dl className="grid grid-cols-3 gap-3">
+            <Metric label="Region" value={bucket.region} />
+            <Metric label="Documents" value={String(bucket.documentCount)} />
+            <Metric label="Storage" value={formatStorage(bucket.storageBytes)} />
+          </dl>
+        </CardContent>
+      </Card>
     </Link>
   );
 }
@@ -116,26 +66,10 @@ interface MetricProps {
 function Metric({ label, value }: MetricProps) {
   return (
     <div>
-      <dt
-        style={{
-          margin: 0,
-          fontSize: "0.6875rem",
-          textTransform: "uppercase",
-          letterSpacing: "0.06em",
-          color: BRAND.colors.blue,
-          fontWeight: 600,
-        }}
-      >
+      <dt className="text-muted-foreground m-0 text-[0.65rem] font-semibold uppercase tracking-wider">
         {label}
       </dt>
-      <dd
-        style={{
-          margin: "0.125rem 0 0",
-          fontSize: "0.875rem",
-          fontWeight: 500,
-          wordBreak: "break-word",
-        }}
-      >
+      <dd className="text-foreground mt-0.5 break-words font-mono text-sm font-medium tabular-nums">
         {value}
       </dd>
     </div>
