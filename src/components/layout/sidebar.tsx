@@ -2,10 +2,34 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BRAND } from "@/lib/brand";
+import {
+  Activity,
+  FileText,
+  FolderKanban,
+  Home,
+  Link2,
+  Shield,
+  Users,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+
+import {
+  Sidebar as SidebarRoot,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "@/components/ui/sidebar";
+import { BrandLogo } from "@/components/layout/brand-logo";
+import { ModeToggle } from "@/components/mode-toggle";
 import {
   DASHBOARD_NAV_ITEMS,
   filterNavForRole,
+  type DashboardNavItem,
 } from "@/lib/dashboard-nav";
 import type { Role } from "@/types";
 
@@ -13,49 +37,71 @@ interface SidebarProps {
   readonly role: Role;
 }
 
+const NAV_ICONS: Record<string, LucideIcon> = {
+  "/": Home,
+  "/buckets": FolderKanban,
+  "/documents": FileText,
+  "/policies": Shield,
+  "/links": Link2,
+  "/audit": Activity,
+  "/users": Users,
+};
+
+function iconFor(item: DashboardNavItem): LucideIcon {
+  return NAV_ICONS[item.href] ?? FileText;
+}
+
 export function Sidebar({ role }: SidebarProps) {
   const pathname = usePathname() ?? "/";
   const items = filterNavForRole(DASHBOARD_NAV_ITEMS, role);
 
   return (
-    <nav
-      aria-label="Primary"
-      style={{
-        width: "16rem",
-        minHeight: "100vh",
-        background: BRAND.colors.dark,
-        color: BRAND.colors.light,
-        padding: "1.5rem 0.75rem",
-        fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-        display: "flex",
-        flexDirection: "column",
-        gap: "0.25rem",
-      }}
-    >
-      {items.map((item) => {
-        const isActive =
-          item.href === "/"
-            ? pathname === "/"
-            : pathname === item.href || pathname.startsWith(`${item.href}/`);
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={isActive ? "page" : undefined}
-            style={{
-              display: "block",
-              padding: "0.625rem 0.875rem",
-              borderRadius: "0.5rem",
-              textDecoration: "none",
-              color: BRAND.colors.light,
-              background: isActive ? BRAND.colors.pink : "transparent",
-              fontWeight: isActive ? 600 : 400,
-            }}
-          >
-            {item.label}
-          </Link>
-        );
-      })}
-    </nav>
+    <SidebarRoot collapsible="icon">
+      <SidebarHeader className="border-b border-sidebar-border">
+        <div className="flex items-center justify-between gap-2 px-2 py-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+          <BrandLogo className="group-data-[collapsible=icon]:[&>span:last-child]:hidden" />
+        </div>
+      </SidebarHeader>
+
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {items.map((item) => {
+                const isActive =
+                  item.href === "/"
+                    ? pathname === "/"
+                    : pathname === item.href ||
+                      pathname.startsWith(`${item.href}/`);
+                const Icon = iconFor(item);
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive}
+                      tooltip={item.label}
+                    >
+                      <Link
+                        href={item.href}
+                        aria-current={isActive ? "page" : undefined}
+                      >
+                        <Icon aria-hidden="true" />
+                        <span>{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarFooter className="border-t border-sidebar-border">
+        <div className="flex items-center justify-between gap-2 px-1 py-1 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-1">
+          <ModeToggle />
+        </div>
+      </SidebarFooter>
+    </SidebarRoot>
   );
 }

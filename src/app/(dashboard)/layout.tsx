@@ -3,7 +3,7 @@ import { auth0 } from "@/lib/auth0";
 import { resolveRole } from "@/lib/auth-guard";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
-import { BRAND } from "@/lib/brand";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 export const dynamic = "force-dynamic";
 
@@ -22,8 +22,6 @@ export default async function DashboardLayout({ children }: LayoutProps) {
   }
   // redirect() returns `never` (typed by next/navigation), so role is
   // correctly narrowed from `Role | null` to `Role` at this point.
-  // Asserting here makes the guarantee explicit and guards against a
-  // future next.js type regression that relaxes redirect's return type.
   if (!role) throw new Error("unreachable: role narrowed by redirect");
 
   const user = {
@@ -32,18 +30,12 @@ export default async function DashboardLayout({ children }: LayoutProps) {
   };
 
   return (
-    <div
-      style={{
-        display: "flex",
-        minHeight: "100vh",
-        background: BRAND.colors.light,
-      }}
-    >
+    <SidebarProvider>
       <Sidebar role={role} />
-      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+      <SidebarInset>
         <Topbar user={user} role={role} />
-        <main style={{ flex: 1, padding: "1.5rem" }}>{children}</main>
-      </div>
-    </div>
+        <main className="flex-1 p-6">{children}</main>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

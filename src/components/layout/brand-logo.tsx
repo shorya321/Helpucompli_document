@@ -3,36 +3,21 @@ import { BRAND } from "@/lib/brand";
 
 interface BrandLogoProps {
   readonly href?: string;
+  readonly className?: string;
 }
 
-export function BrandLogo({ href = "/" }: BrandLogoProps) {
+export function BrandLogo({ href = "/", className }: BrandLogoProps) {
   return (
     <Link
       href={href}
       aria-label={`${BRAND.name} — ${BRAND.productName}`}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "0.5rem",
-        textDecoration: "none",
-        color: BRAND.colors.dark,
-        fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-        fontWeight: 700,
-      }}
+      className={`inline-flex items-center gap-2 font-semibold tracking-tight text-foreground no-underline ${className ?? ""}`.trim()}
     >
       <span
         aria-hidden="true"
-        style={{
-          display: "inline-block",
-          width: "1.5rem",
-          height: "1.5rem",
-          borderRadius: "0.375rem",
-          background: BRAND.colors.pink,
-        }}
+        className="inline-block h-6 w-6 rounded-md bg-foreground"
       />
-      <span style={{ fontSize: "1.125rem", letterSpacing: "-0.01em" }}>
-        {BRAND.name}
-      </span>
+      <span className="text-base">{BRAND.name}</span>
     </Link>
   );
 }

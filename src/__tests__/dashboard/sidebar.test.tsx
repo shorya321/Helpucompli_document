@@ -7,23 +7,32 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { Sidebar } from "@/components/layout/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
+
+function renderSidebar(role: "superadmin" | "admin" | "viewer"): string {
+  return renderToString(
+    <SidebarProvider>
+      <Sidebar role={role} />
+    </SidebarProvider>,
+  );
+}
 
 describe("Sidebar", () => {
   it("renders role-appropriate links for a superadmin (includes /users)", () => {
-    const html = renderToString(<Sidebar role="superadmin" />);
+    const html = renderSidebar("superadmin");
     expect(html).toMatch(/href="\/users"/);
     expect(html).toMatch(/href="\/buckets"/);
     expect(html).toMatch(/href="\/audit"/);
   });
 
   it("hides /users for admin role", () => {
-    const html = renderToString(<Sidebar role="admin" />);
+    const html = renderSidebar("admin");
     expect(html).not.toMatch(/href="\/users"/);
     expect(html).toMatch(/href="\/buckets"/);
   });
 
   it("only shows documents + links + home for viewer role", () => {
-    const html = renderToString(<Sidebar role="viewer" />);
+    const html = renderSidebar("viewer");
     expect(html).toMatch(/href="\/documents"/);
     expect(html).toMatch(/href="\/links"/);
     expect(html).not.toMatch(/href="\/buckets"/);
@@ -33,7 +42,7 @@ describe("Sidebar", () => {
   });
 
   it("marks the link matching the current pathname as active via aria-current", () => {
-    const html = renderToString(<Sidebar role="superadmin" />);
+    const html = renderSidebar("superadmin");
     // usePathname mocked to /buckets — next/link may order attrs either way
     expect(html).toMatch(
       /<a[^>]*aria-current="page"[^>]*href="\/buckets"|<a[^>]*href="\/buckets"[^>]*aria-current="page"/,
@@ -43,8 +52,8 @@ describe("Sidebar", () => {
     );
   });
 
-  it("is wrapped in a <nav> landmark", () => {
-    const html = renderToString(<Sidebar role="superadmin" />);
-    expect(html).toMatch(/<nav\b/);
+  it("renders the shadcn sidebar landmark container", () => {
+    const html = renderSidebar("superadmin");
+    expect(html).toMatch(/data-slot="sidebar"/);
   });
 });
