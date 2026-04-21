@@ -15,34 +15,31 @@ function renderTopbar(
 }
 
 describe("Topbar", () => {
-  it("displays the user's name", () => {
+  it("renders the sidebar trigger for mobile collapse", () => {
+    const html = renderTopbar({ name: "A", email: "a@x.com" }, "admin");
+    expect(html).toMatch(/data-slot="sidebar-trigger"/);
+  });
+
+  it("renders the search trigger (opens command palette in E3)", () => {
+    const html = renderTopbar({ name: "A", email: "a@x.com" }, "admin");
+    expect(html).toMatch(/aria-label="Open command menu"/);
+  });
+
+  it("renders the theme switch trigger", () => {
+    const html = renderTopbar({ name: "A", email: "a@x.com" }, "admin");
+    expect(html).toMatch(/aria-label="Toggle theme"/);
+  });
+
+  it("renders the layout config drawer trigger", () => {
+    const html = renderTopbar({ name: "A", email: "a@x.com" }, "admin");
+    expect(html).toMatch(/aria-label="Open layout config"/);
+  });
+
+  it("renders a profile dropdown trigger labelled with the user's display name", () => {
     const html = renderTopbar(
       { name: "Alice Admin", email: "alice@x.com" },
       "admin",
     );
-    expect(html).toContain("Alice Admin");
-  });
-
-  it("falls back to email when name is missing", () => {
-    const html = renderTopbar({ name: null, email: "bob@x.com" }, "viewer");
-    expect(html).toContain("bob@x.com");
-  });
-
-  it("shows a role badge with the current role label", () => {
-    const html = renderTopbar(
-      { name: "Sam Super", email: "sam@x.com" },
-      "superadmin",
-    );
-    expect(html).toContain("Superadmin");
-  });
-
-  it("renders a logout anchor pointing at /auth/logout (Auth0 proxy route)", () => {
-    const html = renderTopbar({ name: "A", email: "a@x.com" }, "admin");
-    expect(html).toMatch(/<a[^>]+href="\/auth\/logout"/);
-  });
-
-  it("renders the sidebar trigger (for mobile collapse)", () => {
-    const html = renderTopbar({ name: "A", email: "a@x.com" }, "admin");
-    expect(html).toMatch(/data-slot="sidebar-trigger"/);
+    expect(html).toMatch(/aria-label="Open profile menu for Alice Admin"/);
   });
 });

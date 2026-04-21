@@ -31,7 +31,7 @@ export default async function DashboardLayout({ children }: LayoutProps) {
 
   return (
     <SidebarProvider>
-      <Sidebar role={role} />
+      <Sidebar role={role} user={user} />
       <SidebarInset>
         <Topbar user={user} role={role} />
         <main className="flex-1 p-6">{children}</main>

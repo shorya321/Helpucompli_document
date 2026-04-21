@@ -54,4 +54,27 @@ beforeAll(() => {
       ),
     ),
   );
+
+  // matchMedia polyfill — jsdom does not implement it, so the shadcn
+  // use-mobile hook (consumed by Sidebar/NavUser/etc.) crashes on mount
+  // during component tests. Stub returns a never-matching MediaQueryList
+  // so components default to the desktop code path.
+  if (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia !== "function"
+  ) {
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: (query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    });
+  }
 });

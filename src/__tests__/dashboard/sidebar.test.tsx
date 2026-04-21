@@ -9,10 +9,12 @@ vi.mock("next/navigation", () => ({
 import { Sidebar } from "@/components/layout/sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 
+const STUB_USER = { name: "Test User", email: "test@example.com" };
+
 function renderSidebar(role: "superadmin" | "admin" | "viewer"): string {
   return renderToString(
     <SidebarProvider>
-      <Sidebar role={role} />
+      <Sidebar role={role} user={STUB_USER} />
     </SidebarProvider>,
   );
 }
@@ -31,10 +33,11 @@ describe("Sidebar", () => {
     expect(html).toMatch(/href="\/buckets"/);
   });
 
-  it("only shows documents + links + home for viewer role", () => {
+  it("only shows documents + links + home + settings for viewer role", () => {
     const html = renderSidebar("viewer");
     expect(html).toMatch(/href="\/documents"/);
     expect(html).toMatch(/href="\/links"/);
+    expect(html).toMatch(/href="\/settings"/);
     expect(html).not.toMatch(/href="\/buckets"/);
     expect(html).not.toMatch(/href="\/policies"/);
     expect(html).not.toMatch(/href="\/audit"/);
@@ -55,5 +58,18 @@ describe("Sidebar", () => {
   it("renders the shadcn sidebar landmark container", () => {
     const html = renderSidebar("superadmin");
     expect(html).toMatch(/data-slot="sidebar"/);
+  });
+
+  it("renders the three nav group labels (Workspace / Management / Account)", () => {
+    const html = renderSidebar("superadmin");
+    expect(html).toContain("Workspace");
+    expect(html).toContain("Management");
+    expect(html).toContain("Account");
+  });
+
+  it("surfaces the NavUser footer with the current displayName", () => {
+    const html = renderSidebar("admin");
+    expect(html).toContain(STUB_USER.name);
+    expect(html).toContain(STUB_USER.email);
   });
 });
