@@ -26,6 +26,10 @@ RUN npm ci
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# Pin NODE_ENV=production so any Coolify-injected build-time NODE_ENV
+# cannot leak in and trip the HIPAA guard in src/lib/config.ts (https://
+# APP_BASE_URL requires NODE_ENV=production for Secure cookie flag).
+ENV NODE_ENV=production
 # Skip ESLint errors during prod build (Next respects eslint.ignoreDuringBuilds
 # only if set in config — safer to run lint separately in CI). Keep tsc hard-
 # fail on type errors by not disabling typescript check.
