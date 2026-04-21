@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BRAND } from "@/lib/brand";
+
+import { Button } from "@/components/ui/button";
 
 interface BucketOption {
   readonly id: string;
@@ -82,7 +83,7 @@ export function BucketAccess({
 
   if (allBuckets.length === 0) {
     return (
-      <p style={{ color: "rgba(30,41,59,0.64)", fontSize: "0.85rem" }}>
+      <p className="text-muted-foreground text-sm">
         No buckets configured yet.
       </p>
     );
@@ -91,83 +92,48 @@ export function BucketAccess({
   return (
     <div>
       <ul
-        style={{
-          listStyle: "none",
-          padding: 0,
-          margin: 0,
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(16rem, 1fr))",
-          gap: "0.4rem",
-        }}
+        role="list"
+        className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-2 p-0"
       >
         {allBuckets.map((b) => {
           const checked = assigned.has(b.id);
           return (
             <li key={b.id}>
               <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  padding: "0.45rem 0.6rem",
-                  border: `1px solid ${BRAND.colors.dark}1F`,
-                  borderRadius: "0.375rem",
-                  fontSize: "0.85rem",
-                  background: checked ? "#EFF6FF" : "#FFFFFF",
-                  cursor: "pointer",
-                }}
+                className={
+                  checked
+                    ? "border-border bg-accent text-accent-foreground flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-sm"
+                    : "border-border bg-background text-foreground hover:bg-accent/30 flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-sm transition-colors"
+                }
               >
                 <input
                   type="checkbox"
                   checked={checked}
                   disabled={pending}
                   onChange={() => toggle(b.id)}
+                  className="accent-primary"
                 />
-                <span style={{ fontFamily: "ui-monospace, monospace" }}>
-                  {b.name}
-                </span>
+                <span className="font-mono">{b.name}</span>
               </label>
             </li>
           );
         })}
       </ul>
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "0.75rem",
-          marginTop: "0.75rem",
-        }}
-      >
-        <button
+      <div className="mt-3 flex items-center gap-3">
+        <Button
           type="button"
           onClick={save}
           disabled={!dirty || pending}
-          style={{
-            padding: "0.45rem 1rem",
-            background: BRAND.colors.blue,
-            color: "#FFFFFF",
-            border: "none",
-            borderRadius: "0.375rem",
-            fontSize: "0.85rem",
-            fontWeight: 600,
-            cursor: !dirty || pending ? "not-allowed" : "pointer",
-            opacity: !dirty || pending ? 0.6 : 1,
-          }}
+          size="sm"
         >
           {pending ? "Saving…" : "Save bucket access"}
-        </button>
+        </Button>
         {status.kind === "ok" && (
-          <span style={{ color: "#16A34A", fontSize: "0.8rem" }}>
-            {status.message}
-          </span>
+          <span className="text-muted-foreground text-xs">{status.message}</span>
         )}
         {status.kind === "error" && (
-          <span
-            role="alert"
-            style={{ color: BRAND.colors.pink, fontSize: "0.8rem" }}
-          >
+          <span role="alert" className="text-destructive text-xs">
             {status.message}
           </span>
         )}

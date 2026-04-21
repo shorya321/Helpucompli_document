@@ -11,6 +11,10 @@ interface RoleSelectProps {
   readonly isSelf: boolean;
 }
 
+// Native <select> styled to match shadcn Input for a compact inline cell.
+const nativeSelectClass =
+  "border-input bg-background text-foreground focus-visible:ring-ring h-7 rounded-md border px-2 text-xs shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50";
+
 function allowedRolesFor(actorRole: Role, targetCurrent: Role): Role[] {
   if (actorRole === "superadmin") return ["superadmin", "admin", "viewer"];
   if (actorRole === "admin" && targetCurrent !== "superadmin") return ["viewer"];
@@ -31,16 +35,9 @@ export function RoleSelect({
   const options = allowedRolesFor(actorRole, currentRole);
 
   // Read-only states: self-demotion block + no permitted change at all.
-  if (isSelf || options.length === 0 || options.length === 1 && options[0] === currentRole) {
+  if (isSelf || options.length === 0 || (options.length === 1 && options[0] === currentRole)) {
     return (
-      <span
-        style={{
-          fontSize: "0.7rem",
-          fontWeight: 600,
-          textTransform: "uppercase",
-          color: "rgba(30,41,59,0.72)",
-        }}
-      >
+      <span className="text-muted-foreground text-xs font-semibold uppercase">
         {currentRole}
       </span>
     );
@@ -76,18 +73,13 @@ export function RoleSelect({
   }
 
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+    <span className="inline-flex items-center gap-1.5">
       <select
         aria-label="Change role"
         value={value}
         disabled={pending}
         onChange={(e) => apply(e.target.value as Role)}
-        style={{
-          padding: "0.2rem 0.4rem",
-          fontSize: "0.75rem",
-          border: "1px solid rgba(30,41,59,0.25)",
-          borderRadius: "0.25rem",
-        }}
+        className={nativeSelectClass}
       >
         {displayOptions.map((r) => (
           <option key={r} value={r}>
@@ -96,10 +88,7 @@ export function RoleSelect({
         ))}
       </select>
       {error && (
-        <span
-          role="alert"
-          style={{ fontSize: "0.7rem", color: "#DC2626" }}
-        >
+        <span role="alert" className="text-destructive text-xs">
           {error}
         </span>
       )}

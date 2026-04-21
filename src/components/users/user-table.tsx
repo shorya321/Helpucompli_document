@@ -1,5 +1,19 @@
 import Link from "next/link";
-import { BRAND } from "@/lib/brand";
+import { Eye, Shield, ShieldCheck } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import type { UserListRow } from "@/lib/user-list";
 import type { Role } from "@/types";
 import { RoleSelect } from "@/components/users/role-select";
@@ -19,49 +33,60 @@ interface UserTableProps {
   readonly actorId: string | null;
 }
 
-const ROLE_STYLES: Record<Role, { bg: string; fg: string }> = {
-  superadmin: { bg: "#E91E8C", fg: "#FFFFFF" },
-  admin: { bg: "#2563EB", fg: "#FFFFFF" },
-  viewer: { bg: "#E2E8F0", fg: "#1E293B" },
+// Native <select> styled to match shadcn Input. The user filter form
+// submits via GET, so we need the DOM element, not the Radix-based
+// shadcn Select (which is a button + popover, not a form control).
+const nativeSelectClass =
+  "border-input bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50";
+
+type RoleBadgeVariant = "default" | "secondary" | "outline";
+
+const ROLE_VARIANT: Record<Role, RoleBadgeVariant> = {
+  superadmin: "default",
+  admin: "secondary",
+  viewer: "outline",
 };
 
-function RoleBadge({ role }: { readonly role: Role }) {
-  const style = ROLE_STYLES[role];
+function roleIcon(role: Role) {
+  if (role === "superadmin") return <ShieldCheck aria-hidden="true" />;
+  if (role === "admin") return <Shield aria-hidden="true" />;
+  return <Eye aria-hidden="true" />;
+}
+
+export function RoleBadge({ role }: { readonly role: Role }) {
   return (
-    <span
-      style={{
-        background: style.bg,
-        color: style.fg,
-        padding: "0.15rem 0.55rem",
-        borderRadius: "999px",
-        fontSize: "0.7rem",
-        fontWeight: 600,
-        textTransform: "uppercase",
-        letterSpacing: "0.04em",
-      }}
+    <Badge
+      variant={ROLE_VARIANT[role]}
+      className="gap-1 font-mono text-[0.65rem] uppercase tracking-wide"
     >
+      {roleIcon(role)}
       {role}
-    </span>
+    </Badge>
   );
 }
 
-function StatusBadge({ status }: { readonly status: "active" | "disabled" }) {
-  const bg = status === "active" ? "#16A34A" : "#DC2626";
+export function StatusBadge({
+  status,
+}: {
+  readonly status: "active" | "disabled";
+}) {
+  if (status === "active") {
+    return (
+      <Badge
+        variant="secondary"
+        className="font-mono text-[0.65rem] uppercase tracking-wide"
+      >
+        active
+      </Badge>
+    );
+  }
   return (
-    <span
-      style={{
-        background: bg,
-        color: "#FFFFFF",
-        padding: "0.15rem 0.55rem",
-        borderRadius: "999px",
-        fontSize: "0.7rem",
-        fontWeight: 600,
-        textTransform: "uppercase",
-        letterSpacing: "0.04em",
-      }}
+    <Badge
+      variant="outline"
+      className="text-muted-foreground font-mono text-[0.65rem] uppercase tracking-wide"
     >
-      {status}
-    </span>
+      disabled
+    </Badge>
   );
 }
 
@@ -75,228 +100,136 @@ export function UserTable({
   actorId,
 }: UserTableProps) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-
-  const cell: React.CSSProperties = {
-    padding: "0.625rem 1rem",
-    borderBottom: `1px solid ${BRAND.colors.dark}0F`,
-  };
+  const hasFilters = Boolean(query.q || query.role || query.status);
 
   return (
-    <section>
-      <form
-        method="get"
-        style={{
-          display: "flex",
-          gap: "0.75rem",
-          flexWrap: "wrap",
-          marginBottom: "1rem",
-        }}
-      >
-        <input
-          type="text"
-          name="q"
-          defaultValue={query.q ?? ""}
-          placeholder="Search name or email"
-          maxLength={128}
-          style={{
-            padding: "0.4rem 0.65rem",
-            border: `1px solid ${BRAND.colors.dark}33`,
-            borderRadius: "0.375rem",
-            fontSize: "0.85rem",
-            minWidth: "14rem",
-          }}
-        />
-        <select
-          name="role"
-          defaultValue={query.role ?? ""}
-          style={{
-            padding: "0.4rem 0.65rem",
-            border: `1px solid ${BRAND.colors.dark}33`,
-            borderRadius: "0.375rem",
-            fontSize: "0.85rem",
-          }}
+    <section className="flex flex-col gap-4">
+      <Card className="p-4">
+        <form
+          method="get"
+          className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] items-end gap-3"
         >
-          <option value="">All roles</option>
-          <option value="superadmin">Superadmin</option>
-          <option value="admin">Admin</option>
-          <option value="viewer">Viewer</option>
-        </select>
-        <select
-          name="status"
-          defaultValue={query.status ?? ""}
-          style={{
-            padding: "0.4rem 0.65rem",
-            border: `1px solid ${BRAND.colors.dark}33`,
-            borderRadius: "0.375rem",
-            fontSize: "0.85rem",
-          }}
-        >
-          <option value="">All statuses</option>
-          <option value="active">Active</option>
-          <option value="disabled">Disabled</option>
-        </select>
-        <button
-          type="submit"
-          style={{
-            padding: "0.4rem 0.9rem",
-            background: BRAND.colors.blue,
-            color: "#FFFFFF",
-            border: "none",
-            borderRadius: "0.375rem",
-            fontSize: "0.85rem",
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          Apply
-        </button>
-        {(query.q || query.role || query.status) && (
-          <Link
-            href="/users"
-            style={{
-              alignSelf: "center",
-              fontSize: "0.8rem",
-              color: BRAND.colors.blue,
-            }}
-          >
-            Reset
-          </Link>
-        )}
-      </form>
-
-      <div
-        style={{
-          background: "#FFFFFF",
-          border: `1px solid ${BRAND.colors.dark}1A`,
-          borderRadius: "0.5rem",
-          overflowX: "auto",
-        }}
-      >
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
-          <thead>
-            <tr>
-              {["Name", "Email", "Role", "Last login", "Status", ""].map((h) => (
-                <th
-                  key={h}
-                  style={{
-                    textAlign: "left",
-                    padding: "0.75rem 1rem",
-                    borderBottom: `1px solid ${BRAND.colors.dark}1A`,
-                    fontSize: "0.75rem",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                    color: "rgba(30,41,59,0.64)",
-                  }}
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id}>
-                <td style={{ ...cell, fontWeight: 600 }}>{row.name ?? "—"}</td>
-                <td
-                  style={{
-                    ...cell,
-                    fontFamily: "ui-monospace, monospace",
-                    fontSize: "0.8rem",
-                  }}
-                >
-                  {row.email}
-                </td>
-                <td style={cell}>
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.5rem",
-                    }}
-                  >
-                    <RoleBadge role={row.role} />
-                    <RoleSelect
-                      userId={row.id}
-                      currentRole={row.role}
-                      actorRole={actorRole}
-                      isSelf={actorId === row.id}
-                    />
-                  </span>
-                </td>
-                <td
-                  style={{
-                    ...cell,
-                    color: "rgba(30,41,59,0.64)",
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {row.lastLoginAt ? row.lastLoginAt.toLocaleString() : "Never"}
-                </td>
-                <td style={cell}>
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.5rem",
-                    }}
-                  >
-                    <StatusBadge status={row.status} />
-                    <StatusToggle
-                      userId={row.id}
-                      currentStatus={row.status}
-                      targetRole={row.role}
-                      actorRole={actorRole}
-                      isSelf={actorId === row.id}
-                    />
-                  </span>
-                </td>
-                <td style={{ ...cell, textAlign: "right" }}>
-                  <Link
-                    href={`/users/${row.id}`}
-                    style={{
-                      color: BRAND.colors.blue,
-                      textDecoration: "none",
-                      fontWeight: 600,
-                    }}
-                  >
-                    Details
-                  </Link>
-                </td>
-              </tr>
-            ))}
-            {rows.length === 0 && (
-              <tr>
-                <td
-                  colSpan={6}
-                  style={{
-                    padding: "2rem",
-                    textAlign: "center",
-                    color: "rgba(30,41,59,0.56)",
-                  }}
-                >
-                  No users match those filters.
-                </td>
-              </tr>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="user-q">Search</Label>
+            <Input
+              id="user-q"
+              type="text"
+              name="q"
+              defaultValue={query.q ?? ""}
+              placeholder="Search name or email"
+              maxLength={128}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="user-role">Role</Label>
+            <select
+              id="user-role"
+              name="role"
+              defaultValue={query.role ?? ""}
+              className={nativeSelectClass}
+            >
+              <option value="">All roles</option>
+              <option value="superadmin">Superadmin</option>
+              <option value="admin">Admin</option>
+              <option value="viewer">Viewer</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="user-status">Status</Label>
+            <select
+              id="user-status"
+              name="status"
+              defaultValue={query.status ?? ""}
+              className={nativeSelectClass}
+            >
+              <option value="">All statuses</option>
+              <option value="active">Active</option>
+              <option value="disabled">Disabled</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button type="submit" variant="secondary" size="sm">
+              Apply
+            </Button>
+            {hasFilters && (
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/users">Reset</Link>
+              </Button>
             )}
-          </tbody>
-        </table>
-      </div>
+          </div>
+        </form>
+      </Card>
+
+      {rows.length === 0 ? (
+        <div className="border-border bg-card text-muted-foreground rounded-lg border border-dashed p-6 text-center">
+          No users match those filters.
+        </div>
+      ) : (
+        <Card className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Last login</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right" aria-label="Actions" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell className="font-medium">
+                    {row.name ?? "—"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground font-mono text-xs">
+                    {row.email}
+                  </TableCell>
+                  <TableCell>
+                    <span className="inline-flex items-center gap-2">
+                      <RoleBadge role={row.role} />
+                      <RoleSelect
+                        userId={row.id}
+                        currentRole={row.role}
+                        actorRole={actorRole}
+                        isSelf={actorId === row.id}
+                      />
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground font-mono tabular-nums">
+                    {row.lastLoginAt ? row.lastLoginAt.toLocaleString() : "Never"}
+                  </TableCell>
+                  <TableCell>
+                    <span className="inline-flex items-center gap-2">
+                      <StatusBadge status={row.status} />
+                      <StatusToggle
+                        userId={row.id}
+                        currentStatus={row.status}
+                        targetRole={row.role}
+                        actorRole={actorRole}
+                        isSelf={actorId === row.id}
+                      />
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button asChild variant="ghost" size="sm">
+                      <Link href={`/users/${row.id}`}>Details</Link>
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
 
       {total > pageSize && (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginTop: "0.75rem",
-            fontSize: "0.8rem",
-            color: "rgba(30,41,59,0.64)",
-          }}
-        >
+        <div className="text-muted-foreground flex items-center justify-between text-xs">
           <span>
             Page {page} of {totalPages} · {total} users
           </span>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
+          <div className="flex gap-2">
             {page > 1 && (
               <PageLink query={query} page={page - 1} label="Prev" />
             )}
@@ -325,17 +258,8 @@ function PageLink({
   if (query.status) params.set("status", query.status);
   params.set("page", String(page));
   return (
-    <Link
-      href={`/users?${params.toString()}`}
-      style={{
-        padding: "0.3rem 0.7rem",
-        border: `1px solid ${BRAND.colors.dark}33`,
-        borderRadius: "0.375rem",
-        color: BRAND.colors.dark,
-        textDecoration: "none",
-      }}
-    >
-      {label}
-    </Link>
+    <Button asChild variant="outline" size="sm">
+      <Link href={`/users?${params.toString()}`}>{label}</Link>
+    </Button>
   );
 }

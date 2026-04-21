@@ -7,14 +7,6 @@
 #
 # Paths are relative to repo root. Comments (# ...) and blank lines ignored.
 
-# Phase C5 — users
-src/components/users/user-table.tsx
-src/components/users/invite-user-dialog.tsx
-src/components/users/role-select.tsx
-src/components/users/status-toggle.tsx
-src/components/users/bucket-access.tsx
-src/app/(dashboard)/users/[id]/page.tsx
-
 # Phase C6 — audit
 src/components/audit/audit-table.tsx
 src/components/audit/audit-filters.tsx

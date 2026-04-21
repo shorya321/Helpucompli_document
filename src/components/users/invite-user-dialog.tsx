@@ -1,8 +1,20 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BRAND } from "@/lib/brand";
+
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import type { Role } from "@/types";
 
 interface InviteUserDialogProps {
@@ -20,23 +32,19 @@ type FormState =
     }
   | { readonly kind: "error"; readonly message: string };
 
+// Native <select> styled to match shadcn Input. Using a DOM <select>
+// here keeps the plain HTML form submission path + FormData parsing
+// in onSubmit intact; the Radix Select would break that.
+const nativeSelectClass =
+  "border-input bg-background text-foreground focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50";
+
 export function InviteUserDialog({ canInviteAdmin }: InviteUserDialogProps) {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<FormState>({ kind: "idle" });
-  const dialogRef = useRef<HTMLDivElement | null>(null);
   const emailId = useId();
   const nameId = useId();
   const roleId = useId();
   const router = useRouter();
-
-  useEffect(() => {
-    if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open]);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -86,239 +94,98 @@ export function InviteUserDialog({ canInviteAdmin }: InviteUserDialogProps) {
   }
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => {
-          setState({ kind: "idle" });
-          setOpen(true);
-        }}
-        style={{
-          padding: "0.5rem 1rem",
-          background: BRAND.colors.pink,
-          color: "#FFFFFF",
-          border: "none",
-          borderRadius: "0.375rem",
-          fontWeight: 600,
-          fontSize: "0.85rem",
-          cursor: "pointer",
-        }}
-      >
-        + Invite user
-      </button>
-
-      {open && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={`${emailId}-title`}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(30,41,59,0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 50,
-          }}
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setOpen(false);
-          }}
-        >
-          <div
-            ref={dialogRef}
-            style={{
-              background: "#FFFFFF",
-              borderRadius: "0.5rem",
-              padding: "1.5rem",
-              width: "min(30rem, 90vw)",
-              boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-            }}
-          >
-            <h2
-              id={`${emailId}-title`}
-              style={{ fontSize: "1.15rem", fontWeight: 700, margin: 0 }}
-            >
-              Invite user
-            </h2>
-            <p
-              style={{
-                margin: "0.25rem 0 1rem",
-                color: "rgba(30,41,59,0.64)",
-                fontSize: "0.85rem",
-              }}
-            >
-              Sends an activation email via Auth0. The user sets their own
-              password on first login.
-            </p>
-
-            <form onSubmit={onSubmit}>
-              <Field label="Email" htmlFor={emailId}>
-                <input
-                  id={emailId}
-                  name="email"
-                  type="email"
-                  required
-                  autoComplete="email"
-                  maxLength={254}
-                  style={inputStyle}
-                />
-              </Field>
-
-              <Field label="Name (optional)" htmlFor={nameId}>
-                <input
-                  id={nameId}
-                  name="name"
-                  type="text"
-                  maxLength={150}
-                  style={inputStyle}
-                />
-              </Field>
-
-              <Field label="Role" htmlFor={roleId}>
-                <select
-                  id={roleId}
-                  name="role"
-                  defaultValue="viewer"
-                  required
-                  style={inputStyle}
-                >
-                  <option value="viewer">Viewer</option>
-                  {canInviteAdmin && <option value="admin">Admin</option>}
-                </select>
-              </Field>
-
-              {state.kind === "error" && (
-                <p
-                  role="alert"
-                  style={{
-                    color: BRAND.colors.pink,
-                    fontSize: "0.8rem",
-                    margin: "0.5rem 0 0",
-                  }}
-                >
-                  {state.message}
-                </p>
-              )}
-
-              {state.kind === "ok" && (
-                <div
-                  style={{
-                    background: state.emailSent ? "#F0FDF4" : "#FFFBEB",
-                    border: `1px solid ${state.emailSent ? "#16A34A" : "#D97706"}`,
-                    borderRadius: "0.375rem",
-                    padding: "0.75rem",
-                    margin: "0.75rem 0 0",
-                    fontSize: "0.8rem",
-                  }}
-                >
-                  <p style={{ margin: 0, fontWeight: 600 }}>
-                    {state.emailSent
-                      ? `Invitation email sent to ${state.email}.`
-                      : `Invitation created for ${state.email}, but email was not sent.`}
-                  </p>
-                  <p
-                    style={{
-                      margin: "0.25rem 0 0",
-                      color: "rgba(30,41,59,0.72)",
-                    }}
-                  >
-                    {state.emailSent
-                      ? "If the user does not receive the email, share this activation link manually:"
-                      : "Check RESEND_API_KEY / RESEND_FROM_EMAIL in .env.local, or forward this activation link manually:"}
-                  </p>
-                  <code
-                    style={{
-                      display: "block",
-                      marginTop: "0.35rem",
-                      wordBreak: "break-all",
-                      fontSize: "0.75rem",
-                    }}
-                  >
-                    {state.ticket}
-                  </code>
-                </div>
-              )}
-
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: "0.5rem",
-                  marginTop: "1rem",
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  style={{
-                    padding: "0.45rem 0.9rem",
-                    background: "#FFFFFF",
-                    color: BRAND.colors.dark,
-                    border: `1px solid ${BRAND.colors.dark}33`,
-                    borderRadius: "0.375rem",
-                    fontSize: "0.85rem",
-                    cursor: "pointer",
-                  }}
-                >
-                  Close
-                </button>
-                <button
-                  type="submit"
-                  disabled={state.kind === "pending"}
-                  style={{
-                    padding: "0.45rem 1rem",
-                    background: BRAND.colors.pink,
-                    color: "#FFFFFF",
-                    border: "none",
-                    borderRadius: "0.375rem",
-                    fontSize: "0.85rem",
-                    fontWeight: 600,
-                    cursor: state.kind === "pending" ? "wait" : "pointer",
-                    opacity: state.kind === "pending" ? 0.6 : 1,
-                  }}
-                >
-                  {state.kind === "pending" ? "Sending…" : "Send invite"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "0.45rem 0.65rem",
-  border: "1px solid rgba(30,41,59,0.2)",
-  borderRadius: "0.375rem",
-  fontSize: "0.9rem",
-  boxSizing: "border-box",
-};
-
-function Field({
-  label,
-  htmlFor,
-  children,
-}: {
-  readonly label: string;
-  readonly htmlFor: string;
-  readonly children: React.ReactNode;
-}) {
-  return (
-    <label
-      htmlFor={htmlFor}
-      style={{
-        display: "block",
-        marginBottom: "0.75rem",
-        fontSize: "0.8rem",
-        fontWeight: 600,
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) setState({ kind: "idle" });
       }}
     >
-      <span style={{ display: "block", marginBottom: "0.25rem" }}>{label}</span>
-      {children}
-    </label>
+      <DialogTrigger asChild>
+        <Button type="button">+ Invite user</Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Invite user</DialogTitle>
+          <DialogDescription>
+            Sends an activation email via Auth0. The user sets their own
+            password on first login.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={onSubmit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={emailId}>Email</Label>
+            <Input
+              id={emailId}
+              name="email"
+              type="email"
+              required
+              autoComplete="email"
+              maxLength={254}
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={nameId}>
+              Name{" "}
+              <span className="text-muted-foreground font-normal">(optional)</span>
+            </Label>
+            <Input id={nameId} name="name" type="text" maxLength={150} />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={roleId}>Role</Label>
+            <select
+              id={roleId}
+              name="role"
+              defaultValue="viewer"
+              required
+              className={nativeSelectClass}
+            >
+              <option value="viewer">Viewer</option>
+              {canInviteAdmin && <option value="admin">Admin</option>}
+            </select>
+          </div>
+
+          {state.kind === "error" && (
+            <p role="alert" className="text-destructive text-sm">
+              {state.message}
+            </p>
+          )}
+
+          {state.kind === "ok" && (
+            <div className="border-border bg-muted text-muted-foreground rounded-md border px-3 py-2 text-xs">
+              <p className="text-foreground m-0 font-semibold">
+                {state.emailSent
+                  ? `Invitation email sent to ${state.email}.`
+                  : `Invitation created for ${state.email}, but email was not sent.`}
+              </p>
+              <p className="mt-1">
+                {state.emailSent
+                  ? "If the user does not receive the email, share this activation link manually:"
+                  : "Check RESEND_API_KEY / RESEND_FROM_EMAIL in .env.local, or forward this activation link manually:"}
+              </p>
+              <code className="mt-1.5 block break-all font-mono text-xs">
+                {state.ticket}
+              </code>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+            >
+              Close
+            </Button>
+            <Button type="submit" disabled={state.kind === "pending"}>
+              {state.kind === "pending" ? "Sending…" : "Send invite"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

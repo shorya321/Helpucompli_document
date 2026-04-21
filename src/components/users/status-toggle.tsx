@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Role } from "@/types";
-import { BRAND } from "@/lib/brand";
+
+import { Button } from "@/components/ui/button";
 
 interface StatusToggleProps {
   readonly userId: string;
@@ -33,7 +34,7 @@ export function StatusToggle({
 
   const nextStatus = currentStatus === "active" ? "disabled" : "active";
   const label = nextStatus === "disabled" ? "Disable" : "Enable";
-  const bg = nextStatus === "disabled" ? "#DC2626" : "#16A34A";
+  const variant = nextStatus === "disabled" ? "destructive" : "secondary";
 
   function onClick() {
     setError(null);
@@ -77,27 +78,19 @@ export function StatusToggle({
   }
 
   return (
-    <span style={{ display: "inline-flex", gap: "0.35rem", alignItems: "center" }}>
-      <button
+    <span className="inline-flex items-center gap-1.5">
+      <Button
         type="button"
         onClick={onClick}
         disabled={pending}
-        style={{
-          padding: "0.2rem 0.55rem",
-          background: bg,
-          color: "#FFFFFF",
-          border: "none",
-          borderRadius: "0.25rem",
-          fontSize: "0.7rem",
-          fontWeight: 600,
-          cursor: pending ? "wait" : "pointer",
-          opacity: pending ? 0.6 : 1,
-        }}
+        variant={variant}
+        size="sm"
+        className="h-7 px-2.5 text-xs"
       >
         {pending ? "…" : label}
-      </button>
+      </Button>
       {error && (
-        <span role="alert" style={{ fontSize: "0.7rem", color: BRAND.colors.pink }}>
+        <span role="alert" className="text-destructive text-xs">
           {error}
         </span>
       )}

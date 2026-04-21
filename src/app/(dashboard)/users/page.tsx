@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth0 } from "@/lib/auth0";
 import { resolveRole } from "@/lib/auth-guard";
-import { BRAND } from "@/lib/brand";
 import { prisma } from "@/lib/prisma";
 import { ensureUser } from "@/lib/ensure-user";
 import {
@@ -52,26 +51,13 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
   }
 
   return (
-    <main
-      style={{
-        padding: "2rem",
-        maxWidth: "80rem",
-        margin: "0 auto",
-        fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-        color: BRAND.colors.dark,
-      }}
-    >
-      <header
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "1.5rem",
-        }}
-      >
+    <section className="flex flex-col gap-6">
+      <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 style={{ fontSize: "1.5rem", fontWeight: 700, margin: 0 }}>Users</h1>
-          <p style={{ color: "rgba(30,41,59,0.64)", margin: "0.25rem 0 0" }}>
+          <h1 className="text-foreground m-0 text-2xl font-bold tracking-tight">
+            Users
+          </h1>
+          <p className="text-muted-foreground mt-1">
             Manage who can access the document repository.
           </p>
         </div>
@@ -79,7 +65,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
       </header>
 
       {loadError && (
-        <p role="alert" style={{ color: BRAND.colors.pink }}>
+        <p role="alert" className="text-destructive text-sm">
           Unable to load users. Try again.
         </p>
       )}
@@ -93,6 +79,6 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
         actorRole={role}
         actorId={actorId}
       />
-    </main>
+    </section>
   );
 }
