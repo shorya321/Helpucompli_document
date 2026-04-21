@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BRAND } from "@/lib/brand";
+import { Folder, FileText } from "lucide-react";
 import { formatStorage } from "@/components/buckets/bucket-card";
 import { buildBreadcrumb } from "@/lib/documents-browse";
 import { DownloadButton } from "@/components/documents/download-button";
@@ -35,41 +35,23 @@ interface FileRowProps {
   readonly canHardDelete: boolean;
 }
 
-function FileRow({ entry, view, bucketId, canHardDelete }: FileRowProps) {
-  const rowStyle: React.CSSProperties = {
-    padding: "0.625rem 0.875rem",
-    borderBottom:
-      view === "list" ? `1px solid ${BRAND.colors.dark}0D` : "none",
-    background: view === "grid" ? "#FFFFFF" : "transparent",
-    border: view === "grid" ? `1px solid ${BRAND.colors.dark}1A` : undefined,
-    borderRadius: view === "grid" ? "0.5rem" : undefined,
-    display: "flex",
-    gap: "0.75rem",
-    justifyContent: "space-between",
-    alignItems: "baseline",
-    flexWrap: "wrap",
-    fontSize: "0.875rem",
-  };
+function rowClass(view: "grid" | "list"): string {
+  const base =
+    "flex flex-wrap items-baseline justify-between gap-3 px-3.5 py-2.5 text-sm";
+  return view === "grid"
+    ? `${base} border-border bg-card rounded-lg border`
+    : `${base} border-border/50 border-b last:border-b-0`;
+}
 
+function FileRow({ entry, view, bucketId, canHardDelete }: FileRowProps) {
   const inner = (
     <>
-      <span style={{ wordBreak: "break-all", fontWeight: 500 }}>
+      <span className="text-foreground inline-flex items-baseline gap-2 break-all font-medium">
+        <FileText aria-hidden="true" className="text-muted-foreground h-4 w-4 shrink-0" />
         {filenameFromKey(entry.key)}
       </span>
-      <span
-        style={{
-          display: "inline-flex",
-          alignItems: "baseline",
-          gap: "0.75rem",
-        }}
-      >
-        <span
-          style={{
-            color: "rgba(30,41,59,0.72)",
-            fontSize: "0.75rem",
-            fontVariantNumeric: "tabular-nums",
-          }}
-        >
+      <span className="inline-flex items-baseline gap-3">
+        <span className="text-muted-foreground font-mono text-xs tabular-nums">
           {formatStorage(entry.size)}
         </span>
         {bucketId ? (
@@ -80,11 +62,11 @@ function FileRow({ entry, view, bucketId, canHardDelete }: FileRowProps) {
   );
 
   if (!bucketId) {
-    return <li style={rowStyle}>{inner}</li>;
+    return <li className={rowClass(view)}>{inner}</li>;
   }
 
   return (
-    <li style={rowStyle}>
+    <li className={rowClass(view)}>
       <ContextMenu
         items={buildDocumentMenu({
           bucketId,
@@ -92,16 +74,7 @@ function FileRow({ entry, view, bucketId, canHardDelete }: FileRowProps) {
           canHardDelete,
         })}
       >
-        <span
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            gap: "0.75rem",
-            width: "100%",
-            flexWrap: "wrap",
-            alignItems: "baseline",
-          }}
-        >
+        <span className="flex w-full flex-wrap items-baseline justify-between gap-3">
           {inner}
         </span>
       </ContextMenu>
@@ -131,48 +104,33 @@ export function FileList({
   const crumbs = buildBreadcrumb(bucket, prefix);
 
   return (
-    <section
-      style={{
-        fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-        color: BRAND.colors.dark,
-        display: "flex",
-        flexDirection: "column",
-        gap: "1rem",
-      }}
-    >
+    <section className="text-foreground flex flex-col gap-4">
       <nav aria-label="Breadcrumb">
-        <ol
-          style={{
-            listStyle: "none",
-            padding: 0,
-            margin: 0,
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "0.25rem",
-            fontSize: "0.8125rem",
-          }}
-        >
+        <ol className="m-0 flex flex-wrap gap-1 p-0 text-sm">
           {crumbs.map((c, i) => {
             const isLast = i === crumbs.length - 1;
             const href = hrefForFolder(bucket, c.prefix);
             return (
-              <li key={`${c.prefix}-${c.label}`} style={{ display: "flex", gap: "0.25rem" }}>
+              <li
+                key={`${c.prefix}-${c.label}`}
+                className="flex items-baseline gap-1"
+              >
                 {i > 0 ? (
-                  <span aria-hidden="true" style={{ color: "rgba(30,41,59,0.45)" }}>
+                  <span aria-hidden="true" className="text-muted-foreground">
                     /
                   </span>
                 ) : null}
                 {isLast ? (
                   <span
                     aria-current="page"
-                    style={{ color: BRAND.colors.dark, fontWeight: 600 }}
+                    className="text-foreground font-semibold"
                   >
                     {c.label}
                   </span>
                 ) : (
                   <Link
                     href={href}
-                    style={{ color: BRAND.colors.blue, textDecoration: "none" }}
+                    className="text-muted-foreground hover:text-foreground no-underline transition-colors"
                   >
                     {c.label}
                   </Link>
@@ -185,15 +143,7 @@ export function FileList({
 
       {entries.length === 0 ? (
         <p
-          style={{
-            margin: 0,
-            padding: "1.5rem",
-            background: "#FFFFFF",
-            border: `1px dashed ${BRAND.colors.dark}33`,
-            borderRadius: "0.75rem",
-            textAlign: "center",
-            color: "rgba(30,41,59,0.72)",
-          }}
+          className="border-border bg-card text-muted-foreground m-0 rounded-xl border border-dashed p-6 text-center"
           data-view={view}
         >
           This folder is empty.
@@ -202,56 +152,30 @@ export function FileList({
         <ul
           role="list"
           data-view={view}
-          style={
+          className={
             view === "grid"
-              ? {
-                  listStyle: "none",
-                  padding: 0,
-                  margin: 0,
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(12rem, 1fr))",
-                  gap: "0.75rem",
-                }
-              : {
-                  listStyle: "none",
-                  padding: 0,
-                  margin: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.25rem",
-                  background: "#FFFFFF",
-                  border: `1px solid ${BRAND.colors.dark}1A`,
-                  borderRadius: "0.75rem",
-                  overflow: "hidden",
-                }
+              ? "m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-3 p-0"
+              : "border-border bg-card m-0 flex list-none flex-col overflow-hidden rounded-xl border p-0"
           }
         >
           {entries.map((e) =>
             e.kind === "folder" ? (
               <li
                 key={`folder:${e.prefix}`}
-                style={{
-                  padding: "0.625rem 0.875rem",
-                  borderBottom:
-                    view === "list" ? `1px solid ${BRAND.colors.dark}0D` : "none",
-                  background: view === "grid" ? "#FFFFFF" : "transparent",
-                  border:
-                    view === "grid"
-                      ? `1px solid ${BRAND.colors.dark}1A`
-                      : undefined,
-                  borderRadius: view === "grid" ? "0.5rem" : undefined,
-                }}
+                className={
+                  view === "grid"
+                    ? "border-border bg-card rounded-lg border px-3.5 py-2.5"
+                    : "border-border/50 border-b px-3.5 py-2.5 last:border-b-0"
+                }
               >
                 <Link
                   href={hrefForFolder(bucket, e.prefix)}
-                  style={{
-                    color: BRAND.colors.blue,
-                    textDecoration: "none",
-                    fontWeight: 600,
-                    fontSize: "0.875rem",
-                    wordBreak: "break-all",
-                  }}
+                  className="text-foreground hover:text-primary inline-flex items-baseline gap-2 break-all text-sm font-semibold no-underline transition-colors"
                 >
+                  <Folder
+                    aria-hidden="true"
+                    className="text-muted-foreground h-4 w-4 shrink-0"
+                  />
                   {e.name}/
                 </Link>
               </li>

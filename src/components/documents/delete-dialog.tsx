@@ -2,7 +2,17 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { BRAND } from "@/lib/brand";
+
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface DeleteDialogProps {
   readonly bucketId: string;
@@ -64,171 +74,99 @@ export function DeleteDialog({
     mode !== "hard" || confirmName.trim().toLowerCase() === filename.toLowerCase();
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="delete-title"
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(30,41,59,0.55)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 40,
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) router.push(href);
       }}
     >
-      <form
-        onSubmit={onSubmit}
-        style={{
-          background: "#FFFFFF",
-          borderRadius: "0.75rem",
-          padding: "1.5rem",
-          width: "min(30rem, 90vw)",
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.875rem",
-          fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-          color: BRAND.colors.dark,
-        }}
-      >
-        <header
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "baseline",
-          }}
-        >
-          <h2 id="delete-title" style={{ margin: 0, fontSize: "1.125rem" }}>
-            Delete document
-          </h2>
-          <a
-            href={href}
-            style={{ fontSize: "0.75rem", color: BRAND.colors.blue }}
-          >
-            Close
-          </a>
-        </header>
+      <DialogContent className="sm:max-w-lg">
+        <form onSubmit={onSubmit} className="flex flex-col gap-4">
+          <DialogHeader>
+            <DialogTitle>Delete document</DialogTitle>
+          </DialogHeader>
 
-        <p style={{ margin: 0, fontSize: "0.8125rem", color: "rgba(30,41,59,0.72)" }}>
-          {filename}
-        </p>
-
-        <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
-          <legend style={{ fontSize: "0.75rem", fontWeight: 600 }}>Delete mode</legend>
-          <label style={{ display: "block", marginTop: "0.25rem", fontSize: "0.875rem" }}>
-            <input
-              type="radio"
-              name="mode"
-              value="soft"
-              checked={mode === "soft"}
-              onChange={() => setMode("soft")}
-            />{" "}
-            Soft delete — hidden but recoverable via versioning
-          </label>
-          <label
-            style={{
-              display: "block",
-              marginTop: "0.25rem",
-              fontSize: "0.875rem",
-              opacity: canHardDelete ? 1 : 0.5,
-            }}
-          >
-            <input
-              type="radio"
-              name="mode"
-              value="hard"
-              disabled={!canHardDelete}
-              checked={mode === "hard"}
-              onChange={() => setMode("hard")}
-            />{" "}
-            Hard delete — permanent, all versions removed (superadmin)
-          </label>
-        </fieldset>
-
-        {mode === "hard" ? (
-          <>
-            <div
-              role="alert"
-              style={{
-                background: `${BRAND.colors.pink}14`,
-                color: BRAND.colors.pink,
-                padding: "0.5rem 0.75rem",
-                borderRadius: "0.375rem",
-                fontSize: "0.8125rem",
-              }}
-            >
-              Hard delete is permanent and cannot be undone. All S3 versions will
-              be purged.
-            </div>
-            <label style={{ fontSize: "0.75rem", fontWeight: 600 }}>
-              Type the filename to confirm
-              <input
-                type="text"
-                value={confirmName}
-                onChange={(e) => setConfirmName(e.target.value)}
-                placeholder={filename}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  marginTop: "0.25rem",
-                  padding: "0.5rem",
-                  fontSize: "0.875rem",
-                  borderRadius: "0.375rem",
-                  border: `1px solid ${BRAND.colors.dark}26`,
-                  fontFamily: "inherit",
-                }}
-              />
-            </label>
-          </>
-        ) : null}
-
-        {err ? (
-          <p
-            role="alert"
-            style={{
-              margin: 0,
-              color: BRAND.colors.pink,
-              fontSize: "0.8125rem",
-            }}
-          >
-            {err}
+          <p className="text-muted-foreground m-0 break-all text-sm">
+            {filename}
           </p>
-        ) : null}
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-          <a
-            href={href}
-            style={{
-              padding: "0.5rem 0.875rem",
-              fontSize: "0.875rem",
-              color: BRAND.colors.dark,
-              textDecoration: "none",
-              border: `1px solid ${BRAND.colors.dark}26`,
-              borderRadius: "0.375rem",
-            }}
-          >
-            Cancel
-          </a>
-          <button
-            type="submit"
-            disabled={busy || !hardConfirmValid}
-            style={{
-              background: mode === "hard" ? BRAND.colors.pink : BRAND.colors.blue,
-              color: "#FFFFFF",
-              border: "none",
-              padding: "0.5rem 0.875rem",
-              fontSize: "0.875rem",
-              fontWeight: 600,
-              borderRadius: "0.375rem",
-              cursor: busy || !hardConfirmValid ? "not-allowed" : "pointer",
-              opacity: !hardConfirmValid ? 0.6 : 1,
-            }}
-          >
-            {busy ? "…" : mode === "hard" ? "Delete permanently" : "Soft delete"}
-          </button>
-        </div>
-      </form>
-    </div>
+          <fieldset className="m-0 flex flex-col gap-2 border-none p-0">
+            <legend className="text-foreground text-xs font-semibold">
+              Delete mode
+            </legend>
+            <label className="text-foreground flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="mode"
+                value="soft"
+                checked={mode === "soft"}
+                onChange={() => setMode("soft")}
+              />
+              Soft delete — hidden but recoverable via versioning
+            </label>
+            <label
+              className={
+                canHardDelete
+                  ? "text-foreground flex items-center gap-2 text-sm"
+                  : "text-muted-foreground flex items-center gap-2 text-sm opacity-50"
+              }
+            >
+              <input
+                type="radio"
+                name="mode"
+                value="hard"
+                disabled={!canHardDelete}
+                checked={mode === "hard"}
+                onChange={() => setMode("hard")}
+              />
+              Hard delete — permanent, all versions removed (superadmin)
+            </label>
+          </fieldset>
+
+          {mode === "hard" ? (
+            <>
+              <div
+                role="alert"
+                className="border-destructive/40 bg-destructive/10 text-destructive rounded-md border px-3 py-2 text-sm"
+              >
+                Hard delete is permanent and cannot be undone. All S3 versions
+                will be purged.
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="confirm-name">
+                  Type the filename to confirm
+                </Label>
+                <Input
+                  id="confirm-name"
+                  type="text"
+                  value={confirmName}
+                  onChange={(e) => setConfirmName(e.target.value)}
+                  placeholder={filename}
+                />
+              </div>
+            </>
+          ) : null}
+
+          {err ? (
+            <p role="alert" className="text-destructive text-sm">
+              {err}
+            </p>
+          ) : null}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" asChild>
+              <a href={href}>Cancel</a>
+            </Button>
+            <Button
+              type="submit"
+              variant={mode === "hard" ? "destructive" : "default"}
+              disabled={busy || !hardConfirmValid}
+            >
+              {busy ? "…" : mode === "hard" ? "Delete permanently" : "Soft delete"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

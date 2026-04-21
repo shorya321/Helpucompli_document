@@ -2,7 +2,18 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { BRAND } from "@/lib/brand";
+
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface CreateFolderDialogProps {
   readonly bucketId: string;
@@ -52,126 +63,60 @@ export function CreateFolderDialog({
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="create-folder-title"
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(30,41,59,0.55)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 40,
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) router.push(href);
       }}
     >
-      <form
-        onSubmit={onSubmit}
-        style={{
-          background: "#FFFFFF",
-          borderRadius: "0.75rem",
-          padding: "1.5rem",
-          width: "min(28rem, 90vw)",
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.875rem",
-          fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-          color: BRAND.colors.dark,
-        }}
-      >
-        <header
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "baseline",
-          }}
-        >
-          <h2 id="create-folder-title" style={{ margin: 0, fontSize: "1.125rem" }}>
-            New folder
-          </h2>
-          <a
-            href={href}
-            style={{ fontSize: "0.75rem", color: BRAND.colors.blue }}
-          >
-            Close
-          </a>
-        </header>
+      <DialogContent className="sm:max-w-md">
+        <form onSubmit={onSubmit} className="flex flex-col gap-4">
+          <DialogHeader>
+            <DialogTitle>New folder</DialogTitle>
+            <DialogDescription>
+              In:{" "}
+              <code className="font-mono">
+                {parentPrefix === "" ? "(bucket root)" : parentPrefix}
+              </code>
+            </DialogDescription>
+          </DialogHeader>
 
-        <p style={{ margin: 0, fontSize: "0.8125rem", color: "rgba(30,41,59,0.72)" }}>
-          In:{" "}
-          <code>{parentPrefix === "" ? "(bucket root)" : parentPrefix}</code>
-        </p>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="folder-name">Folder name</Label>
+            <Input
+              id="folder-name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="invoices"
+              maxLength={128}
+              autoFocus
+            />
+            <p className="text-muted-foreground text-xs">
+              Letters, digits, <code className="font-mono">. _ -</code> only. No
+              slashes.
+            </p>
+          </div>
 
-        <label style={{ fontSize: "0.75rem", fontWeight: 600 }}>
-          Folder name
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="invoices"
-            maxLength={128}
-            autoFocus
-            style={{
-              display: "block",
-              width: "100%",
-              marginTop: "0.25rem",
-              padding: "0.5rem",
-              fontSize: "0.875rem",
-              borderRadius: "0.375rem",
-              border: `1px solid ${BRAND.colors.dark}26`,
-              fontFamily: "inherit",
-            }}
-          />
-        </label>
+          {err ? (
+            <p role="alert" className="text-destructive text-sm">
+              {err}
+            </p>
+          ) : null}
 
-        <p style={{ margin: 0, fontSize: "0.75rem", color: "rgba(30,41,59,0.6)" }}>
-          Letters, digits, <code>. _ -</code> only. No slashes.
-        </p>
-
-        {err ? (
-          <p
-            role="alert"
-            style={{ margin: 0, color: BRAND.colors.pink, fontSize: "0.8125rem" }}
-          >
-            {err}
-          </p>
-        ) : null}
-
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-          <a
-            href={href}
-            style={{
-              padding: "0.5rem 0.875rem",
-              fontSize: "0.875rem",
-              color: BRAND.colors.dark,
-              textDecoration: "none",
-              border: `1px solid ${BRAND.colors.dark}26`,
-              borderRadius: "0.375rem",
-            }}
-          >
-            Cancel
-          </a>
-          <button
-            type="submit"
-            disabled={busy || name.trim().length === 0}
-            style={{
-              background: BRAND.colors.blue,
-              color: "#FFFFFF",
-              border: "none",
-              padding: "0.5rem 0.875rem",
-              fontSize: "0.875rem",
-              fontWeight: 600,
-              borderRadius: "0.375rem",
-              cursor:
-                busy || name.trim().length === 0 ? "not-allowed" : "pointer",
-              opacity: name.trim().length === 0 ? 0.6 : 1,
-            }}
-          >
-            {busy ? "…" : "Create"}
-          </button>
-        </div>
-      </form>
-    </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" asChild>
+              <a href={href}>Cancel</a>
+            </Button>
+            <Button
+              type="submit"
+              disabled={busy || name.trim().length === 0}
+            >
+              {busy ? "…" : "Create"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

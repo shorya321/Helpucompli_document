@@ -7,7 +7,10 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { BRAND } from "@/lib/brand";
+
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { formatStorage } from "@/components/buckets/bucket-card";
 import { DownloadButton } from "@/components/documents/download-button";
 
@@ -43,6 +46,12 @@ interface DocumentSearchProps {
 }
 
 const columnHelper = createColumnHelper<DocumentRow>();
+
+// Native <select> styled to match shadcn Input. Used for GET-like
+// filter controls and client-state selects where the Radix popover
+// would hamper keyboard-driven submit flows.
+const nativeSelectClass =
+  "border-input bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50";
 
 function parseSize(v: DocumentRow["sizeBytes"]): bigint {
   if (v === null || v === undefined) return BigInt(0);
@@ -148,125 +157,94 @@ export function DocumentSearch({ initialBucketId }: DocumentSearchProps) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <section
-      style={{
-        fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-        color: BRAND.colors.dark,
-        display: "flex",
-        flexDirection: "column",
-        gap: "1rem",
-      }}
-    >
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          setFilters((f) => ({ ...f, page: 1 }));
-        }}
-        style={{
-          display: "grid",
-          gap: "0.5rem",
-          gridTemplateColumns: "repeat(auto-fit, minmax(10rem, 1fr))",
-          padding: "1rem",
-          background: "#FFFFFF",
-          border: `1px solid ${BRAND.colors.dark}1A`,
-          borderRadius: "0.75rem",
-        }}
-      >
-        <input
-          placeholder="Filename contains…"
-          value={filters.q}
-          onChange={(e) => setFilters({ ...filters, q: e.target.value, page: 1 })}
-          style={inputStyle}
-          maxLength={128}
-        />
-        <input
-          placeholder="Content type (e.g. application/pdf)"
-          value={filters.contentType}
-          onChange={(e) =>
-            setFilters({ ...filters, contentType: e.target.value, page: 1 })
-          }
-          style={inputStyle}
-          maxLength={255}
-        />
-        <input
-          type="date"
-          value={filters.from}
-          onChange={(e) => setFilters({ ...filters, from: e.target.value, page: 1 })}
-          style={inputStyle}
-        />
-        <input
-          type="date"
-          value={filters.to}
-          onChange={(e) => setFilters({ ...filters, to: e.target.value, page: 1 })}
-          style={inputStyle}
-        />
-        <select
-          value={filters.sort}
-          onChange={(e) =>
-            setFilters({
-              ...filters,
-              sort: e.target.value as typeof filters.sort,
-              page: 1,
-            })
-          }
-          style={inputStyle}
+    <section className="text-foreground flex flex-col gap-4">
+      <Card className="p-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setFilters((f) => ({ ...f, page: 1 }));
+          }}
+          className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-2"
         >
-          <option value="uploadedAt">Sort: Uploaded</option>
-          <option value="filename">Sort: Filename</option>
-          <option value="sizeBytes">Sort: Size</option>
-        </select>
-        <select
-          value={filters.dir}
-          onChange={(e) =>
-            setFilters({
-              ...filters,
-              dir: e.target.value as typeof filters.dir,
-              page: 1,
-            })
-          }
-          style={inputStyle}
-        >
-          <option value="desc">Desc</option>
-          <option value="asc">Asc</option>
-        </select>
-      </form>
+          <Input
+            placeholder="Filename contains…"
+            value={filters.q}
+            onChange={(e) =>
+              setFilters({ ...filters, q: e.target.value, page: 1 })
+            }
+            maxLength={128}
+          />
+          <Input
+            placeholder="Content type (e.g. application/pdf)"
+            value={filters.contentType}
+            onChange={(e) =>
+              setFilters({ ...filters, contentType: e.target.value, page: 1 })
+            }
+            maxLength={255}
+          />
+          <Input
+            type="date"
+            value={filters.from}
+            onChange={(e) =>
+              setFilters({ ...filters, from: e.target.value, page: 1 })
+            }
+          />
+          <Input
+            type="date"
+            value={filters.to}
+            onChange={(e) =>
+              setFilters({ ...filters, to: e.target.value, page: 1 })
+            }
+          />
+          <select
+            value={filters.sort}
+            onChange={(e) =>
+              setFilters({
+                ...filters,
+                sort: e.target.value as typeof filters.sort,
+                page: 1,
+              })
+            }
+            className={nativeSelectClass}
+            aria-label="Sort by"
+          >
+            <option value="uploadedAt">Sort: Uploaded</option>
+            <option value="filename">Sort: Filename</option>
+            <option value="sizeBytes">Sort: Size</option>
+          </select>
+          <select
+            value={filters.dir}
+            onChange={(e) =>
+              setFilters({
+                ...filters,
+                dir: e.target.value as typeof filters.dir,
+                page: 1,
+              })
+            }
+            className={nativeSelectClass}
+            aria-label="Sort direction"
+          >
+            <option value="desc">Desc</option>
+            <option value="asc">Asc</option>
+          </select>
+        </form>
+      </Card>
 
       {err ? (
-        <p role="alert" style={{ margin: 0, color: BRAND.colors.pink }}>
+        <p role="alert" className="text-destructive m-0 text-sm">
           {err}
         </p>
       ) : null}
 
-      <div
-        style={{
-          background: "#FFFFFF",
-          border: `1px solid ${BRAND.colors.dark}1A`,
-          borderRadius: "0.75rem",
-          overflow: "hidden",
-        }}
-      >
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            fontSize: "0.875rem",
-          }}
-        >
+      <Card className="overflow-hidden p-0">
+        <table className="w-full border-collapse text-sm">
           <thead>
             {table.getHeaderGroups().map((hg) => (
-              <tr key={hg.id} style={{ background: `${BRAND.colors.blue}0D` }}>
+              <tr key={hg.id} className="bg-muted/50">
                 {hg.headers.map((h) => (
                   <th
                     key={h.id}
-                    style={{
-                      padding: "0.625rem 0.875rem",
-                      textAlign: "left",
-                      fontWeight: 600,
-                      color: BRAND.colors.blue,
-                      fontSize: "0.75rem",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.04em",
-                    }}
+                    className="text-muted-foreground px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-wider"
                   >
                     {h.isPlaceholder
                       ? null
@@ -281,29 +259,18 @@ export function DocumentSearch({ initialBucketId }: DocumentSearchProps) {
               <tr>
                 <td
                   colSpan={columns.length}
-                  style={{
-                    padding: "1.5rem",
-                    textAlign: "center",
-                    color: "rgba(30,41,59,0.6)",
-                  }}
+                  className="text-muted-foreground p-6 text-center"
                 >
                   No documents match the current filters.
                 </td>
               </tr>
             ) : (
               table.getRowModel().rows.map((row) => (
-                <tr
-                  key={row.id}
-                  style={{ borderTop: `1px solid ${BRAND.colors.dark}0D` }}
-                >
+                <tr key={row.id} className="border-border/50 border-t">
                   {row.getVisibleCells().map((cell) => (
                     <td
                       key={cell.id}
-                      style={{
-                        padding: "0.5rem 0.875rem",
-                        verticalAlign: "top",
-                        wordBreak: "break-word",
-                      }}
+                      className="text-foreground break-words px-3.5 py-2 align-top"
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
@@ -313,56 +280,32 @@ export function DocumentSearch({ initialBucketId }: DocumentSearchProps) {
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
 
-      <div
-        style={{
-          display: "flex",
-          gap: "0.5rem",
-          alignItems: "center",
-          fontSize: "0.8125rem",
-        }}
-      >
-        <button
+      <div className="text-muted-foreground flex items-center gap-2 text-sm">
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           disabled={filters.page <= 1 || busy}
           onClick={() => setFilters((f) => ({ ...f, page: f.page - 1 }))}
-          style={btnStyle}
         >
           ← Prev
-        </button>
-        <span>
-          Page {filters.page} of {totalPages} · {total} result{total === 1 ? "" : "s"}
+        </Button>
+        <span className="tabular-nums">
+          Page {filters.page} of {totalPages} · {total} result
+          {total === 1 ? "" : "s"}
         </span>
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           disabled={filters.page >= totalPages || busy}
           onClick={() => setFilters((f) => ({ ...f, page: f.page + 1 }))}
-          style={btnStyle}
         >
           Next →
-        </button>
+        </Button>
       </div>
     </section>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  padding: "0.5rem",
-  fontSize: "0.875rem",
-  borderRadius: "0.375rem",
-  border: `1px solid ${BRAND.colors.dark}26`,
-  fontFamily: "inherit",
-};
-
-const btnStyle: React.CSSProperties = {
-  padding: "0.375rem 0.75rem",
-  fontSize: "0.75rem",
-  fontWeight: 600,
-  color: BRAND.colors.blue,
-  background: `${BRAND.colors.blue}14`,
-  border: "none",
-  borderRadius: "0.375rem",
-  cursor: "pointer",
-  fontFamily: "inherit",
-};

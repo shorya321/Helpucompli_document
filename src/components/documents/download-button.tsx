@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { BRAND } from "@/lib/brand";
+import { Download } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 
 interface DownloadButtonProps {
   readonly bucketId: string;
@@ -41,27 +43,19 @@ export function DownloadButton({ bucketId, s3Key }: DownloadButtonProps) {
   };
 
   return (
-    <span style={{ display: "inline-flex", alignItems: "baseline", gap: "0.5rem" }}>
-      <button
+    <span className="inline-flex items-baseline gap-2">
+      <Button
         type="button"
         onClick={onClick}
         disabled={busy}
-        style={{
-          background: busy ? "rgba(30,41,59,0.06)" : `${BRAND.colors.blue}14`,
-          color: BRAND.colors.blue,
-          border: "none",
-          borderRadius: "0.375rem",
-          padding: "0.25rem 0.625rem",
-          fontSize: "0.75rem",
-          fontWeight: 600,
-          cursor: busy ? "wait" : "pointer",
-          fontFamily: "inherit",
-        }}
+        size="sm"
+        variant="secondary"
       >
+        <Download aria-hidden="true" className="h-3.5 w-3.5" />
         {busy ? "…" : "Download"}
-      </button>
+      </Button>
       {err ? (
-        <span role="alert" style={{ color: BRAND.colors.pink, fontSize: "0.75rem" }}>
+        <span role="alert" className="text-destructive text-xs">
           {err}
         </span>
       ) : null}

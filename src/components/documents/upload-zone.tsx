@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDropzone, type FileRejection } from "react-dropzone";
-import { BRAND } from "@/lib/brand";
+import { Upload } from "lucide-react";
 import {
   MAX_FILE_SIZE_BYTES,
   MULTIPART_THRESHOLD_BYTES,
@@ -249,84 +249,50 @@ export function UploadZone({
   });
 
   return (
-    <div
-      style={{
-        fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-        color: BRAND.colors.dark,
-        display: "flex",
-        flexDirection: "column",
-        gap: "0.75rem",
-      }}
-    >
+    <div className="text-foreground flex flex-col gap-3">
       <div
         {...getRootProps()}
         role="button"
         tabIndex={0}
-        style={{
-          border: `2px dashed ${
-            isDragActive ? BRAND.colors.pink : `${BRAND.colors.dark}33`
-          }`,
-          borderRadius: "0.75rem",
-          padding: "1.5rem",
-          background: isDragActive ? `${BRAND.colors.pink}0D` : "#FFFFFF",
-          textAlign: "center",
-          cursor: "pointer",
-          fontSize: "0.875rem",
-          color: BRAND.colors.dark,
-        }}
+        className={
+          isDragActive
+            ? "border-primary bg-primary/5 text-foreground flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-6 text-center text-sm transition-colors"
+            : "border-border bg-card text-foreground hover:bg-accent/30 flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-6 text-center text-sm transition-colors"
+        }
       >
         <input {...getInputProps()} />
-        {isDragActive
-          ? "Drop files here to upload"
-          : "Drag and drop files here, or click to select"}
-        <p
-          style={{
-            margin: "0.5rem 0 0",
-            fontSize: "0.75rem",
-            color: "rgba(30,41,59,0.6)",
-          }}
-        >
+        <Upload aria-hidden="true" className="text-muted-foreground h-6 w-6" />
+        <span>
+          {isDragActive
+            ? "Drop files here to upload"
+            : "Drag and drop files here, or click to select"}
+        </span>
+        <p className="text-muted-foreground m-0 text-xs">
           Max {Math.floor(MAX_FILE_SIZE_BYTES / (1024 * 1024 * 1024))} GB per file.
           Files over{" "}
           {Math.floor(MULTIPART_THRESHOLD_BYTES / (1024 * 1024))} MB use
           multipart upload.
         </p>
-        <p
-          style={{
-            margin: "0.5rem 0 0",
-            fontSize: "0.75rem",
-            color: BRAND.colors.pink,
-          }}
-        >
+        <p className="border-border bg-muted text-muted-foreground m-0 mt-1 rounded-md border px-3 py-2 text-xs">
           Do not upload documents containing PHI without a signed BAA in place.
         </p>
       </div>
 
       {status.phase === "uploading" ? (
-        <div role="status" aria-live="polite">
-          <p style={{ margin: 0, fontSize: "0.8125rem" }}>
+        <div role="status" aria-live="polite" className="flex flex-col gap-1">
+          <p className="text-foreground m-0 text-sm tabular-nums">
             Uploading {status.filename}… {status.pct.toFixed(0)}%
           </p>
-          <progress
-            value={status.pct}
-            max={100}
-            style={{ width: "100%", marginTop: "0.25rem" }}
-          />
+          <progress value={status.pct} max={100} className="w-full" />
         </div>
       ) : null}
       {status.phase === "done" ? (
-        <p
-          role="status"
-          style={{ margin: 0, fontSize: "0.8125rem", color: BRAND.colors.blue }}
-        >
+        <p role="status" className="text-foreground m-0 text-sm">
           Uploaded {status.filename}.
         </p>
       ) : null}
       {status.phase === "error" ? (
-        <p
-          role="alert"
-          style={{ margin: 0, fontSize: "0.8125rem", color: BRAND.colors.pink }}
-        >
+        <p role="alert" className="text-destructive m-0 text-sm">
           {status.message}
         </p>
       ) : null}

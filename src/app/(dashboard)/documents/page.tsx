@@ -1,7 +1,7 @@
 import Link from "next/link";
+import { FolderPlus } from "lucide-react";
 import { auth0 } from "@/lib/auth0";
 import { resolveRole } from "@/lib/auth-guard";
-import { BRAND } from "@/lib/brand";
 import { prisma } from "@/lib/prisma";
 import {
   asBucketListPrisma,
@@ -12,6 +12,7 @@ import {
 import { createRateLimiter } from "@/lib/rate-limit";
 import { parseBrowseQuery } from "@/lib/documents-browse";
 import { listObjects } from "@/lib/s3-objects";
+import { Button } from "@/components/ui/button";
 import { FileTree } from "@/components/documents/file-tree";
 import {
   FileList,
@@ -137,53 +138,27 @@ export default async function DocumentsPage({ searchParams }: PageProps) {
   }
 
   return (
-    <section
-      style={{
-        fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-        color: BRAND.colors.dark,
-        display: "grid",
-        gridTemplateColumns: "minmax(14rem, 18rem) 1fr",
-        gap: "1.5rem",
-        alignItems: "start",
-      }}
-    >
+    <section className="text-foreground grid items-start gap-6 [grid-template-columns:minmax(14rem,18rem)_1fr]">
       <FileTree buckets={buckets} activeBucket={inScope?.name} />
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-        <header
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "1rem",
-            flexWrap: "wrap",
-          }}
-        >
-          <h1 style={{ margin: 0, fontSize: "1.5rem", fontWeight: 700 }}>
+      <div className="flex flex-col gap-4">
+        <header className="flex flex-wrap items-center justify-between gap-4">
+          <h1 className="text-foreground m-0 text-2xl font-bold tracking-tight">
             Documents
           </h1>
           {inScope ? (
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <div className="flex items-center gap-2">
               {role === "superadmin" || role === "admin" ? (
-                <Link
-                  href={`/documents?bucket=${encodeURIComponent(inScope.name)}${
-                    q.prefix ? `&prefix=${encodeURIComponent(q.prefix)}` : ""
-                  }&newFolder=1`}
-                  style={{
-                    padding: "0.3125rem 0.75rem",
-                    borderRadius: "999px",
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                    textDecoration: "none",
-                    color: BRAND.colors.blue,
-                    background: `${BRAND.colors.blue}14`,
-                    border: `1px solid ${BRAND.colors.blue}33`,
-                  }}
-                >
-                  + New folder
-                </Link>
+                <Button asChild variant="outline" size="sm">
+                  <Link
+                    href={`/documents?bucket=${encodeURIComponent(inScope.name)}${
+                      q.prefix ? `&prefix=${encodeURIComponent(q.prefix)}` : ""
+                    }&newFolder=1`}
+                  >
+                    <FolderPlus aria-hidden="true" className="h-3.5 w-3.5" />
+                    New folder
+                  </Link>
+                </Button>
               ) : null}
               <ViewToggle
                 bucket={inScope.name}
@@ -250,14 +225,7 @@ function ViewToggle({ bucket, prefix, current }: ViewToggleProps) {
     <nav
       role="tablist"
       aria-label="View mode"
-      style={{
-        display: "inline-flex",
-        background: "#FFFFFF",
-        border: `1px solid ${BRAND.colors.dark}1A`,
-        borderRadius: "999px",
-        padding: "0.1875rem",
-        gap: "0.125rem",
-      }}
+      className="border-border bg-card inline-flex gap-0.5 rounded-full border p-0.5"
     >
       {(["list", "grid"] as const).map((v) => (
         <Link
@@ -265,17 +233,11 @@ function ViewToggle({ bucket, prefix, current }: ViewToggleProps) {
           href={`${base}&view=${v}`}
           role="tab"
           aria-selected={v === current}
-          style={{
-            padding: "0.3125rem 0.75rem",
-            borderRadius: "999px",
-            fontSize: "0.75rem",
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "0.06em",
-            textDecoration: "none",
-            color: v === current ? "#FFFFFF" : BRAND.colors.dark,
-            background: v === current ? BRAND.colors.blue : "transparent",
-          }}
+          className={
+            v === current
+              ? "bg-primary text-primary-foreground rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wider no-underline"
+              : "text-muted-foreground hover:text-foreground rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wider no-underline transition-colors"
+          }
         >
           {v}
         </Link>
@@ -286,17 +248,7 @@ function ViewToggle({ bucket, prefix, current }: ViewToggleProps) {
 
 function EmptyPage({ message }: { readonly message: string }) {
   return (
-    <div
-      style={{
-        padding: "2rem",
-        background: "#FFFFFF",
-        border: `1px dashed ${BRAND.colors.dark}33`,
-        borderRadius: "0.75rem",
-        textAlign: "center",
-        color: "rgba(30,41,59,0.72)",
-        fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-      }}
-    >
+    <div className="border-border bg-card text-muted-foreground rounded-xl border border-dashed p-8 text-center">
       {message}
     </div>
   );
@@ -304,17 +256,7 @@ function EmptyPage({ message }: { readonly message: string }) {
 
 function EmptyPanel({ message }: { readonly message: string }) {
   return (
-    <p
-      style={{
-        margin: 0,
-        padding: "1.5rem",
-        background: "#FFFFFF",
-        border: `1px dashed ${BRAND.colors.dark}33`,
-        borderRadius: "0.75rem",
-        textAlign: "center",
-        color: "rgba(30,41,59,0.72)",
-      }}
-    >
+    <p className="border-border bg-card text-muted-foreground m-0 rounded-xl border border-dashed p-6 text-center">
       {message}
     </p>
   );

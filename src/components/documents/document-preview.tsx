@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { BRAND } from "@/lib/brand";
+
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { formatStorage } from "@/components/buckets/bucket-card";
 
 interface DocumentPreviewProps {
@@ -76,104 +77,65 @@ export function DocumentPreview({
   const isImage = contentType ? INLINE_IMAGE_TYPES.has(contentType) : false;
 
   return (
-    <section
-      style={{
-        fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-        color: BRAND.colors.dark,
-        background: "#FFFFFF",
-        border: `1px solid ${BRAND.colors.dark}1A`,
-        borderRadius: "0.75rem",
-        padding: "1rem",
-        display: "flex",
-        flexDirection: "column",
-        gap: "0.75rem",
-      }}
-    >
-      <header
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "baseline",
-          gap: "0.5rem",
-          flexWrap: "wrap",
-        }}
-      >
-        <h2 style={{ margin: 0, fontSize: "1rem", wordBreak: "break-all" }}>
+    <Card>
+      <CardHeader className="flex flex-row flex-wrap items-baseline justify-between gap-2 space-y-0 pb-3">
+        <h2 className="text-foreground m-0 break-all text-base font-semibold">
           {filename}
         </h2>
-        <span style={{ fontSize: "0.75rem", color: "rgba(30,41,59,0.6)" }}>
+        <span className="text-muted-foreground font-mono text-xs tabular-nums">
           {contentType ?? "unknown"} · {formatStorage(sizeBytes)}
         </span>
-      </header>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {err ? (
+          <p role="alert" className="text-destructive m-0 text-sm">
+            {err}
+          </p>
+        ) : null}
 
-      {err ? (
-        <p role="alert" style={{ margin: 0, color: BRAND.colors.pink, fontSize: "0.8125rem" }}>
-          {err}
-        </p>
-      ) : null}
+        {isPdf && url ? (
+          <iframe
+            title={`Preview of ${filename}`}
+            src={url}
+            className="border-border h-[min(75vh,42rem)] w-full rounded-md border"
+          />
+        ) : null}
 
-      {isPdf && url ? (
-        <iframe
-          title={`Preview of ${filename}`}
-          src={url}
-          style={{
-            width: "100%",
-            height: "min(75vh, 42rem)",
-            border: "none",
-            borderRadius: "0.375rem",
-          }}
-        />
-      ) : null}
+        {isImage && url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={url}
+            alt={filename}
+            className="border-border max-h-[min(75vh,42rem)] max-w-full rounded-md border object-contain"
+          />
+        ) : null}
 
-      {isImage && url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={url}
-          alt={filename}
-          style={{
-            maxWidth: "100%",
-            maxHeight: "min(75vh, 42rem)",
-            objectFit: "contain",
-            borderRadius: "0.375rem",
-          }}
-        />
-      ) : null}
-
-      {!isInlineType(contentType) ? (
-        <dl
-          style={{
-            display: "grid",
-            gridTemplateColumns: "max-content 1fr",
-            gap: "0.375rem 1rem",
-            margin: 0,
-            fontSize: "0.8125rem",
-          }}
-        >
-          <dt style={{ color: BRAND.colors.blue, fontWeight: 600 }}>Type</dt>
-          <dd style={{ margin: 0 }}>{contentType ?? "unknown"}</dd>
-          <dt style={{ color: BRAND.colors.blue, fontWeight: 600 }}>Size</dt>
-          <dd style={{ margin: 0 }}>{formatStorage(sizeBytes)}</dd>
-          <dt style={{ color: BRAND.colors.blue, fontWeight: 600 }}>Uploaded</dt>
-          <dd style={{ margin: 0 }}>{uploadedAt.toISOString()}</dd>
-          {uploadedByName ? (
-            <>
-              <dt style={{ color: BRAND.colors.blue, fontWeight: 600 }}>By</dt>
-              <dd style={{ margin: 0 }}>{uploadedByName}</dd>
-            </>
-          ) : null}
-          <dt
-            style={{
-              color: "rgba(30,41,59,0.6)",
-              fontStyle: "italic",
-              gridColumn: "1 / -1",
-              marginTop: "0.25rem",
-              fontWeight: 500,
-            }}
-          >
-            No inline preview available for this file type.
-          </dt>
-        </dl>
-      ) : null}
-    </section>
+        {!isInlineType(contentType) ? (
+          <dl className="m-0 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-sm">
+            <dt className="text-muted-foreground font-semibold">Type</dt>
+            <dd className="text-foreground m-0 font-mono tabular-nums">
+              {contentType ?? "unknown"}
+            </dd>
+            <dt className="text-muted-foreground font-semibold">Size</dt>
+            <dd className="text-foreground m-0 font-mono tabular-nums">
+              {formatStorage(sizeBytes)}
+            </dd>
+            <dt className="text-muted-foreground font-semibold">Uploaded</dt>
+            <dd className="text-foreground m-0 font-mono tabular-nums">
+              {uploadedAt.toISOString()}
+            </dd>
+            {uploadedByName ? (
+              <>
+                <dt className="text-muted-foreground font-semibold">By</dt>
+                <dd className="text-foreground m-0">{uploadedByName}</dd>
+              </>
+            ) : null}
+            <dt className="text-muted-foreground col-span-2 mt-1 text-xs italic">
+              No inline preview available for this file type.
+            </dt>
+          </dl>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }

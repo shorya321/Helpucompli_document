@@ -2,7 +2,17 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { BRAND } from "@/lib/brand";
+
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface BucketOption {
   readonly id: string;
@@ -16,6 +26,12 @@ interface MoveCopyDialogProps {
   readonly buckets: ReadonlyArray<BucketOption>;
   readonly closeHref: string;
 }
+
+// Native <select> styled to match shadcn Input. The bucket picker must
+// be a real <select> so value changes propagate cleanly in the controlled
+// state without the Radix popover overhead.
+const nativeSelectClass =
+  "border-input bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-ring h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50";
 
 // Restrict the closeHref prop so a caller-supplied value cannot redirect
 // to an off-site URL when the dialog closes.
@@ -73,162 +89,96 @@ export function MoveCopyDialog({
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="move-copy-title"
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(30,41,59,0.55)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 40,
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) router.push(href);
       }}
     >
-      <form
-        onSubmit={onSubmit}
-        style={{
-          background: "#FFFFFF",
-          borderRadius: "0.75rem",
-          padding: "1.5rem",
-          width: "min(32rem, 90vw)",
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.875rem",
-          fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-          color: BRAND.colors.dark,
-        }}
-      >
-        <header
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "baseline",
-          }}
-        >
-          <h2 id="move-copy-title" style={{ margin: 0, fontSize: "1.125rem" }}>
-            Move or copy document
-          </h2>
-          <a
-            href={href}
-            style={{ fontSize: "0.75rem", color: BRAND.colors.blue }}
-          >
-            Close
-          </a>
-        </header>
+      <DialogContent className="sm:max-w-lg">
+        <form onSubmit={onSubmit} className="flex flex-col gap-4">
+          <DialogHeader>
+            <DialogTitle>Move or copy document</DialogTitle>
+          </DialogHeader>
 
-        <p style={{ margin: 0, fontSize: "0.8125rem", color: "rgba(30,41,59,0.72)" }}>
-          {sourceFilename}
-        </p>
-
-        <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
-          <legend style={{ fontSize: "0.75rem", fontWeight: 600 }}>Action</legend>
-          <label style={{ marginRight: "1rem", fontSize: "0.875rem" }}>
-            <input
-              type="radio"
-              name="mode"
-              value="move"
-              checked={mode === "move"}
-              onChange={() => setMode("move")}
-            />{" "}
-            Move
-          </label>
-          <label style={{ fontSize: "0.875rem" }}>
-            <input
-              type="radio"
-              name="mode"
-              value="copy"
-              checked={mode === "copy"}
-              onChange={() => setMode("copy")}
-            />{" "}
-            Copy
-          </label>
-        </fieldset>
-
-        <label style={{ fontSize: "0.75rem", fontWeight: 600 }}>
-          Destination bucket
-          <select
-            value={destBucketId}
-            onChange={(e) => setDestBucketId(e.target.value)}
-            style={{
-              display: "block",
-              width: "100%",
-              marginTop: "0.25rem",
-              padding: "0.5rem",
-              fontSize: "0.875rem",
-              borderRadius: "0.375rem",
-              border: `1px solid ${BRAND.colors.dark}26`,
-              fontFamily: "inherit",
-            }}
-          >
-            {buckets.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label style={{ fontSize: "0.75rem", fontWeight: 600 }}>
-          Destination folder prefix (optional)
-          <input
-            type="text"
-            value={destFolderPrefix}
-            onChange={(e) => setDestFolderPrefix(e.target.value)}
-            placeholder="invoices/2026/"
-            style={{
-              display: "block",
-              width: "100%",
-              marginTop: "0.25rem",
-              padding: "0.5rem",
-              fontSize: "0.875rem",
-              borderRadius: "0.375rem",
-              border: `1px solid ${BRAND.colors.dark}26`,
-              fontFamily: "inherit",
-            }}
-          />
-        </label>
-
-        {err ? (
-          <p role="alert" style={{ margin: 0, color: BRAND.colors.pink, fontSize: "0.8125rem" }}>
-            {err}
+          <p className="text-muted-foreground m-0 break-all text-sm">
+            {sourceFilename}
           </p>
-        ) : null}
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-          <a
-            href={href}
-            style={{
-              padding: "0.5rem 0.875rem",
-              fontSize: "0.875rem",
-              color: BRAND.colors.dark,
-              textDecoration: "none",
-              border: `1px solid ${BRAND.colors.dark}26`,
-              borderRadius: "0.375rem",
-            }}
-          >
-            Cancel
-          </a>
-          <button
-            type="submit"
-            disabled={busy}
-            style={{
-              background: BRAND.colors.blue,
-              color: "#FFFFFF",
-              border: "none",
-              padding: "0.5rem 0.875rem",
-              fontSize: "0.875rem",
-              fontWeight: 600,
-              borderRadius: "0.375rem",
-              cursor: busy ? "wait" : "pointer",
-            }}
-          >
-            {busy ? "…" : mode === "move" ? "Move" : "Copy"}
-          </button>
-        </div>
-      </form>
-    </div>
+          <fieldset className="m-0 flex flex-wrap gap-4 border-none p-0">
+            <legend className="text-foreground text-xs font-semibold">
+              Action
+            </legend>
+            <label className="text-foreground flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="mode"
+                value="move"
+                checked={mode === "move"}
+                onChange={() => setMode("move")}
+              />
+              Move
+            </label>
+            <label className="text-foreground flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="mode"
+                value="copy"
+                checked={mode === "copy"}
+                onChange={() => setMode("copy")}
+              />
+              Copy
+            </label>
+          </fieldset>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="dest-bucket">Destination bucket</Label>
+            <select
+              id="dest-bucket"
+              value={destBucketId}
+              onChange={(e) => setDestBucketId(e.target.value)}
+              className={nativeSelectClass}
+            >
+              {buckets.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="dest-prefix">
+              Destination folder prefix{" "}
+              <span className="text-muted-foreground font-normal">
+                (optional)
+              </span>
+            </Label>
+            <Input
+              id="dest-prefix"
+              type="text"
+              value={destFolderPrefix}
+              onChange={(e) => setDestFolderPrefix(e.target.value)}
+              placeholder="invoices/2026/"
+            />
+          </div>
+
+          {err ? (
+            <p role="alert" className="text-destructive text-sm">
+              {err}
+            </p>
+          ) : null}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" asChild>
+              <a href={href}>Cancel</a>
+            </Button>
+            <Button type="submit" disabled={busy}>
+              {busy ? "…" : mode === "move" ? "Move" : "Copy"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -7,18 +7,6 @@
 #
 # Paths are relative to repo root. Comments (# ...) and blank lines ignored.
 
-# Phase C3 — documents
-src/components/documents/upload-zone.tsx
-src/components/documents/file-list.tsx
-src/components/documents/file-tree.tsx
-src/components/documents/document-search.tsx
-src/components/documents/document-preview.tsx
-src/components/documents/context-menu.tsx
-src/components/documents/create-folder-dialog.tsx
-src/components/documents/delete-dialog.tsx
-src/components/documents/move-copy-dialog.tsx
-src/app/(dashboard)/documents/page.tsx
-
 # Phase C4 — policies
 src/components/policies/policy-form.tsx
 src/components/policies/policy-preview.tsx

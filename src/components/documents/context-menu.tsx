@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BRAND } from "@/lib/brand";
 
 export interface ContextMenuItem {
   readonly key: string;
@@ -54,7 +53,7 @@ export function ContextMenu({ items, children }: ContextMenuProps) {
   return (
     <span
       onContextMenu={onContext}
-      style={{ display: "contents" }}
+      className="contents"
     >
       {children}
       {open ? (
@@ -62,39 +61,19 @@ export function ContextMenu({ items, children }: ContextMenuProps) {
           ref={menuRef}
           role="menu"
           aria-label="Document actions"
-          style={{
-            position: "fixed",
-            top: open.y,
-            left: open.x,
-            zIndex: 50,
-            listStyle: "none",
-            padding: "0.25rem",
-            margin: 0,
-            background: "#FFFFFF",
-            border: `1px solid ${BRAND.colors.dark}26`,
-            borderRadius: "0.5rem",
-            boxShadow: "0 8px 24px rgba(30,41,59,0.15)",
-            fontFamily: `'${BRAND.font.family}', system-ui, sans-serif`,
-            fontSize: "0.8125rem",
-            minWidth: "10rem",
-          }}
+          style={{ top: open.y, left: open.x }}
+          className="border-border bg-popover text-popover-foreground fixed z-50 m-0 min-w-40 list-none rounded-md border p-1 text-sm shadow-md"
         >
           {items.map((it) => {
             const disabled = it.disabled === true;
-            const color = disabled
-              ? "rgba(30,41,59,0.4)"
+            const baseClass =
+              "block w-full rounded-md px-2.5 py-1.5 text-left no-underline select-none";
+            const toneClass = disabled
+              ? "text-muted-foreground cursor-not-allowed"
               : it.danger
-              ? BRAND.colors.pink
-              : BRAND.colors.dark;
-            const style: React.CSSProperties = {
-              display: "block",
-              padding: "0.4375rem 0.625rem",
-              borderRadius: "0.375rem",
-              color,
-              textDecoration: "none",
-              cursor: disabled ? "not-allowed" : "pointer",
-              userSelect: "none",
-            };
+                ? "text-destructive hover:bg-destructive/10 cursor-pointer"
+                : "text-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer";
+            const cls = `${baseClass} ${toneClass}`;
             const onPick = () => {
               if (disabled) return;
               close();
@@ -108,7 +87,7 @@ export function ContextMenu({ items, children }: ContextMenuProps) {
                     href={disabled ? undefined : it.href}
                     aria-disabled={disabled || undefined}
                     onClick={disabled ? (e) => e.preventDefault() : close}
-                    style={style}
+                    className={cls}
                   >
                     {it.label}
                   </a>
@@ -118,15 +97,7 @@ export function ContextMenu({ items, children }: ContextMenuProps) {
                     role="menuitem"
                     disabled={disabled}
                     onClick={onPick}
-                    style={{
-                      ...style,
-                      width: "100%",
-                      textAlign: "left",
-                      background: "transparent",
-                      border: "none",
-                      fontFamily: "inherit",
-                      fontSize: "inherit",
-                    }}
+                    className={`${cls} border-none bg-transparent font-[inherit] text-[inherit]`}
                   >
                     {it.label}
                   </button>
