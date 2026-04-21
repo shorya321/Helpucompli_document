@@ -1,0 +1,60 @@
+# Transitional allowlist for lint:tokens.
+# These files still contain raw hex literals OR inline-style color references
+# that will be migrated during Phases B, C, D of the shadcn monochrome
+# redesign. Remove a line once its file is migrated to semantic Tailwind
+# tokens. When this file is empty, delete it and the LINT_TOKENS_ALLOWLIST
+# check in scripts/lint-tokens.mjs.
+#
+# Paths are relative to repo root. Comments (# ...) and blank lines ignored.
+
+# Phase C1 — dashboard home
+src/components/dashboard/summary-cards.tsx
+src/components/dashboard/quick-actions.tsx
+src/components/dashboard/activity-feed.tsx
+
+# Phase C2 — buckets
+src/components/buckets/bucket-card.tsx
+src/components/buckets/create-bucket-dialog.tsx
+src/components/buckets/delete-bucket-dialog.tsx
+src/components/buckets/compliance-verifier.tsx
+src/app/(dashboard)/buckets/page.tsx
+src/app/(dashboard)/buckets/[id]/page.tsx
+
+# Phase C3 — documents
+src/components/documents/upload-zone.tsx
+src/components/documents/file-list.tsx
+src/components/documents/file-tree.tsx
+src/components/documents/document-search.tsx
+src/components/documents/document-preview.tsx
+src/components/documents/context-menu.tsx
+src/components/documents/create-folder-dialog.tsx
+src/components/documents/delete-dialog.tsx
+src/components/documents/move-copy-dialog.tsx
+src/app/(dashboard)/documents/page.tsx
+
+# Phase C4 — policies
+src/components/policies/policy-form.tsx
+src/components/policies/policy-preview.tsx
+src/components/policies/target-picker.tsx
+src/components/policies/ip-range-input.tsx
+src/components/policies/domain-input.tsx
+src/app/(dashboard)/policies/page.tsx
+
+# Phase C5 — users
+src/components/users/user-table.tsx
+src/components/users/invite-user-dialog.tsx
+src/components/users/role-select.tsx
+src/components/users/status-toggle.tsx
+src/components/users/bucket-access.tsx
+src/app/(dashboard)/users/[id]/page.tsx
+
+# Phase C6 — audit
+src/components/audit/audit-table.tsx
+src/components/audit/audit-filters.tsx
+src/components/audit/export-csv.tsx
+
+# Phase C7 — links
+src/components/links/link-table.tsx
+src/components/links/link-analytics.tsx
+src/components/links/generate-link-form.tsx
+src/components/links/qr-code.tsx
