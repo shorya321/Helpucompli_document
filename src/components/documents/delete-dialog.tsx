@@ -20,6 +20,7 @@ interface DeleteDialogProps {
   readonly filename: string;
   readonly canHardDelete: boolean;
   readonly closeHref: string;
+  readonly initialMode?: "soft" | "hard";
 }
 
 function safeHref(href: string): string {
@@ -33,9 +34,15 @@ export function DeleteDialog({
   filename,
   canHardDelete,
   closeHref,
+  initialMode,
 }: DeleteDialogProps) {
   const router = useRouter();
-  const [mode, setMode] = useState<"soft" | "hard">("soft");
+  // Guard initialMode: never pre-select hard if the caller lacks the
+  // hard-delete capability (superadmin gate applied by page.tsx, but
+  // defense-in-depth here keeps the radio invariant correct).
+  const [mode, setMode] = useState<"soft" | "hard">(
+    initialMode === "hard" && canHardDelete ? "hard" : "soft",
+  );
   const [confirmName, setConfirmName] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);

@@ -31,7 +31,9 @@ interface FileListProps {
 interface FileRowProps {
   readonly entry: Extract<FileListEntry, { kind: "file" }>;
   readonly view: "grid" | "list";
+  readonly bucket: string;
   readonly bucketId?: string;
+  readonly prefix: string;
   readonly canHardDelete: boolean;
 }
 
@@ -43,7 +45,14 @@ function rowClass(view: "grid" | "list"): string {
     : `${base} border-border/50 border-b last:border-b-0`;
 }
 
-function FileRow({ entry, view, bucketId, canHardDelete }: FileRowProps) {
+function FileRow({
+  entry,
+  view,
+  bucket,
+  bucketId,
+  prefix,
+  canHardDelete,
+}: FileRowProps) {
   const inner = (
     <>
       <span className="text-foreground inline-flex items-baseline gap-2 break-all font-medium">
@@ -69,6 +78,8 @@ function FileRow({ entry, view, bucketId, canHardDelete }: FileRowProps) {
     <li className={rowClass(view)}>
       <ContextMenu
         items={buildDocumentMenu({
+          bucket,
+          prefix,
           bucketId,
           s3Key: entry.key,
           canHardDelete,
@@ -184,7 +195,9 @@ export function FileList({
                 key={`file:${e.key}`}
                 entry={e}
                 view={view}
+                bucket={bucket}
                 bucketId={bucketId}
+                prefix={prefix}
                 canHardDelete={canHardDelete}
               />
             ),

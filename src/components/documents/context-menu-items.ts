@@ -6,18 +6,31 @@ import type { ContextMenuItem } from "./context-menu";
 // Next.js forbids server components from importing exported functions
 // from a 'use client' module (even when the function itself is pure).
 export function buildDocumentMenu({
+  bucket,
+  prefix = "",
   bucketId,
   s3Key,
   canHardDelete,
   basePath = "/documents",
 }: {
+  readonly bucket: string;
+  readonly prefix?: string;
   readonly bucketId: string;
   readonly s3Key: string;
   readonly canHardDelete: boolean;
   readonly basePath?: string;
 }): ReadonlyArray<ContextMenuItem> {
+  // Preserve current browse state (bucket + prefix) in every action href
+  // so the page render stays in-scope when an action param (op=*) is
+  // parsed. Without these, `parseBrowseQuery` returns `bucket: undefined`
+  // and the dialog conditional in page.tsx never renders.
+  const browse =
+    `bucket=${encodeURIComponent(bucket)}` +
+    (prefix ? `&prefix=${encodeURIComponent(prefix)}` : "");
   const q = (op: string) =>
-    `${basePath}?op=${op}&bucketId=${encodeURIComponent(bucketId)}&s3Key=${encodeURIComponent(s3Key)}`;
+    `${basePath}?${browse}&op=${op}` +
+    `&bucketId=${encodeURIComponent(bucketId)}` +
+    `&s3Key=${encodeURIComponent(s3Key)}`;
   return [
     { key: "preview", label: "View details", href: q("preview") },
     { key: "download", label: "Download", href: q("download") },

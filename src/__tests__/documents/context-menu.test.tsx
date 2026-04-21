@@ -7,6 +7,8 @@ import { buildDocumentMenu } from "@/components/documents/context-menu-items";
 describe("buildDocumentMenu", () => {
   it("produces the standard action set", () => {
     const menu = buildDocumentMenu({
+      bucket: "my-bucket",
+      prefix: "",
       bucketId: "b1",
       s3Key: "abc-report.pdf",
       canHardDelete: false,
@@ -17,6 +19,8 @@ describe("buildDocumentMenu", () => {
 
   it("appends hard-delete when canHardDelete=true", () => {
     const menu = buildDocumentMenu({
+      bucket: "my-bucket",
+      prefix: "",
       bucketId: "b1",
       s3Key: "abc-report.pdf",
       canHardDelete: true,
@@ -26,6 +30,8 @@ describe("buildDocumentMenu", () => {
 
   it("disables generate-link until F9 ships", () => {
     const menu = buildDocumentMenu({
+      bucket: "my-bucket",
+      prefix: "",
       bucketId: "b1",
       s3Key: "abc-report.pdf",
       canHardDelete: false,
@@ -35,6 +41,8 @@ describe("buildDocumentMenu", () => {
 
   it("encodes bucketId + s3Key in query", () => {
     const menu = buildDocumentMenu({
+      bucket: "my-bucket",
+      prefix: "",
       bucketId: "b 1",
       s3Key: "a b/c.pdf",
       canHardDelete: false,
@@ -43,8 +51,37 @@ describe("buildDocumentMenu", () => {
     expect(menu[0]!.href).toContain("s3Key=a%20b%2Fc.pdf");
   });
 
+  it("preserves current browse state (bucket + prefix) in href", () => {
+    const menu = buildDocumentMenu({
+      bucket: "my-bucket",
+      prefix: "folder/",
+      bucketId: "b1",
+      s3Key: "file.pdf",
+      canHardDelete: false,
+    });
+    const moveHref = menu.find((m) => m.key === "move")!.href!;
+    expect(moveHref).toContain("bucket=my-bucket");
+    expect(moveHref).toContain("prefix=folder%2F");
+    expect(moveHref).toContain("op=move");
+  });
+
+  it("omits prefix param when prefix is empty", () => {
+    const menu = buildDocumentMenu({
+      bucket: "my-bucket",
+      prefix: "",
+      bucketId: "b1",
+      s3Key: "file.pdf",
+      canHardDelete: false,
+    });
+    const moveHref = menu.find((m) => m.key === "move")!.href!;
+    expect(moveHref).toContain("bucket=my-bucket");
+    expect(moveHref).not.toContain("prefix=");
+  });
+
   it("marks delete as danger", () => {
     const menu = buildDocumentMenu({
+      bucket: "my-bucket",
+      prefix: "",
       bucketId: "b1",
       s3Key: "k",
       canHardDelete: true,

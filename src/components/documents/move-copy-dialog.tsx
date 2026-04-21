@@ -25,6 +25,7 @@ interface MoveCopyDialogProps {
   readonly sourceFilename: string;
   readonly buckets: ReadonlyArray<BucketOption>;
   readonly closeHref: string;
+  readonly initialMode?: "move" | "copy";
 }
 
 // Native <select> styled to match shadcn Input. The bucket picker must
@@ -46,9 +47,10 @@ export function MoveCopyDialog({
   sourceFilename,
   buckets,
   closeHref,
+  initialMode = "move",
 }: MoveCopyDialogProps) {
   const router = useRouter();
-  const [mode, setMode] = useState<"move" | "copy">("move");
+  const [mode, setMode] = useState<"move" | "copy">(initialMode);
   const [destBucketId, setDestBucketId] = useState<string>(
     buckets.find((b) => b.id !== sourceBucketId)?.id ?? sourceBucketId,
   );

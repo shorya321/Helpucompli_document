@@ -20,6 +20,10 @@ import {
 } from "@/components/documents/file-list";
 import { UploadZone } from "@/components/documents/upload-zone";
 import { CreateFolderDialog } from "@/components/documents/create-folder-dialog";
+import { MoveCopyDialog } from "@/components/documents/move-copy-dialog";
+import { DeleteDialog } from "@/components/documents/delete-dialog";
+import { DocumentPreviewDialog } from "@/components/documents/document-preview-dialog";
+import { DocumentSearch } from "@/components/documents/document-search";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +68,7 @@ export default async function DocumentsPage({ searchParams }: PageProps) {
 
   const params = await searchParams;
   const q = parseBrowseQuery(params);
+  const isSearchView = params.op === "search";
 
   // Scope the sidebar bucket list the same way the bucket manager does:
   // viewers only see buckets they have UserBucketAccess rows for.
@@ -160,6 +165,21 @@ export default async function DocumentsPage({ searchParams }: PageProps) {
                   </Link>
                 </Button>
               ) : null}
+              <Button asChild variant={isSearchView ? "default" : "outline"} size="sm">
+                <Link
+                  href={
+                    isSearchView
+                      ? `/documents?bucket=${encodeURIComponent(inScope.name)}${
+                          q.prefix ? `&prefix=${encodeURIComponent(q.prefix)}` : ""
+                        }`
+                      : `/documents?bucket=${encodeURIComponent(inScope.name)}${
+                          q.prefix ? `&prefix=${encodeURIComponent(q.prefix)}` : ""
+                        }&op=search`
+                  }
+                >
+                  {isSearchView ? "Browse" : "Search"}
+                </Link>
+              </Button>
               <ViewToggle
                 bucket={inScope.name}
                 prefix={q.prefix}
@@ -177,6 +197,8 @@ export default async function DocumentsPage({ searchParams }: PageProps) {
                 : "Pick a bucket from the left panel to start browsing."
             }
           />
+        ) : isSearchView ? (
+          <DocumentSearch initialBucketId={inScope.id} />
         ) : listError ? (
           <EmptyPanel message="Unable to load this folder. Please try again." />
         ) : (
@@ -190,6 +212,7 @@ export default async function DocumentsPage({ searchParams }: PageProps) {
             <FileList
               bucket={inScope.name}
               bucketId={inScope.id}
+              canHardDelete={role === "superadmin"}
               prefix={q.prefix}
               entries={entries}
               view={q.view}
@@ -207,6 +230,92 @@ export default async function DocumentsPage({ searchParams }: PageProps) {
           </>
         )}
       </div>
+
+      {/*
+        MoveCopyDialog lives at section scope so it mounts independent
+        of inScope. Its required inputs (sourceBucketId / sourceS3Key)
+        come from the URL directly — a user bookmarking or reloading
+        mid-dialog with a dropped bucket= param must still see the
+        dialog instead of an empty panel.
+      */}
+      {(params.op === "move" || params.op === "copy") &&
+      typeof params.bucketId === "string" &&
+      typeof params.s3Key === "string" &&
+      (role === "superadmin" || role === "admin") ? (
+        <MoveCopyDialog
+          sourceBucketId={params.bucketId}
+          sourceS3Key={params.s3Key}
+          sourceFilename={
+            params.s3Key.split("/").filter((s) => s !== "").pop() ??
+            params.s3Key
+          }
+          buckets={buckets.map((b) => ({ id: b.id, name: b.name }))}
+          closeHref={
+            inScope
+              ? `/documents?bucket=${encodeURIComponent(inScope.name)}${
+                  q.prefix ? `&prefix=${encodeURIComponent(q.prefix)}` : ""
+                }`
+              : "/documents"
+          }
+          initialMode={params.op}
+        />
+      ) : null}
+
+      {/*
+        DocumentPreviewDialog mounts when op=preview. The Document row
+        is fetched server-side from Prisma so metadata (contentType,
+        sizeBytes, uploadedAt, uploader) is authoritative; the client
+        component then fetches a presigned inline GET URL to render PDF
+        iframe or image tag. Viewers are scoped via the `buckets` list —
+        the bucketId must belong to a bucket in their UserBucketAccess
+        set for the preview to mount, otherwise it silently no-ops.
+      */}
+      {params.op === "preview" &&
+      typeof params.bucketId === "string" &&
+      typeof params.s3Key === "string" &&
+      buckets.some((b) => b.id === params.bucketId) ? (
+        <PreviewMount
+          bucketId={params.bucketId}
+          s3Key={params.s3Key}
+          closeHref={
+            inScope
+              ? `/documents?bucket=${encodeURIComponent(inScope.name)}${
+                  q.prefix ? `&prefix=${encodeURIComponent(q.prefix)}` : ""
+                }`
+              : "/documents"
+          }
+        />
+      ) : null}
+
+      {/*
+        DeleteDialog handles both soft and hard delete. op=delete opens
+        with soft pre-selected (admin + superadmin). op=hard-delete
+        opens with hard pre-selected and is gated to superadmin only,
+        matching the backend route's role check at /api/s3/delete.
+      */}
+      {(params.op === "delete" || params.op === "hard-delete") &&
+      typeof params.bucketId === "string" &&
+      typeof params.s3Key === "string" &&
+      (role === "superadmin" ||
+        (role === "admin" && params.op === "delete")) ? (
+        <DeleteDialog
+          bucketId={params.bucketId}
+          s3Key={params.s3Key}
+          filename={
+            params.s3Key.split("/").filter((s) => s !== "").pop() ??
+            params.s3Key
+          }
+          canHardDelete={role === "superadmin"}
+          initialMode={params.op === "hard-delete" ? "hard" : "soft"}
+          closeHref={
+            inScope
+              ? `/documents?bucket=${encodeURIComponent(inScope.name)}${
+                  q.prefix ? `&prefix=${encodeURIComponent(q.prefix)}` : ""
+                }`
+              : "/documents"
+          }
+        />
+      ) : null}
     </section>
   );
 }
@@ -243,6 +352,47 @@ function ViewToggle({ bucket, prefix, current }: ViewToggleProps) {
         </Link>
       ))}
     </nav>
+  );
+}
+
+interface PreviewMountProps {
+  readonly bucketId: string;
+  readonly s3Key: string;
+  readonly closeHref: string;
+}
+
+// Server-side Document lookup for preview metadata. Soft-deleted docs
+// are excluded so a stale `?op=preview` URL cannot expose a hidden
+// document's metadata via the dialog header. Missing / deleted docs
+// silently no-op — no 404 rendered so the browser view under the
+// dialog remains intact.
+async function PreviewMount({
+  bucketId,
+  s3Key,
+  closeHref,
+}: PreviewMountProps) {
+  const doc = await prisma.document.findFirst({
+    where: { bucketId, s3Key, isDeleted: false },
+    select: {
+      filename: true,
+      contentType: true,
+      sizeBytes: true,
+      uploadedAt: true,
+      uploadedBy: { select: { name: true, email: true } },
+    },
+  });
+  if (!doc) return null;
+  return (
+    <DocumentPreviewDialog
+      bucketId={bucketId}
+      s3Key={s3Key}
+      filename={doc.filename}
+      contentType={doc.contentType}
+      sizeBytes={doc.sizeBytes ?? BigInt(0)}
+      uploadedAt={doc.uploadedAt}
+      uploadedByName={doc.uploadedBy.name ?? doc.uploadedBy.email}
+      closeHref={closeHref}
+    />
   );
 }
 
