@@ -4,6 +4,8 @@ import { resolveRole } from "@/lib/auth-guard";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { SearchProvider } from "@/components/layout/search-provider";
+import { CommandPalette } from "@/components/layout/command-palette";
 
 export const dynamic = "force-dynamic";
 
@@ -31,11 +33,14 @@ export default async function DashboardLayout({ children }: LayoutProps) {
 
   return (
     <SidebarProvider>
-      <Sidebar role={role} user={user} />
-      <SidebarInset>
-        <Topbar user={user} role={role} />
-        <main className="flex-1 p-6">{children}</main>
-      </SidebarInset>
+      <SearchProvider>
+        <Sidebar role={role} user={user} />
+        <SidebarInset>
+          <Topbar user={user} role={role} />
+          <main className="flex-1 p-6">{children}</main>
+        </SidebarInset>
+        <CommandPalette role={role} />
+      </SearchProvider>
     </SidebarProvider>
   );
 }

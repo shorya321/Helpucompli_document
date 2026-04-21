@@ -10,7 +10,7 @@ export default function NotFound() {
     <main className="bg-background flex min-h-screen items-center justify-center p-6">
       <Card className="max-w-md w-full">
         <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
-          <h1 className="text-foreground font-mono text-5xl font-semibold tabular-nums">
+          <h1 className="text-foreground text-5xl font-semibold tabular-nums">
             404
           </h1>
           <p className="text-muted-foreground m-0 text-base">

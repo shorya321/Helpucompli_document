@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, CreditCard, LogOut, UserRound } from "lucide-react";
+import { LogOut, UserRound } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -83,18 +83,6 @@ export function ProfileDropdown({ user, role }: ProfileDropdownProps) {
             <a href="/settings/profile">
               <UserRound aria-hidden="true" />
               Account
-            </a>
-          </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <a href="/settings/account">
-              <CreditCard aria-hidden="true" />
-              Billing
-            </a>
-          </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <a href="/settings/notifications">
-              <Bell aria-hidden="true" />
-              Notifications
             </a>
           </DropdownMenuItem>
         </DropdownMenuGroup>

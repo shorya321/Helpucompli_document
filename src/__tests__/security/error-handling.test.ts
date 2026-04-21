@@ -55,28 +55,30 @@ describe("/api/health (F12.5)", () => {
   });
 });
 
-describe("instrumentation.ts graceful shutdown (F12.5 / F2.2 follow-up)", () => {
+describe("instrumentation graceful shutdown (F12.5 / F2.2 follow-up)", () => {
   const INSTR = read("src/instrumentation.ts");
+  const INSTR_NODE = read("src/instrumentation-node.ts");
 
-  it("exports async register()", () => {
+  it("instrumentation.ts exports async register()", () => {
     expect(INSTR).toMatch(/export async function register\b/);
   });
 
-  it("guards on NEXT_RUNTIME to skip Edge runtime", () => {
+  it("instrumentation.ts guards NEXT_RUNTIME and dynamic-imports node module", () => {
     expect(INSTR).toContain("NEXT_RUNTIME");
     expect(INSTR).toContain("nodejs");
+    expect(INSTR).toMatch(/import\(["']\.\/instrumentation-node["']\)/);
   });
 
-  it("registers SIGTERM + SIGINT handlers", () => {
-    expect(INSTR).toContain('process.on("SIGTERM"');
-    expect(INSTR).toContain('process.on("SIGINT"');
+  it("instrumentation-node.ts registers SIGTERM + SIGINT handlers", () => {
+    expect(INSTR_NODE).toContain('process.on("SIGTERM"');
+    expect(INSTR_NODE).toContain('process.on("SIGINT"');
   });
 
-  it("flushes prisma via $disconnect on shutdown", () => {
-    expect(INSTR).toContain("prisma.$disconnect");
+  it("instrumentation-node.ts flushes prisma via $disconnect on shutdown", () => {
+    expect(INSTR_NODE).toContain("prisma.$disconnect");
   });
 
-  it("exits cleanly with process.exit(0) after flush", () => {
-    expect(INSTR).toContain("process.exit(0)");
+  it("instrumentation-node.ts exits cleanly with process.exit(0) after flush", () => {
+    expect(INSTR_NODE).toContain("process.exit(0)");
   });
 });

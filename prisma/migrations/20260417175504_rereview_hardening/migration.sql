@@ -38,26 +38,29 @@ ALTER TABLE "audit_logs" ENABLE ALWAYS TRIGGER audit_logs_no_truncate;
 -- --------------------------------------------------------------------------
 -- F8 policy engine preparation — switch allowed_domains / allowed_ip_ranges
 -- from jsonb to text[]. Native arrays give us GIN-friendly @>, unnest(),
--- and per-element indexability without a JSON path fragment. USING clause
--- reads existing jsonb arrays element-wise so dev data survives the move.
+-- and per-element indexability without a JSON path fragment. Use a helper
+-- function because Postgres forbids subqueries directly in ALTER ... USING
+-- transform expressions (SQLSTATE 0A000).
 -- --------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION _rereview_jsonb_to_text_array(j jsonb)
+RETURNS text[]
+LANGUAGE sql IMMUTABLE AS $fn$
+  SELECT CASE
+           WHEN j IS NULL THEN NULL
+           WHEN jsonb_typeof(j) = 'array' THEN ARRAY(SELECT jsonb_array_elements_text(j))
+           ELSE ARRAY[]::text[]
+         END
+$fn$;
+
 ALTER TABLE "access_policies"
   ALTER COLUMN "allowed_domains" TYPE TEXT[]
-    USING (
-      CASE
-        WHEN "allowed_domains" IS NULL THEN NULL
-        ELSE ARRAY(SELECT jsonb_array_elements_text("allowed_domains"))
-      END
-    );
+    USING _rereview_jsonb_to_text_array("allowed_domains");
 
 ALTER TABLE "access_policies"
   ALTER COLUMN "allowed_ip_ranges" TYPE TEXT[]
-    USING (
-      CASE
-        WHEN "allowed_ip_ranges" IS NULL THEN NULL
-        ELSE ARRAY(SELECT jsonb_array_elements_text("allowed_ip_ranges"))
-      END
-    );
+    USING _rereview_jsonb_to_text_array("allowed_ip_ranges");
+
+DROP FUNCTION _rereview_jsonb_to_text_array(jsonb);
 
 -- --------------------------------------------------------------------------
 -- F7 audit-log query performance — GIN index on metadata. audit_logs is the

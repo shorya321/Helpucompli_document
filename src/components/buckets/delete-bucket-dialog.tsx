@@ -91,7 +91,7 @@ export function DeleteBucketDialog({
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="confirm-name">
-              Type <code className="font-mono">{bucketName}</code> to confirm
+              Type <code>{bucketName}</code> to confirm
             </Label>
             <Input
               id="confirm-name"

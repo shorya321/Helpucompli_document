@@ -36,7 +36,7 @@ export function BucketCard({ bucket }: BucketCardProps) {
           </CardTitle>
           <Badge
             variant={bucket.isActive ? "secondary" : "outline"}
-            className="shrink-0 font-mono text-[0.6rem] uppercase tracking-wide"
+            className="shrink-0 text-[0.6rem] uppercase tracking-wide"
           >
             {bucket.isActive ? "Active" : "Inactive"}
           </Badge>
@@ -69,7 +69,7 @@ function Metric({ label, value }: MetricProps) {
       <dt className="text-muted-foreground m-0 text-[0.65rem] font-semibold uppercase tracking-wider">
         {label}
       </dt>
-      <dd className="text-foreground mt-0.5 break-words font-mono text-sm font-medium tabular-nums">
+      <dd className="text-foreground mt-0.5 break-words text-sm font-medium tabular-nums">
         {value}
       </dd>
     </div>

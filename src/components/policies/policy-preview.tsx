@@ -42,7 +42,7 @@ export function PolicyPreview({ policy }: PolicyPreviewProps) {
                 <dd
                   className={
                     row.key === "target"
-                      ? "text-foreground m-0 font-mono tabular-nums"
+                      ? "text-foreground m-0 tabular-nums"
                       : "text-foreground m-0"
                   }
                 >

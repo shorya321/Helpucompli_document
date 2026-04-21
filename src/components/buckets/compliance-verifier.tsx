@@ -129,7 +129,7 @@ export function ComplianceVerifier({ bucketId }: ComplianceVerifierProps) {
                   ].join(" / ")
                 }
               />
-              <li className="text-muted-foreground mt-1 font-mono text-[0.65rem] tabular-nums">
+              <li className="text-muted-foreground mt-1 text-[0.65rem] tabular-nums">
                 Checked at {new Date(report.checkedAt).toISOString()} •{" "}
                 {report.compliant ? "COMPLIANT" : "DRIFT DETECTED"}
               </li>
@@ -169,8 +169,8 @@ function Row({
       <span
         className={
           ok
-            ? "text-muted-foreground font-mono text-[0.65rem] font-semibold uppercase tracking-wider"
-            : "text-destructive font-mono text-[0.65rem] font-semibold uppercase tracking-wider"
+            ? "text-muted-foreground text-[0.65rem] font-semibold uppercase tracking-wider"
+            : "text-destructive text-[0.65rem] font-semibold uppercase tracking-wider"
         }
         title={detail}
       >

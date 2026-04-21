@@ -21,6 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { DeletePolicyButton } from "@/components/policies/delete-policy-button";
+import { formatDate } from "@/lib/format-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -81,14 +82,14 @@ export default async function PoliciesPage() {
               {rows.map((row) => (
                 <TableRow key={row.id}>
                   <TableCell className="font-semibold">{row.name}</TableCell>
-                  <TableCell className="font-mono text-sm tabular-nums">
+                  <TableCell className="text-sm tabular-nums">
                     {row.targetType}:{row.targetValue}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {summarizeRestrictions(row)}
                   </TableCell>
-                  <TableCell className="text-muted-foreground font-mono tabular-nums">
-                    {row.updatedAt.toLocaleDateString()}
+                  <TableCell className="text-muted-foreground tabular-nums">
+                    {formatDate(row.updatedAt)}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button asChild variant="ghost" size="sm">

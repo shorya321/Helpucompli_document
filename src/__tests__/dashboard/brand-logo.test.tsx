@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
 import { BrandLogo } from "@/components/layout/brand-logo";
-import { BRAND } from "@/lib/brand";
 
 describe("BrandLogo", () => {
-  it("renders the HelpUcompli wordmark", () => {
+  it("renders the Compass Doc wordmark", () => {
     const html = renderToString(<BrandLogo />);
-    expect(html).toContain(BRAND.name);
+    expect(html).toContain("Compass Doc");
   });
 
   it("renders as a single link to the dashboard root", () => {

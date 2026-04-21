@@ -23,6 +23,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { actionBadgeTone, type BadgeTone } from "@/lib/activity-feed";
+import { formatDateTime } from "@/lib/format-datetime";
 import { AuditFilters, EMPTY_FILTERS, type AuditFiltersValue } from "@/components/audit/audit-filters";
 import { ExportCsv } from "@/components/audit/export-csv";
 import type { ApiResponse } from "@/types";
@@ -105,9 +106,9 @@ export function AuditTable({ initial }: AuditTableProps) {
           return (
             <span
               title={d.toISOString()}
-              className="font-mono tabular-nums text-xs"
+              className="tabular-nums text-xs"
             >
-              {d.toLocaleString()}
+              {formatDateTime(d)}
             </span>
           );
         },
@@ -127,7 +128,7 @@ export function AuditTable({ initial }: AuditTableProps) {
           return (
             <Badge
               variant={variant}
-              className="font-mono text-[0.65rem] uppercase tracking-wide"
+              className="text-[0.65rem] uppercase tracking-wide"
             >
               {action}
             </Badge>
@@ -138,7 +139,7 @@ export function AuditTable({ initial }: AuditTableProps) {
         accessorFn: (r) => `${r.targetType}:${r.targetId}`,
         id: "target",
         cell: ({ getValue }) => (
-          <span className="font-mono tabular-nums text-xs">
+          <span className="tabular-nums text-xs">
             {getValue<string>()}
           </span>
         ),
@@ -148,7 +149,7 @@ export function AuditTable({ initial }: AuditTableProps) {
         accessorKey: "ipAddress",
         header: "IP address",
         cell: ({ getValue }) => (
-          <span className="font-mono tabular-nums text-xs">
+          <span className="tabular-nums text-xs">
             {getValue<string>()}
           </span>
         ),

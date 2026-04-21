@@ -16,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatDateTime } from "@/lib/format-datetime";
 import type { ApiResponse } from "@/types";
 import type { LinkListResult, LinkListRow, LinkStatus } from "@/lib/link-list";
 
@@ -55,7 +56,7 @@ function StatusBadge({ status }: { readonly status: LinkStatus }) {
     return (
       <Badge
         variant="secondary"
-        className="font-mono text-[0.65rem] uppercase tracking-wide"
+        className="text-[0.65rem] uppercase tracking-wide"
       >
         active
       </Badge>
@@ -65,7 +66,7 @@ function StatusBadge({ status }: { readonly status: LinkStatus }) {
     return (
       <Badge
         variant="destructive"
-        className="font-mono text-[0.65rem] uppercase tracking-wide"
+        className="text-[0.65rem] uppercase tracking-wide"
       >
         revoked
       </Badge>
@@ -74,7 +75,7 @@ function StatusBadge({ status }: { readonly status: LinkStatus }) {
   return (
     <Badge
       variant="outline"
-      className="text-muted-foreground font-mono text-[0.65rem] uppercase tracking-wide"
+      className="text-muted-foreground text-[0.65rem] uppercase tracking-wide"
     >
       expired
     </Badge>
@@ -263,7 +264,7 @@ export function LinkTable({ initial }: LinkTableProps) {
                       {row.documentName}
                     </span>
                     <br />
-                    <span className="text-muted-foreground font-mono text-xs">
+                    <span className="text-muted-foreground text-xs">
                       {row.bucketName}
                     </span>
                   </TableCell>
@@ -273,17 +274,17 @@ export function LinkTable({ initial }: LinkTableProps) {
                   <TableCell className="text-muted-foreground">
                     {row.generatedByName ?? row.generatedByEmail ?? "—"}
                   </TableCell>
-                  <TableCell className="font-mono tabular-nums">
+                  <TableCell className="tabular-nums">
                     {row.downloadCount}
                     {row.maxDownloads !== null
                       ? ` / ${row.maxDownloads}`
                       : ""}
                   </TableCell>
                   <TableCell
-                    className="font-mono tabular-nums"
+                    className="tabular-nums"
                     title={row.expiresAt.toISOString()}
                   >
-                    {row.expiresAt.toLocaleString()}
+                    {formatDateTime(row.expiresAt)}
                   </TableCell>
                   <TableCell className="text-right">
                     {row.status === "active" ? (
@@ -324,7 +325,7 @@ export function LinkTable({ initial }: LinkTableProps) {
         >
           Next page →
         </Button>
-        <span className="font-mono tabular-nums">
+        <span className="tabular-nums">
           {isFetching ? "Loading…" : `${rows.length} rows`}
         </span>
       </div>

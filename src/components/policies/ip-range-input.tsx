@@ -49,7 +49,7 @@ export function IpRangeInput({
           <span
             key={cidr}
             role="listitem"
-            className="bg-secondary text-secondary-foreground inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-xs tabular-nums"
+            className="bg-secondary text-secondary-foreground inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs tabular-nums"
           >
             {cidr}
             <button
@@ -85,8 +85,8 @@ export function IpRangeInput({
           aria-invalid={error !== null}
           className={
             error
-              ? "border-destructive focus-visible:ring-destructive flex-1 font-mono tabular-nums"
-              : "flex-1 font-mono tabular-nums"
+              ? "border-destructive focus-visible:ring-destructive flex-1 tabular-nums"
+              : "flex-1 tabular-nums"
           }
         />
         <Button

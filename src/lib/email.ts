@@ -19,7 +19,7 @@ export interface SendInviteEmailResult {
 }
 
 const RESEND_URL = "https://api.resend.com/emails";
-const DEFAULT_APP_NAME = "HelpUcompli";
+const DEFAULT_APP_NAME = "Compass Doc";
 
 // HTML escape to neutralise any injection via the activationUrl or
 // inviterName when rendered as an anchor's href / text. Guards against

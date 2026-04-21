@@ -19,6 +19,7 @@ import {
 } from "@/lib/audit-query";
 import { BucketAccess } from "@/components/users/bucket-access";
 import { RoleBadge, StatusBadge } from "@/components/users/user-table";
+import { formatDate, formatDateTime } from "@/lib/format-datetime";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Role } from "@/types";
@@ -110,19 +111,19 @@ export default async function UserDetailsPage({
               <StatusBadge status={target.status} />
             </DtDd>
             <DtDd label="Last login">
-              <span className="font-mono tabular-nums">
+              <span className="tabular-nums">
                 {target.lastLoginAt
-                  ? target.lastLoginAt.toLocaleString()
+                  ? formatDateTime(target.lastLoginAt)
                   : "Never"}
               </span>
             </DtDd>
             <DtDd label="Created">
-              <span className="font-mono tabular-nums">
-                {target.createdAt.toLocaleDateString()}
+              <span className="tabular-nums">
+                {formatDate(target.createdAt)}
               </span>
             </DtDd>
             <DtDd label="Auth0 ID">
-              <code className="font-mono text-xs">{target.auth0Id}</code>
+              <code className="text-xs">{target.auth0Id}</code>
             </DtDd>
           </dl>
         </CardContent>
@@ -188,11 +189,11 @@ function DtDd({
 function ActivityItem({ row }: { readonly row: AuditQueryRow }) {
   return (
     <li className="border-border grid grid-cols-[9rem_1fr_auto] gap-3 border-b py-2 text-xs last:border-b-0">
-      <span className="text-muted-foreground font-mono tabular-nums">
-        {row.createdAt.toLocaleString()}
+      <span className="text-muted-foreground tabular-nums">
+        {formatDateTime(row.createdAt)}
       </span>
       <span className="text-foreground font-semibold">{row.action}</span>
-      <span className="text-muted-foreground font-mono text-xs">
+      <span className="text-muted-foreground text-xs">
         {row.targetType}:{row.targetId}
       </span>
     </li>

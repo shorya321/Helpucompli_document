@@ -113,7 +113,7 @@ export function BucketAccess({
                   onChange={() => toggle(b.id)}
                   className="accent-primary"
                 />
-                <span className="font-mono">{b.name}</span>
+                <span>{b.name}</span>
               </label>
             </li>
           );

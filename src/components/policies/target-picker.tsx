@@ -95,7 +95,6 @@ export function TargetPicker({
           onChange={(e) =>
             onChange({ targetType, targetValue: e.target.value })
           }
-          className="font-mono"
         />
       )}
     </div>

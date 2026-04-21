@@ -51,7 +51,7 @@ function FileRow({ entry, view, bucketId, canHardDelete }: FileRowProps) {
         {filenameFromKey(entry.key)}
       </span>
       <span className="inline-flex items-baseline gap-3">
-        <span className="text-muted-foreground font-mono text-xs tabular-nums">
+        <span className="text-muted-foreground text-xs tabular-nums">
           {formatStorage(entry.size)}
         </span>
         {bucketId ? (

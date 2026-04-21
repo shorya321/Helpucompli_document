@@ -82,7 +82,7 @@ export function DocumentPreview({
         <h2 className="text-foreground m-0 break-all text-base font-semibold">
           {filename}
         </h2>
-        <span className="text-muted-foreground font-mono text-xs tabular-nums">
+        <span className="text-muted-foreground text-xs tabular-nums">
           {contentType ?? "unknown"} · {formatStorage(sizeBytes)}
         </span>
       </CardHeader>
@@ -113,15 +113,15 @@ export function DocumentPreview({
         {!isInlineType(contentType) ? (
           <dl className="m-0 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-sm">
             <dt className="text-muted-foreground font-semibold">Type</dt>
-            <dd className="text-foreground m-0 font-mono tabular-nums">
+            <dd className="text-foreground m-0 tabular-nums">
               {contentType ?? "unknown"}
             </dd>
             <dt className="text-muted-foreground font-semibold">Size</dt>
-            <dd className="text-foreground m-0 font-mono tabular-nums">
+            <dd className="text-foreground m-0 tabular-nums">
               {formatStorage(sizeBytes)}
             </dd>
             <dt className="text-muted-foreground font-semibold">Uploaded</dt>
-            <dd className="text-foreground m-0 font-mono tabular-nums">
+            <dd className="text-foreground m-0 tabular-nums">
               {uploadedAt.toISOString()}
             </dd>
             {uploadedByName ? (

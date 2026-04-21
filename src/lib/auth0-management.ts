@@ -293,7 +293,21 @@ export async function createPasswordChangeTicket(
   }
 
   const data = (await response.json()) as { ticket: string };
-  return data.ticket;
+  return rewriteTicketHost(data.ticket, config.AUTH0_DOMAIN);
+}
+
+// Auth0 returns password-change tickets scoped to the raw tenant domain
+// (e.g. dev-xxx.us.auth0.com) when no custom domain is configured. We
+// rewrite the host to AUTH0_DOMAIN so invite emails and the fallback
+// link in the UI always land on the branded host the operator controls.
+function rewriteTicketHost(ticket: string, host: string): string {
+  try {
+    const url = new URL(ticket);
+    url.host = host;
+    return url.toString();
+  } catch {
+    return ticket;
+  }
 }
 
 // Role listing is cached because the tenant's role catalogue is

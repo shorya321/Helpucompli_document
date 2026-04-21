@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
  * Shared shadcn Table styled to match the policies-page pattern so
  * every data table in the dashboard reads the same: Card wrapper
  * overflow, muted header row with uppercase micro-caps, hover row
- * tint, font-mono tabular-nums opt-in via cell className.
+ * tint, tabular-nums opt-in via cell className.
  */
 
 function Table({ className, ...props }: React.ComponentProps<"table">) {

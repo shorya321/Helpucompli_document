@@ -196,7 +196,12 @@ export async function getBucketDetails(
       },
     }),
     prisma.accessPolicy.findMany({
-      where: { targetType: "bucket", targetValue: bucketId },
+      // Bucket-scoped policies store the bucket's *name* as targetValue
+      // (set by the policy form's TargetPicker, and matched at link-
+      // enforcement time by policy-engine.ts via doc.bucketName). Match
+      // on name here too so the counter on the details page reflects
+      // policies that will actually fire at download time.
+      where: { targetType: "bucket", targetValue: bucketRow.name },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,

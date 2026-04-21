@@ -33,10 +33,9 @@ export const metadata: Metadata = {
 };
 
 // Runs before React hydrates. Reads localStorage + matchMedia, sets
-// the .dark class on <html>. Prevents theme flash without needing
-// next-themes's <ThemeScript>, which React 19 flags because it ships
-// a <script> tag inside a Client Component tree. This is a server-
-// rendered inline script, which React 19 accepts.
+// the .dark class on <html>. Rendered as a raw inline <script> in <head>
+// with suppressHydrationWarning so React 19 does not re-diff it on Fast
+// Refresh and next/script does not inject a dev-only nonce mismatch.
 const themeInitScript = `(function(){try{var t=localStorage.getItem('theme')||'system';var d=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);var c=document.documentElement.classList;c.toggle('dark',d);c.toggle('light',!d);document.documentElement.style.colorScheme=d?'dark':'light';}catch(e){}})();`;
 
 export default async function RootLayout({
@@ -61,6 +60,7 @@ export default async function RootLayout({
     >
       <head>
         <script
+          suppressHydrationWarning
           // eslint-disable-next-line react/no-danger
           dangerouslySetInnerHTML={{ __html: themeInitScript }}
         />

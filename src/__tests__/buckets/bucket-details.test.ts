@@ -230,13 +230,16 @@ describe("getBucketDetails — recent documents", () => {
 });
 
 describe("getBucketDetails — access policies", () => {
-  it("returns policies scoped to targetType='bucket' AND targetValue=bucketId", async () => {
+  it("returns policies scoped to targetType='bucket' AND targetValue=bucketName", async () => {
     const stub = makeStub({ bucket: baseBucket() });
     await getBucketDetails(stub.client, { role: "admin" }, "b-1");
     const args = stub.policyFindManyCalls[0] as {
       where: { targetType: string; targetValue: string };
     };
-    expect(args.where).toEqual({ targetType: "bucket", targetValue: "b-1" });
+    expect(args.where).toEqual({
+      targetType: "bucket",
+      targetValue: "helpucompli-docs-acme",
+    });
   });
 
   it("maps policy row fields into the BucketDetails payload shape", async () => {

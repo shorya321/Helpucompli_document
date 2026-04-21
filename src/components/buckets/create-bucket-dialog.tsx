@@ -115,7 +115,7 @@ export function CreateBucketDialog({
               placeholder={`${HIPAA_BUCKET_NAME_PREFIX}tenant-name`}
             />
             <p className="text-muted-foreground text-xs">
-              Must start with <code className="font-mono">{HIPAA_BUCKET_NAME_PREFIX}</code>.
+              Must start with <code>{HIPAA_BUCKET_NAME_PREFIX}</code>.
               Lowercase, digits, hyphens only. 3–63 chars.
             </p>
           </div>

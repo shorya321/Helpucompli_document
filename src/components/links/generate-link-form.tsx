@@ -12,6 +12,7 @@ import {
   LINK_MIN_TTL_SECONDS,
   LINK_MAX_TTL_SECONDS,
 } from "@/lib/link-create";
+import { formatDateTime } from "@/lib/format-datetime";
 import type { ApiResponse } from "@/types";
 import { QrCode } from "@/components/links/qr-code";
 
@@ -245,8 +246,8 @@ export function GenerateLinkForm({
             <div className="border-border bg-muted rounded-md border p-3">
               <p className="text-muted-foreground m-0 mb-2 text-xs">
                 Share this link — expires{" "}
-                <span className="font-mono tabular-nums">
-                  {new Date(result.expiresAt).toLocaleString()}
+                <span className="tabular-nums">
+                  {formatDateTime(result.expiresAt)}
                 </span>
                 {result.maxDownloads !== null
                   ? ` · ${result.maxDownloads} downloads max`
@@ -259,7 +260,7 @@ export function GenerateLinkForm({
                   value={result.shareableUrl}
                   onFocus={(e) => e.currentTarget.select()}
                   aria-label="Generated link URL"
-                  className="flex-1 font-mono text-xs"
+                  className="flex-1 text-xs"
                 />
                 <Button
                   type="button"
@@ -277,7 +278,7 @@ export function GenerateLinkForm({
                   onFocus={(e) => e.currentTarget.select()}
                   aria-label="Iframe embed code"
                   rows={6}
-                  className="flex-1 whitespace-pre resize-y font-mono text-xs"
+                  className="flex-1 whitespace-pre resize-y text-xs"
                 />
                 <Button
                   type="button"

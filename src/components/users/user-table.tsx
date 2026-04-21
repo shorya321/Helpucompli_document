@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatDateTime } from "@/lib/format-datetime";
 import type { UserListRow } from "@/lib/user-list";
 import type { Role } from "@/types";
 import { RoleSelect } from "@/components/users/role-select";
@@ -57,7 +58,7 @@ export function RoleBadge({ role }: { readonly role: Role }) {
   return (
     <Badge
       variant={ROLE_VARIANT[role]}
-      className="gap-1 font-mono text-[0.65rem] uppercase tracking-wide"
+      className="gap-1 text-[0.65rem] uppercase tracking-wide"
     >
       {roleIcon(role)}
       {role}
@@ -74,7 +75,7 @@ export function StatusBadge({
     return (
       <Badge
         variant="secondary"
-        className="font-mono text-[0.65rem] uppercase tracking-wide"
+        className="text-[0.65rem] uppercase tracking-wide"
       >
         active
       </Badge>
@@ -83,7 +84,7 @@ export function StatusBadge({
   return (
     <Badge
       variant="outline"
-      className="text-muted-foreground font-mono text-[0.65rem] uppercase tracking-wide"
+      className="text-muted-foreground text-[0.65rem] uppercase tracking-wide"
     >
       disabled
     </Badge>
@@ -183,7 +184,7 @@ export function UserTable({
                   <TableCell className="font-medium">
                     {row.name ?? "—"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground font-mono text-xs">
+                  <TableCell className="text-muted-foreground text-xs">
                     {row.email}
                   </TableCell>
                   <TableCell>
@@ -197,8 +198,8 @@ export function UserTable({
                       />
                     </span>
                   </TableCell>
-                  <TableCell className="text-muted-foreground font-mono tabular-nums">
-                    {row.lastLoginAt ? row.lastLoginAt.toLocaleString() : "Never"}
+                  <TableCell className="text-muted-foreground tabular-nums">
+                    {row.lastLoginAt ? formatDateTime(row.lastLoginAt) : "Never"}
                   </TableCell>
                   <TableCell>
                     <span className="inline-flex items-center gap-2">

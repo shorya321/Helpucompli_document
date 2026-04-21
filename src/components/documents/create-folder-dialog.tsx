@@ -75,7 +75,7 @@ export function CreateFolderDialog({
             <DialogTitle>New folder</DialogTitle>
             <DialogDescription>
               In:{" "}
-              <code className="font-mono">
+              <code>
                 {parentPrefix === "" ? "(bucket root)" : parentPrefix}
               </code>
             </DialogDescription>
@@ -93,7 +93,7 @@ export function CreateFolderDialog({
               autoFocus
             />
             <p className="text-muted-foreground text-xs">
-              Letters, digits, <code className="font-mono">. _ -</code> only. No
+              Letters, digits, <code>. _ -</code> only. No
               slashes.
             </p>
           </div>

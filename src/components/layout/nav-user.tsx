@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  Bell,
-  ChevronsUpDown,
-  CreditCard,
-  LogOut,
-  UserRound,
-} from "lucide-react";
+import { ChevronsUpDown, LogOut, UserRound } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -107,18 +101,6 @@ export function NavUser({ user, role }: NavUserProps) {
                 <a href="/settings/profile">
                   <UserRound aria-hidden="true" />
                   Account
-                </a>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <a href="/settings/account">
-                  <CreditCard aria-hidden="true" />
-                  Billing
-                </a>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <a href="/settings/notifications">
-                  <Bell aria-hidden="true" />
-                  Notifications
                 </a>
               </DropdownMenuItem>
             </DropdownMenuGroup>

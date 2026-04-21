@@ -37,7 +37,7 @@ export default function GlobalError({
               <>
                 {" "}
                 Reference:{" "}
-                <span className="font-mono tabular-nums">{error.digest}</span>
+                <span className="tabular-nums">{error.digest}</span>
               </>
             ) : null}
           </p>

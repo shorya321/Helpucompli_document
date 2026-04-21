@@ -116,7 +116,7 @@ describe("sendInviteEmail", () => {
       inviterName: null,
     });
     const body = JSON.parse(fetchMock.mock.calls[0]?.[1].body);
-    expect(body.subject).toMatch(/HelpUcompli/);
+    expect(body.subject).toMatch(/Compass Doc/);
   });
 
   it("escapes HTML in activationUrl to block XSS in the HTML body", async () => {

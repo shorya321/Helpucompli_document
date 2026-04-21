@@ -166,7 +166,7 @@ export function InviteUserDialog({ canInviteAdmin }: InviteUserDialogProps) {
                   ? "If the user does not receive the email, share this activation link manually:"
                   : "Check RESEND_API_KEY / RESEND_FROM_EMAIL in .env.local, or forward this activation link manually:"}
               </p>
-              <code className="mt-1.5 block break-all font-mono text-xs">
+              <code className="mt-1.5 block break-all text-xs">
                 {state.ticket}
               </code>
             </div>

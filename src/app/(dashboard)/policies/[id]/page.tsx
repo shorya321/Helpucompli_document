@@ -49,7 +49,7 @@ export default async function EditPolicyPage({
         <h1 className="text-foreground m-0 text-2xl font-bold tracking-tight">
           Edit policy
         </h1>
-        <p className="text-muted-foreground mt-1 font-mono text-sm tabular-nums">
+        <p className="text-muted-foreground mt-1 text-sm tabular-nums">
           {policy.id}
         </p>
       </header>

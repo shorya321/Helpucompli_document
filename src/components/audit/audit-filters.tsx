@@ -166,7 +166,7 @@ export function AuditFilters({
                   variant={active ? "default" : "outline"}
                   onClick={() => toggleAction(action)}
                   aria-pressed={active}
-                  className="h-7 px-2 font-mono text-[0.65rem] uppercase tracking-wide"
+                  className="h-7 px-2 text-[0.65rem] uppercase tracking-wide"
                 >
                   {action}
                 </Button>

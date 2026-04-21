@@ -49,7 +49,7 @@ export function DomainInput({
           <span
             key={domain}
             role="listitem"
-            className="bg-secondary text-secondary-foreground inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-xs"
+            className="bg-secondary text-secondary-foreground inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs"
           >
             {domain}
             <button

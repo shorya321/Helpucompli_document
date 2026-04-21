@@ -1,7 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
-import { ArrowLeft, CheckCircle2, XCircle } from "lucide-react";
+import {
+  Activity,
+  ArrowLeft,
+  CheckCircle2,
+  FileText,
+  Globe,
+  HardDrive,
+  XCircle,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import { auth0 } from "@/lib/auth0";
 import { resolveRole } from "@/lib/auth-guard";
@@ -20,7 +29,12 @@ import { DeleteBucketDialog } from "@/components/buckets/delete-bucket-dialog";
 import { createRateLimiter } from "@/lib/rate-limit";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 const idSchema = z.string().min(1).max(64);
 
@@ -148,7 +162,7 @@ function DetailsView({
           <h1 className="text-foreground m-0 break-all text-2xl font-bold tracking-tight">
             {details.name}
           </h1>
-          <p className="text-muted-foreground mt-1 font-mono text-sm tabular-nums">
+          <p className="text-muted-foreground mt-1 text-sm tabular-nums">
             Created {details.createdAt.toISOString().slice(0, 10)} •{" "}
             {details.region}
           </p>
@@ -193,7 +207,7 @@ function DetailsView({
                   <CardContent className="flex items-center justify-between gap-4 px-4 py-3">
                     <div>
                       <strong className="text-foreground">{p.name}</strong>
-                      <div className="text-muted-foreground mt-0.5 font-mono text-xs tabular-nums">
+                      <div className="text-muted-foreground mt-0.5 text-xs tabular-nums">
                         TTL {p.linkTtlSeconds}s
                         {p.maxDownloads !== null
                           ? ` • max ${p.maxDownloads} downloads`
@@ -232,12 +246,12 @@ function DetailsView({
                       <strong className="text-foreground break-all">
                         {d.filename}
                       </strong>
-                      <div className="text-muted-foreground mt-0.5 font-mono text-xs">
+                      <div className="text-muted-foreground mt-0.5 text-xs">
                         {d.contentType ?? "unknown"} •{" "}
                         {formatStorage(d.sizeBytes)}
                       </div>
                     </div>
-                    <div className="text-muted-foreground text-right font-mono text-xs tabular-nums">
+                    <div className="text-muted-foreground text-right text-xs tabular-nums">
                       {d.uploadedAt.toISOString().slice(0, 10)}
                       <br />
                       {d.uploadedByName ?? "unknown"}
@@ -259,12 +273,21 @@ function MetricsGrid({ details }: { readonly details: BucketDetails }) {
       role="list"
       className="m-0 mb-6 grid list-none grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-4 p-0"
     >
-      <Metric label="Documents" value={String(details.documentCount)} />
-      <Metric label="Storage" value={formatStorage(details.storageBytes)} />
-      <Metric label="Region" value={details.region} />
+      <Metric
+        label="Documents"
+        value={String(details.documentCount)}
+        icon={FileText}
+      />
+      <Metric
+        label="Storage"
+        value={formatStorage(details.storageBytes)}
+        icon={HardDrive}
+      />
+      <Metric label="Region" value={details.region} icon={Globe} />
       <Metric
         label="Status"
         value={details.isActive ? "Active" : "Inactive"}
+        icon={Activity}
       />
     </ul>
   );
@@ -273,22 +296,26 @@ function MetricsGrid({ details }: { readonly details: BucketDetails }) {
 function Metric({
   label,
   value,
+  icon: Icon,
 }: {
   readonly label: string;
   readonly value: string;
+  readonly icon: LucideIcon;
 }) {
   return (
     <li>
-      <Card>
-        <CardHeader className="pb-2">
-          <p className="text-muted-foreground m-0 text-[0.65rem] font-semibold uppercase tracking-wider">
-            {label}
-          </p>
+      <Card className="h-full gap-2 py-5">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">{label}</CardTitle>
+          <Icon
+            aria-hidden="true"
+            className="text-muted-foreground h-4 w-4"
+          />
         </CardHeader>
         <CardContent>
-          <p className="text-foreground font-mono text-xl font-bold tabular-nums">
+          <div className="text-foreground text-2xl font-bold tabular-nums">
             {value}
-          </p>
+          </div>
         </CardContent>
       </Card>
     </li>

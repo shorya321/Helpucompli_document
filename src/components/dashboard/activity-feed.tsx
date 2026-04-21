@@ -111,7 +111,7 @@ export function ActivityFeed({ initial }: ActivityFeedProps) {
               <CardContent className="flex items-center gap-3 px-4 py-3">
                 <Badge
                   variant={variant}
-                  className="gap-1 whitespace-nowrap font-mono text-[0.65rem] uppercase tracking-wide"
+                  className="gap-1 whitespace-nowrap text-[0.65rem] uppercase tracking-wide"
                 >
                   <Icon aria-hidden="true" className="h-3 w-3" />
                   {entry.action}
@@ -119,7 +119,7 @@ export function ActivityFeed({ initial }: ActivityFeedProps) {
                 <span className="text-foreground font-medium">
                   {entry.userName ?? "System"}
                 </span>
-                <span className="text-muted-foreground font-mono text-sm">
+                <span className="text-muted-foreground text-sm">
                   {entry.targetType}:{entry.targetId}
                 </span>
                 <span
