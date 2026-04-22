@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Plus, ShieldCheck } from "lucide-react";
 
 import { auth0 } from "@/lib/auth0";
 import { resolveHasRole } from "@/lib/auth-guard";
@@ -41,18 +42,21 @@ export default async function PoliciesPage() {
   }
 
   return (
-    <section className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-foreground m-0 text-2xl font-bold tracking-tight">
+    <section className="flex flex-col gap-8">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-col gap-1.5">
+          <h1 className="text-foreground m-0 text-3xl font-semibold tracking-tight">
             Access policies
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-muted-foreground text-sm">
             Restrict link sharing by IP, referrer, expiry, and download count.
           </p>
         </div>
-        <Button asChild>
-          <Link href="/policies/new">+ New policy</Link>
+        <Button asChild size="sm">
+          <Link href="/policies/new">
+            <Plus aria-hidden="true" />
+            New policy
+          </Link>
         </Button>
       </header>
 
@@ -63,11 +67,16 @@ export default async function PoliciesPage() {
       )}
 
       {rows.length === 0 && !loadError ? (
-        <div className="border-border bg-card text-muted-foreground rounded-lg border border-dashed p-6 text-center">
-          No policies yet. Create one to start restricting link sharing.
+        <div className="border-border bg-card text-muted-foreground flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-12 text-center">
+          <div className="bg-muted text-muted-foreground flex size-12 items-center justify-center rounded-full">
+            <ShieldCheck aria-hidden="true" className="size-5" />
+          </div>
+          <p className="text-sm">
+            No policies yet. Create one to start restricting link sharing.
+          </p>
         </div>
       ) : (
-        <Card className="overflow-x-auto p-0">
+        <Card className="overflow-hidden p-0">
           <Table>
             <TableHeader>
               <TableRow>
@@ -75,27 +84,29 @@ export default async function PoliciesPage() {
                 <TableHead>Target</TableHead>
                 <TableHead>Restrictions</TableHead>
                 <TableHead>Updated</TableHead>
-                <TableHead />
+                <TableHead className="text-right" aria-label="Actions" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.map((row) => (
                 <TableRow key={row.id}>
-                  <TableCell className="font-semibold">{row.name}</TableCell>
-                  <TableCell className="text-sm tabular-nums">
+                  <TableCell className="font-medium">{row.name}</TableCell>
+                  <TableCell className="font-mono text-xs tabular-nums">
                     {row.targetType}:{row.targetValue}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell className="text-muted-foreground text-sm">
                     {summarizeRestrictions(row)}
                   </TableCell>
-                  <TableCell className="text-muted-foreground tabular-nums">
+                  <TableCell className="text-muted-foreground font-mono text-xs tabular-nums">
                     {formatDate(row.updatedAt)}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button asChild variant="ghost" size="sm">
-                      <Link href={`/policies/${row.id}`}>Edit</Link>
-                    </Button>
-                    <DeletePolicyButton id={row.id} name={row.name} />
+                    <div className="inline-flex items-center gap-1">
+                      <Button asChild variant="ghost" size="sm">
+                        <Link href={`/policies/${row.id}`}>Edit</Link>
+                      </Button>
+                      <DeletePolicyButton id={row.id} name={row.name} />
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
