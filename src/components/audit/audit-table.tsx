@@ -106,7 +106,7 @@ export function AuditTable({ initial }: AuditTableProps) {
           return (
             <span
               title={d.toISOString()}
-              className="tabular-nums text-xs"
+              className="font-mono text-xs tabular-nums"
             >
               {formatDateTime(d)}
             </span>
@@ -128,7 +128,7 @@ export function AuditTable({ initial }: AuditTableProps) {
           return (
             <Badge
               variant={variant}
-              className="text-[0.65rem] uppercase tracking-wide"
+              className="font-mono text-[10px] uppercase tracking-wide"
             >
               {action}
             </Badge>
@@ -139,7 +139,7 @@ export function AuditTable({ initial }: AuditTableProps) {
         accessorFn: (r) => `${r.targetType}:${r.targetId}`,
         id: "target",
         cell: ({ getValue }) => (
-          <span className="tabular-nums text-xs">
+          <span className="font-mono text-xs tabular-nums">
             {getValue<string>()}
           </span>
         ),
@@ -149,7 +149,7 @@ export function AuditTable({ initial }: AuditTableProps) {
         accessorKey: "ipAddress",
         header: "IP address",
         cell: ({ getValue }) => (
-          <span className="tabular-nums text-xs">
+          <span className="font-mono text-xs tabular-nums">
             {getValue<string>()}
           </span>
         ),

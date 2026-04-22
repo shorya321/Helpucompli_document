@@ -7,6 +7,8 @@ import {
   queryAuditLogs,
   type AuditQueryResult,
 } from "@/lib/audit-query";
+import { ShieldAlert } from "lucide-react";
+
 import { AuditTable } from "@/components/audit/audit-table";
 
 export const dynamic = "force-dynamic";
@@ -28,17 +30,26 @@ export default async function AuditLogPage() {
 
   return (
     <section className="flex flex-col gap-6">
-      <header>
-        <h1 className="text-foreground m-0 text-2xl font-bold tracking-tight">
+      <header className="flex flex-col gap-1.5">
+        <h1 className="text-foreground m-0 text-3xl font-semibold tracking-tight">
           Audit log
         </h1>
-        <p className="text-muted-foreground mt-1">
+        <p className="text-muted-foreground text-sm">
           Append-only HIPAA audit trail. 6-year retention.
         </p>
       </header>
-      <div className="border-border bg-muted text-muted-foreground rounded-md border px-3 py-2 text-xs">
-        No PHI should appear in audit metadata. Report suspected exposure to
-        compliance immediately.
+      <div
+        role="note"
+        className="border-border/70 bg-muted/40 text-muted-foreground flex items-start gap-2.5 rounded-lg border px-4 py-3 text-sm"
+      >
+        <ShieldAlert
+          aria-hidden="true"
+          className="text-foreground/70 mt-0.5 size-4 shrink-0"
+        />
+        <span>
+          No PHI should appear in audit metadata. Report suspected exposure to
+          compliance immediately.
+        </span>
       </div>
       {loadError ? (
         <p role="alert" className="text-destructive text-sm">

@@ -85,7 +85,7 @@ export function AuditFilters({
   };
 
   return (
-    <Card className="mb-4 p-4">
+    <Card className="mb-4 p-5">
       <form
         role="search"
         aria-label="Audit log filters"
@@ -93,11 +93,16 @@ export function AuditFilters({
           e.preventDefault();
           onApply();
         }}
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-5"
       >
         <div className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] items-end gap-3">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="audit-user-id">User ID</Label>
+            <Label
+              htmlFor="audit-user-id"
+              className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider"
+            >
+              User ID
+            </Label>
             <Input
               id="audit-user-id"
               type="text"
@@ -109,7 +114,12 @@ export function AuditFilters({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="audit-target-type">Target type</Label>
+            <Label
+              htmlFor="audit-target-type"
+              className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider"
+            >
+              Target type
+            </Label>
             <select
               id="audit-target-type"
               value={value.targetType}
@@ -131,7 +141,12 @@ export function AuditFilters({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="audit-date-from">From</Label>
+            <Label
+              htmlFor="audit-date-from"
+              className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider"
+            >
+              From
+            </Label>
             <Input
               id="audit-date-from"
               type="date"
@@ -141,7 +156,12 @@ export function AuditFilters({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="audit-date-to">To</Label>
+            <Label
+              htmlFor="audit-date-to"
+              className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider"
+            >
+              To
+            </Label>
             <Input
               id="audit-date-to"
               type="date"
@@ -151,25 +171,27 @@ export function AuditFilters({
           </div>
         </div>
 
-        <fieldset className="border-border rounded-md border p-2">
-          <legend className="text-muted-foreground px-2 text-xs font-semibold">
+        <fieldset className="border-border/70 rounded-lg border p-3">
+          <legend className="text-muted-foreground px-2 text-[11px] font-semibold uppercase tracking-wider">
             Actions
           </legend>
           <div className="flex flex-wrap gap-1.5">
             {ALL_ACTIONS.map((action) => {
               const active = value.actions.includes(action);
               return (
-                <Button
+                <button
                   key={action}
                   type="button"
-                  size="sm"
-                  variant={active ? "default" : "outline"}
                   onClick={() => toggleAction(action)}
                   aria-pressed={active}
-                  className="h-7 px-2 text-[0.65rem] uppercase tracking-wide"
+                  className={
+                    active
+                      ? "bg-foreground text-background inline-flex h-7 items-center rounded-full px-2.5 font-mono text-[10px] font-semibold uppercase tracking-wide transition-all duration-150 hover:opacity-90 active:scale-[0.97]"
+                      : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground border-border/70 inline-flex h-7 items-center rounded-full border px-2.5 font-mono text-[10px] font-semibold uppercase tracking-wide transition-all duration-150 active:scale-[0.97]"
+                  }
                 >
                   {action}
-                </Button>
+                </button>
               );
             })}
           </div>
