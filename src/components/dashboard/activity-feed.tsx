@@ -6,7 +6,7 @@ import { AlertTriangle, CheckCircle2, Info, ShieldAlert } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import {
   actionBadgeTone,
   type ActivityEntry,
@@ -99,40 +99,41 @@ export function ActivityFeed({ initial }: ActivityFeedProps) {
   }
 
   return (
-    <ul
-      role="list"
-      className="m-0 flex list-none flex-col gap-2 p-0"
-    >
-      {entries.map((entry) => {
-        const { variant, Icon } = TONE_VARIANT[actionBadgeTone(entry.action)];
-        return (
-          <li key={entry.id}>
-            <Card>
-              <CardContent className="flex items-center gap-3 px-4 py-3">
-                <Badge
-                  variant={variant}
-                  className="gap-1 whitespace-nowrap text-[0.65rem] uppercase tracking-wide"
-                >
-                  <Icon aria-hidden="true" className="h-3 w-3" />
-                  {entry.action}
-                </Badge>
-                <span className="text-foreground font-medium">
-                  {entry.userName ?? "System"}
-                </span>
-                <span className="text-muted-foreground text-sm">
-                  {entry.targetType}:{entry.targetId}
-                </span>
-                <span
-                  className="text-muted-foreground ml-auto text-sm tabular-nums"
-                  title={entry.createdAt.toISOString()}
-                >
-                  {formatRelative(entry.createdAt, now)}
-                </span>
-              </CardContent>
-            </Card>
-          </li>
-        );
-      })}
-    </ul>
+    <Card className="overflow-hidden">
+      <ul
+        role="list"
+        className="m-0 flex list-none flex-col divide-y divide-border/60 p-0"
+      >
+        {entries.map((entry) => {
+          const { variant, Icon } = TONE_VARIANT[actionBadgeTone(entry.action)];
+          return (
+            <li
+              key={entry.id}
+              className="group flex items-center gap-3 px-5 py-3 transition-colors hover:bg-muted/40"
+            >
+              <Badge
+                variant={variant}
+                className="gap-1 whitespace-nowrap text-[10px] uppercase tracking-wide"
+              >
+                <Icon aria-hidden="true" className="size-3" />
+                {entry.action}
+              </Badge>
+              <span className="text-foreground truncate text-sm font-medium">
+                {entry.userName ?? "System"}
+              </span>
+              <span className="text-muted-foreground truncate font-mono text-xs">
+                {entry.targetType}:{entry.targetId}
+              </span>
+              <span
+                className="text-muted-foreground ml-auto whitespace-nowrap font-mono text-xs tabular-nums"
+                title={entry.createdAt.toISOString()}
+              >
+                {formatRelative(entry.createdAt, now)}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
   );
 }

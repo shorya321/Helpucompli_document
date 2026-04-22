@@ -45,28 +45,27 @@ export function SummaryCards({ stats }: SummaryCardsProps) {
   return (
     <ul
       role="list"
-      className="m-0 grid list-none grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-4 p-0"
+      className="m-0 grid list-none grid-cols-[repeat(auto-fit,minmax(13rem,1fr))] gap-4 p-0 md:gap-5"
     >
       {cards.map((card) => {
         const Icon = card.icon;
         return (
           <li key={card.label}>
-            <Card className="h-full gap-2 py-5">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
+            <Card className="group h-full gap-3 py-5 hover:shadow-md">
+              <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-0">
+                <CardTitle className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider">
                   {card.label}
                 </CardTitle>
-                <Icon
-                  aria-hidden="true"
-                  className="text-muted-foreground h-4 w-4"
-                />
+                <span className="bg-muted text-muted-foreground flex size-8 items-center justify-center rounded-md transition-colors group-hover:bg-accent group-hover:text-accent-foreground">
+                  <Icon aria-hidden="true" className="size-4" />
+                </span>
               </CardHeader>
               <CardContent>
-                <div className="text-foreground text-2xl font-bold tabular-nums">
+                <div className="text-foreground font-mono text-3xl font-semibold tracking-tight tabular-nums">
                   {card.value}
                 </div>
                 {card.sub ? (
-                  <p className="text-muted-foreground mt-1 text-xs">
+                  <p className="text-muted-foreground mt-1.5 text-xs">
                     {card.sub}
                   </p>
                 ) : null}

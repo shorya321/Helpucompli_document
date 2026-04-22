@@ -38,12 +38,12 @@ export default async function DashboardHomePage() {
   }
 
   return (
-    <section className="flex flex-col gap-6">
-      <header>
-        <h1 className="text-foreground m-0 text-2xl font-bold tracking-tight">
+    <section className="flex flex-col gap-8">
+      <header className="flex flex-col gap-1.5">
+        <h1 className="text-foreground m-0 text-3xl font-semibold tracking-tight">
           Dashboard
         </h1>
-        <p className="text-muted-foreground mt-1">
+        <p className="text-muted-foreground text-sm">
           {canSeeAggregate
             ? "Activity summary for the last 7 days."
             : "Welcome back. Use the sidebar to browse the documents and links you can access."}
@@ -52,13 +52,13 @@ export default async function DashboardHomePage() {
       {role ? <QuickActions role={role} /> : null}
       {canSeeAggregate && stats ? <SummaryCards stats={stats} /> : null}
       {canSeeAggregate && loadError ? (
-        <p role="alert" className="text-destructive">
+        <p role="alert" className="text-destructive text-sm">
           Unable to load dashboard metrics. Please try again.
         </p>
       ) : null}
       {canSeeAggregate && !loadError ? (
-        <section>
-          <h2 className="text-foreground mb-3 text-lg font-semibold">
+        <section className="flex flex-col gap-4">
+          <h2 className="text-foreground text-base font-semibold tracking-tight">
             Recent activity
           </h2>
           <ActivityFeed initial={activity} />
