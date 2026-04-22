@@ -51,13 +51,13 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
   }
 
   return (
-    <section className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-foreground m-0 text-2xl font-bold tracking-tight">
+    <section className="flex flex-col gap-8">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-col gap-1.5">
+          <h1 className="text-foreground m-0 text-3xl font-semibold tracking-tight">
             Users
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-muted-foreground text-sm">
             Manage who can access the document repository.
           </p>
         </div>

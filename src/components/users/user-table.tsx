@@ -58,7 +58,7 @@ export function RoleBadge({ role }: { readonly role: Role }) {
   return (
     <Badge
       variant={ROLE_VARIANT[role]}
-      className="gap-1 text-[0.65rem] uppercase tracking-wide"
+      className="gap-1 font-mono text-[10px] uppercase tracking-wide"
     >
       {roleIcon(role)}
       {role}
@@ -75,7 +75,7 @@ export function StatusBadge({
     return (
       <Badge
         variant="secondary"
-        className="text-[0.65rem] uppercase tracking-wide"
+        className="font-mono text-[10px] uppercase tracking-wide"
       >
         active
       </Badge>
@@ -84,7 +84,7 @@ export function StatusBadge({
   return (
     <Badge
       variant="outline"
-      className="text-muted-foreground text-[0.65rem] uppercase tracking-wide"
+      className="text-muted-foreground font-mono text-[10px] uppercase tracking-wide"
     >
       disabled
     </Badge>
@@ -105,13 +105,18 @@ export function UserTable({
 
   return (
     <section className="flex flex-col gap-4">
-      <Card className="p-4">
+      <Card className="p-5">
         <form
           method="get"
           className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] items-end gap-3"
         >
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="user-q">Search</Label>
+            <Label
+              htmlFor="user-q"
+              className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider"
+            >
+              Search
+            </Label>
             <Input
               id="user-q"
               type="text"
@@ -122,7 +127,12 @@ export function UserTable({
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="user-role">Role</Label>
+            <Label
+              htmlFor="user-role"
+              className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider"
+            >
+              Role
+            </Label>
             <select
               id="user-role"
               name="role"
@@ -136,7 +146,12 @@ export function UserTable({
             </select>
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="user-status">Status</Label>
+            <Label
+              htmlFor="user-status"
+              className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider"
+            >
+              Status
+            </Label>
             <select
               id="user-status"
               name="status"
@@ -162,11 +177,11 @@ export function UserTable({
       </Card>
 
       {rows.length === 0 ? (
-        <div className="border-border bg-card text-muted-foreground rounded-lg border border-dashed p-6 text-center">
-          No users match those filters.
+        <div className="border-border bg-card text-muted-foreground flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-10 text-center">
+          <p className="text-sm">No users match those filters.</p>
         </div>
       ) : (
-        <Card className="p-0">
+        <Card className="overflow-hidden p-0">
           <Table>
             <TableHeader>
               <TableRow>
@@ -184,7 +199,7 @@ export function UserTable({
                   <TableCell className="font-medium">
                     {row.name ?? "—"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground text-xs">
+                  <TableCell className="text-muted-foreground font-mono text-xs">
                     {row.email}
                   </TableCell>
                   <TableCell>
@@ -198,7 +213,7 @@ export function UserTable({
                       />
                     </span>
                   </TableCell>
-                  <TableCell className="text-muted-foreground tabular-nums">
+                  <TableCell className="text-muted-foreground font-mono text-xs tabular-nums">
                     {row.lastLoginAt ? formatDateTime(row.lastLoginAt) : "Never"}
                   </TableCell>
                   <TableCell>
