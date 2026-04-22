@@ -256,13 +256,21 @@ export function UploadZone({
         tabIndex={0}
         className={
           isDragActive
-            ? "border-primary bg-primary/5 text-foreground flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-6 text-center text-sm transition-colors"
-            : "border-border bg-card text-foreground hover:bg-accent/30 flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-6 text-center text-sm transition-colors"
+            ? "border-ring bg-accent/40 text-foreground flex cursor-pointer flex-col items-center gap-3 rounded-xl border-2 border-dashed px-6 py-8 text-center text-sm transition-all duration-150 ease-out"
+            : "border-border bg-card/50 text-foreground hover:border-ring/60 hover:bg-accent/30 flex cursor-pointer flex-col items-center gap-3 rounded-xl border-2 border-dashed px-6 py-8 text-center text-sm transition-all duration-150 ease-out"
         }
       >
         <input {...getInputProps()} />
-        <Upload aria-hidden="true" className="text-muted-foreground h-6 w-6" />
-        <span>
+        <div
+          className={
+            isDragActive
+              ? "bg-foreground text-background flex size-11 items-center justify-center rounded-full transition-colors"
+              : "bg-muted text-muted-foreground flex size-11 items-center justify-center rounded-full transition-colors"
+          }
+        >
+          <Upload aria-hidden="true" className="size-5" />
+        </div>
+        <span className="font-medium">
           {isDragActive
             ? "Drop files here to upload"
             : "Drag and drop files here, or click to select"}
@@ -273,7 +281,7 @@ export function UploadZone({
           {Math.floor(MULTIPART_THRESHOLD_BYTES / (1024 * 1024))} MB use
           multipart upload.
         </p>
-        <p className="border-border bg-muted text-muted-foreground m-0 mt-1 rounded-md border px-3 py-2 text-xs">
+        <p className="border-border bg-muted/50 text-muted-foreground m-0 mt-1 rounded-md border px-3 py-2 text-xs">
           Do not upload documents containing PHI without a signed BAA in place.
         </p>
       </div>

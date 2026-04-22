@@ -146,9 +146,9 @@ export default async function DocumentsPage({ searchParams }: PageProps) {
     <section className="text-foreground grid items-start gap-6 [grid-template-columns:minmax(14rem,18rem)_1fr]">
       <FileTree buckets={buckets} activeBucket={inScope?.name} />
 
-      <div className="flex flex-col gap-4">
-        <header className="flex flex-wrap items-center justify-between gap-4">
-          <h1 className="text-foreground m-0 text-2xl font-bold tracking-tight">
+      <div className="flex flex-col gap-5">
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <h1 className="text-foreground m-0 text-3xl font-semibold tracking-tight">
             Documents
           </h1>
           {inScope ? (
@@ -399,15 +399,18 @@ async function PreviewMount({
 
 function EmptyPage({ message }: { readonly message: string }) {
   return (
-    <div className="border-border bg-card text-muted-foreground rounded-xl border border-dashed p-8 text-center">
-      {message}
+    <div className="border-border bg-card text-muted-foreground flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-12 text-center">
+      <div className="bg-muted text-muted-foreground flex size-12 items-center justify-center rounded-full">
+        <FolderPlus aria-hidden="true" className="size-5" />
+      </div>
+      <p className="text-sm">{message}</p>
     </div>
   );
 }
 
 function EmptyPanel({ message }: { readonly message: string }) {
   return (
-    <p className="border-border bg-card text-muted-foreground m-0 rounded-xl border border-dashed p-6 text-center">
+    <p className="border-border bg-card text-muted-foreground m-0 rounded-xl border border-dashed px-6 py-10 text-center text-sm">
       {message}
     </p>
   );

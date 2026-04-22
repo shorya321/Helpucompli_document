@@ -41,10 +41,10 @@ interface FileRowProps {
 
 function rowClass(view: "grid" | "list"): string {
   const base =
-    "flex flex-wrap items-baseline justify-between gap-3 px-3.5 py-2.5 text-sm";
+    "flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 text-sm transition-colors";
   return view === "grid"
-    ? `${base} border-border bg-card rounded-lg border`
-    : `${base} border-border/50 border-b last:border-b-0`;
+    ? `${base} border-border bg-card rounded-lg border hover:border-ring/40 hover:shadow-sm`
+    : `${base} border-border/50 border-b last:border-b-0 hover:bg-muted/40`;
 }
 
 function FileRow({
@@ -63,7 +63,7 @@ function FileRow({
         {filenameFromKey(entry.key)}
       </span>
       <span className="inline-flex items-baseline gap-3">
-        <span className="text-muted-foreground text-xs tabular-nums">
+        <span className="text-muted-foreground font-mono text-xs tabular-nums">
           {formatStorage(entry.size)}
         </span>
         {bucketId ? (
@@ -159,7 +159,7 @@ export function FileList({
 
       {entries.length === 0 ? (
         <p
-          className="border-border bg-card text-muted-foreground m-0 rounded-xl border border-dashed p-6 text-center"
+          className="border-border bg-card text-muted-foreground m-0 rounded-xl border border-dashed px-6 py-10 text-center text-sm"
           data-view={view}
         >
           This folder is empty.
@@ -171,7 +171,7 @@ export function FileList({
           className={
             view === "grid"
               ? "m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-3 p-0"
-              : "border-border bg-card m-0 flex list-none flex-col overflow-hidden rounded-xl border p-0"
+              : "border-border bg-card shadow-xs m-0 flex list-none flex-col overflow-hidden rounded-xl border p-0"
           }
         >
           {entries.map((e) =>
@@ -180,17 +180,17 @@ export function FileList({
                 key={`folder:${e.prefix}`}
                 className={
                   view === "grid"
-                    ? "border-border bg-card rounded-lg border px-3.5 py-2.5"
-                    : "border-border/50 border-b px-3.5 py-2.5 last:border-b-0"
+                    ? "border-border bg-card rounded-lg border px-4 py-2.5 transition-all hover:border-ring/40 hover:shadow-sm"
+                    : "border-border/50 border-b px-4 py-2.5 last:border-b-0 transition-colors hover:bg-muted/40"
                 }
               >
                 <Link
                   href={hrefForFolder(bucket, e.prefix)}
-                  className="text-foreground hover:text-primary inline-flex items-baseline gap-2 break-all text-sm font-semibold no-underline transition-colors"
+                  className="text-foreground hover:text-foreground inline-flex items-center gap-2 break-all text-sm font-medium no-underline transition-colors"
                 >
                   <Folder
                     aria-hidden="true"
-                    className="text-muted-foreground h-4 w-4 shrink-0"
+                    className="text-muted-foreground size-4 shrink-0"
                   />
                   {e.name}/
                 </Link>
