@@ -5,11 +5,18 @@ import { asStatsPrisma, getDashboardStats } from "@/lib/dashboard-stats";
 import type { DashboardStats } from "@/lib/dashboard-stats";
 import {
   asActivityPrisma,
-  getRecentActivity,
-  type ActivityEntry,
+  getRecentActivityPage,
+  type ActivityFeedPage,
 } from "@/lib/activity-feed";
+import {
+  asTrendPrisma,
+  getActivityTrend,
+  sparklineForCategory,
+  type ActivityTrend,
+} from "@/lib/activity-trend";
 import { SummaryCards } from "@/components/dashboard/summary-cards";
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
+import { ActivityTrendChart } from "@/components/dashboard/activity-trend-chart";
 import { QuickActions } from "@/components/dashboard/quick-actions";
 
 export const dynamic = "force-dynamic";
@@ -23,19 +30,29 @@ export default async function DashboardHomePage() {
   ]);
 
   let stats: DashboardStats | null = null;
-  let activity: readonly ActivityEntry[] = [];
+  let activity: ActivityFeedPage = { entries: [], nextCursor: null };
+  let trend: ActivityTrend | null = null;
   let loadError = false;
   if (canSeeAggregate) {
     try {
-      [stats, activity] = await Promise.all([
+      [stats, activity, trend] = await Promise.all([
         getDashboardStats(asStatsPrisma(prisma)),
-        getRecentActivity(asActivityPrisma(prisma)),
+        getRecentActivityPage(asActivityPrisma(prisma)),
+        getActivityTrend(asTrendPrisma(prisma)),
       ]);
     } catch {
       // Engine-level errors can embed DATABASE_URL. Do NOT surface.
       loadError = true;
     }
   }
+
+  const sparklines = trend
+    ? {
+        document: sparklineForCategory(trend, "document", 7),
+        link: sparklineForCategory(trend, "link", 7),
+        user: sparklineForCategory(trend, "user", 7),
+      }
+    : undefined;
 
   return (
     <section className="flex flex-col gap-8">
@@ -50,7 +67,12 @@ export default async function DashboardHomePage() {
         </p>
       </header>
       {role ? <QuickActions role={role} /> : null}
-      {canSeeAggregate && stats ? <SummaryCards stats={stats} /> : null}
+      {canSeeAggregate && stats ? (
+        <SummaryCards stats={stats} sparklines={sparklines} />
+      ) : null}
+      {canSeeAggregate && !loadError ? (
+        <ActivityTrendChart initial={trend} />
+      ) : null}
       {canSeeAggregate && loadError ? (
         <p role="alert" className="text-destructive text-sm">
           Unable to load dashboard metrics. Please try again.

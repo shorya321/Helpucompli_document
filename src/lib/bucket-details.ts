@@ -61,6 +61,14 @@ export interface BucketDetails {
   readonly hipaaCompliance: BucketDetailsCompliance;
 }
 
+export interface BucketDocumentsPage {
+  readonly entries: readonly BucketDetailsDocument[];
+  readonly nextCursor: string | null;
+}
+
+export const BUCKET_DOCUMENTS_PAGE_LIMIT = 10 as const;
+export const BUCKET_DOCUMENTS_PAGE_LIMIT_MAX = 50 as const;
+
 // All HIPAA buckets are provisioned by createHipaaBucket which applies
 // SSE-KMS + versioning + BPA + HTTPS-only policy unconditionally. We
 // surface this design-guarantee to the UI instead of running live
@@ -96,6 +104,14 @@ export interface BucketDetailsPrisma {
       _sum: { sizeBytes: bigint | null };
     }>;
     findMany(args: unknown): Promise<Array<Record<string, unknown>>>;
+    findUnique?(args: {
+      where: { id: string };
+      select: { uploadedAt: true; bucketId: true; isDeleted: true };
+    }): Promise<{
+      uploadedAt: Date;
+      bucketId: string;
+      isDeleted: boolean;
+    } | null>;
   };
   readonly accessPolicy: {
     findMany(args: unknown): Promise<Array<Record<string, unknown>>>;
@@ -251,5 +267,113 @@ export async function getBucketDetails(
     recentDocuments,
     accessPolicies,
     hipaaCompliance: HIPAA_COMPLIANCE,
+  };
+}
+
+function clampDocsLimit(value: number): number {
+  const n = Math.floor(Number(value) || BUCKET_DOCUMENTS_PAGE_LIMIT);
+  return Math.max(
+    1,
+    Math.min(BUCKET_DOCUMENTS_PAGE_LIMIT_MAX, n),
+  );
+}
+
+async function assertBucketAccess(
+  prisma: BucketDetailsPrisma,
+  scope: BucketDetailsScope,
+  bucketId: string,
+): Promise<{ id: string }> {
+  const row = await prisma.bucket.findUnique(
+    buildFindUniqueArgs(bucketId, scope),
+  );
+  if (scope.role === "viewer") {
+    if (!row || (row.userAccess ?? []).length === 0) {
+      throw new BucketAccessDeniedError(bucketId);
+    }
+  } else if (!row) {
+    throw new BucketNotFoundError(bucketId);
+  }
+  if (!row) throw new Error("unreachable: bucket row narrowed");
+  return { id: row.id };
+}
+
+// Cursor-paginated bucket documents — used by /api/s3/buckets/:id/documents
+// for the bucket-details page Load more button. Same tie-stable cursor
+// pattern as activity-feed: (uploadedAt desc, id desc) with OR-where so
+// rows that share an uploadedAt timestamp don't duplicate or skip.
+// Access control is identical to getBucketDetails: viewer must have a
+// row in user_bucket_access, otherwise BucketAccessDeniedError.
+export async function getBucketDocumentsPage(
+  prisma: BucketDetailsPrisma,
+  scope: BucketDetailsScope,
+  bucketId: string,
+  opts: { cursor?: string | null; limit?: number } = {},
+): Promise<BucketDocumentsPage> {
+  await assertBucketAccess(prisma, scope, bucketId);
+
+  const limit = clampDocsLimit(opts.limit ?? BUCKET_DOCUMENTS_PAGE_LIMIT);
+  const cursor = opts.cursor ?? null;
+
+  let where: Record<string, unknown> = { bucketId, isDeleted: false };
+  if (cursor) {
+    if (!prisma.document.findUnique) {
+      // Stub without findUnique — degrade to no-cursor behaviour.
+    } else {
+      const head = await prisma.document.findUnique({
+        where: { id: cursor },
+        select: { uploadedAt: true, bucketId: true, isDeleted: true },
+      });
+      // Cross-bucket / soft-deleted / unknown cursor → empty page.
+      // Prevents using a cursor from one bucket to peek into another.
+      if (
+        !head ||
+        head.bucketId !== bucketId ||
+        head.isDeleted
+      ) {
+        return { entries: [], nextCursor: null };
+      }
+      where = {
+        bucketId,
+        isDeleted: false,
+        OR: [
+          { uploadedAt: { lt: head.uploadedAt } },
+          { uploadedAt: head.uploadedAt, id: { lt: cursor } },
+        ],
+      };
+    }
+  }
+
+  const rawRows = await prisma.document.findMany({
+    where,
+    orderBy: [{ uploadedAt: "desc" }, { id: "desc" }],
+    take: limit + 1,
+    select: {
+      id: true,
+      filename: true,
+      sizeBytes: true,
+      contentType: true,
+      uploadedAt: true,
+      uploadedBy: { select: { name: true } },
+    },
+  });
+
+  const hasMore = rawRows.length > limit;
+  const sliced = hasMore ? rawRows.slice(0, limit) : rawRows;
+  const entries: BucketDetailsDocument[] = sliced.map((r) => {
+    const uploadedBy = r.uploadedBy as { name: string | null } | null;
+    return {
+      id: r.id as string,
+      filename: r.filename as string,
+      sizeBytes: (r.sizeBytes as bigint | null) ?? BigInt(0),
+      contentType: (r.contentType as string | null) ?? null,
+      uploadedAt: r.uploadedAt as Date,
+      uploadedByName: uploadedBy?.name ?? null,
+    };
+  });
+
+  const last = entries[entries.length - 1];
+  return {
+    entries,
+    nextCursor: hasMore && last ? last.id : null,
   };
 }

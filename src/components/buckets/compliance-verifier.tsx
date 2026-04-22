@@ -1,10 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface ComplianceVerifierProps {
   readonly bucketId: string;
@@ -68,72 +76,109 @@ export function ComplianceVerifier({ bucketId }: ComplianceVerifierProps) {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0">
-        <div>
-          <CardTitle className="text-sm">Live drift check</CardTitle>
-          <CardDescription className="text-xs">
-            Queries the real S3 configuration and reports any drift from the
-            HIPAA baseline.
-          </CardDescription>
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="bg-muted text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-md">
+            <ShieldCheck aria-hidden="true" className="size-4" />
+          </span>
+          <div className="min-w-0">
+            <CardTitle className="text-foreground text-sm font-semibold">
+              Live drift check
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Queries the real S3 configuration and reports any drift from the
+              HIPAA baseline.
+            </CardDescription>
+          </div>
         </div>
-        <Button type="button" size="sm" onClick={run} disabled={pending}>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={run}
+          disabled={pending}
+        >
           {pending ? "Checking…" : "Verify now"}
         </Button>
       </CardHeader>
-      {error || report ? (
+      {pending || error || report ? (
         <CardContent>
-          {error ? (
+          {pending ? (
+            <div
+              aria-busy="true"
+              aria-live="polite"
+              aria-label="Checking S3 compliance"
+              className="flex flex-col gap-2"
+            >
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-9 w-full rounded-md" />
+              ))}
+            </div>
+          ) : null}
+          {!pending && error ? (
             <p role="alert" className="text-destructive text-sm">
               {error}
             </p>
           ) : null}
-          {report ? (
-            <ul className="m-0 flex flex-col gap-1.5 p-0" role="list">
-              <Row
-                label="SSE-KMS encryption"
-                ok={report.sseKms.ok}
-                detail={
-                  report.sseKms.errorReason ??
-                  `algorithm: ${report.sseKms.algorithm ?? "none"}`
-                }
-              />
-              <Row
-                label="Versioning"
-                ok={report.versioning.ok}
-                detail={
-                  report.versioning.errorReason ??
-                  `status: ${report.versioning.status ?? "unset"}`
-                }
-              />
-              <Row
-                label="Public access block (all 4 flags)"
-                ok={report.publicAccessBlock.ok}
-                detail={
-                  report.publicAccessBlock.errorReason ??
-                  [
-                    `acls=${report.publicAccessBlock.blockPublicAcls}`,
-                    `ignore=${report.publicAccessBlock.ignorePublicAcls}`,
-                    `policy=${report.publicAccessBlock.blockPublicPolicy}`,
-                    `restrict=${report.publicAccessBlock.restrictPublicBuckets}`,
-                  ].join(" / ")
-                }
-              />
-              <Row
-                label="HTTPS-only + TLS 1.2 policy"
-                ok={report.httpsOnlyPolicy.ok}
-                detail={
-                  report.httpsOnlyPolicy.errorReason ??
-                  [
-                    `DenyNonHttps=${report.httpsOnlyPolicy.denyNonHttpsPresent}`,
-                    `DenyTls<1.2=${report.httpsOnlyPolicy.denyTlsBelow12Present}`,
-                  ].join(" / ")
-                }
-              />
-              <li className="text-muted-foreground mt-1 text-[10px] tabular-nums">
-                Checked at {new Date(report.checkedAt).toISOString()} •{" "}
-                {report.compliant ? "COMPLIANT" : "DRIFT DETECTED"}
-              </li>
-            </ul>
+          {!pending && report ? (
+            <div className="flex flex-col gap-3">
+              <ul
+                role="list"
+                className="border-border bg-card divide-y divide-border/60 m-0 flex list-none flex-col overflow-hidden rounded-md border p-0"
+              >
+                <Row
+                  label="SSE-KMS encryption"
+                  ok={report.sseKms.ok}
+                  detail={
+                    report.sseKms.errorReason ??
+                    `algorithm: ${report.sseKms.algorithm ?? "none"}`
+                  }
+                />
+                <Row
+                  label="Versioning"
+                  ok={report.versioning.ok}
+                  detail={
+                    report.versioning.errorReason ??
+                    `status: ${report.versioning.status ?? "unset"}`
+                  }
+                />
+                <Row
+                  label="Public access block (all 4 flags)"
+                  ok={report.publicAccessBlock.ok}
+                  detail={
+                    report.publicAccessBlock.errorReason ??
+                    [
+                      `acls=${report.publicAccessBlock.blockPublicAcls}`,
+                      `ignore=${report.publicAccessBlock.ignorePublicAcls}`,
+                      `policy=${report.publicAccessBlock.blockPublicPolicy}`,
+                      `restrict=${report.publicAccessBlock.restrictPublicBuckets}`,
+                    ].join(" / ")
+                  }
+                />
+                <Row
+                  label="HTTPS-only + TLS 1.2 policy"
+                  ok={report.httpsOnlyPolicy.ok}
+                  detail={
+                    report.httpsOnlyPolicy.errorReason ??
+                    [
+                      `DenyNonHttps=${report.httpsOnlyPolicy.denyNonHttpsPresent}`,
+                      `DenyTls<1.2=${report.httpsOnlyPolicy.denyTlsBelow12Present}`,
+                    ].join(" / ")
+                  }
+                />
+              </ul>
+              <p className="text-muted-foreground m-0 flex items-center justify-between font-mono text-[10px] tabular-nums">
+                <span>
+                  Checked at {new Date(report.checkedAt).toISOString()}
+                </span>
+                <Badge
+                  variant={report.compliant ? "secondary" : "destructive"}
+                  className="text-[10px] uppercase tracking-wide"
+                >
+                  {report.compliant ? "Compliant" : "Drift detected"}
+                </Badge>
+              </p>
+            </div>
           ) : null}
         </CardContent>
       ) : null}
@@ -153,29 +198,20 @@ function Row({
   const Icon = ok ? CheckCircle2 : AlertTriangle;
   return (
     <li
-      className={
-        ok
-          ? "border-border bg-muted flex items-center justify-between gap-2 rounded-md border px-2.5 py-2"
-          : "border-destructive/40 bg-destructive/10 flex items-center justify-between gap-2 rounded-md border px-2.5 py-2"
-      }
+      className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-muted/40"
+      title={detail}
     >
-      <span className="flex items-center gap-2 text-sm">
-        <Icon
-          aria-hidden="true"
-          className={ok ? "text-foreground h-4 w-4" : "text-destructive h-4 w-4"}
-        />
-        {label}
-      </span>
-      <span
-        className={
-          ok
-            ? "text-muted-foreground text-[10px] font-semibold uppercase tracking-wider"
-            : "text-destructive text-[10px] font-semibold uppercase tracking-wider"
-        }
-        title={detail}
+      <Icon
+        aria-hidden="true"
+        className={`size-4 ${ok ? "text-foreground" : "text-destructive"}`}
+      />
+      <span className="text-foreground text-sm font-medium">{label}</span>
+      <Badge
+        variant={ok ? "secondary" : "destructive"}
+        className="ml-auto whitespace-nowrap text-[10px] uppercase tracking-wide"
       >
-        {ok ? "OK" : "DRIFT"}
-      </span>
+        {ok ? "OK" : "Drift"}
+      </Badge>
     </li>
   );
 }

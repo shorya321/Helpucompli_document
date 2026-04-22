@@ -22,6 +22,7 @@ export const auditActionSchema = z.enum([
   "LINK_ACCESS",
   "LINK_DENIED",
   "LINK_REVOKE",
+  "LINK_SHARE_INFO_VIEW",
   "USER_INVITE",
   "USER_ROLE_CHANGE",
   "USER_DISABLE",
@@ -33,13 +34,27 @@ export const activityEntrySchema = z.object({
   createdAt: z.date(),
   action: auditActionSchema,
   userName: z.string().max(256).nullable(),
-  targetType: z.string().max(64),
-  targetId: z.string().max(128),
+  // Bumped 2026-04-22: real audit rows carry full S3 object keys as
+  // targetId (AWS allows up to 1024 bytes), and bucket names + prefix
+  // chains can exceed the prior 64-char targetType cap. The previous
+  // tight limits caused the /api/dashboard/activity?cursor= path to
+  // 500 on legitimate rows, breaking F4.6 Load more.
+  targetType: z.string().max(256),
+  targetId: z.string().max(1024),
 });
 
 export const activityFeedPayloadSchema = z.array(activityEntrySchema).max(200);
 
+// Paged response — boundary-validated alongside the array form so the
+// /api/dashboard/activity route can return either shape under the same
+// ApiResponse<T> envelope without losing safety.
+export const activityFeedPageSchema = z.object({
+  entries: activityFeedPayloadSchema,
+  nextCursor: z.string().min(1).max(64).nullable(),
+});
+
 export const ACTIVITY_FEED_LIMIT = 20 as const;
+export const ACTIVITY_FEED_PAGE_LIMIT_MAX = 50 as const;
 const ACTIVITY_FEED_MAX = 200;
 const ACTIVITY_FEED_MIN = 1;
 
@@ -52,11 +67,18 @@ export interface ActivityEntry {
   readonly targetId: string;
 }
 
+export interface ActivityFeedPage {
+  readonly entries: readonly ActivityEntry[];
+  readonly nextCursor: string | null;
+}
+
 export interface ActivityFeedPrisma {
   readonly auditLog: {
     findMany: (args: {
       take: number;
-      orderBy: { createdAt: "desc" };
+      orderBy:
+        | { createdAt: "desc" }
+        | ReadonlyArray<{ createdAt?: "desc"; id?: "desc" }>;
       select: {
         id: true;
         createdAt: true;
@@ -65,7 +87,12 @@ export interface ActivityFeedPrisma {
         targetId: true;
         user: { select: { name: true } };
       };
+      where?: Record<string, unknown>;
     }) => Promise<Array<Record<string, unknown>>>;
+    findUnique?: (args: {
+      where: { id: string };
+      select: { createdAt: true };
+    }) => Promise<{ createdAt: Date } | null>;
   };
 }
 
@@ -93,19 +120,92 @@ export async function getRecentActivity(
 
   // HIPAA 164.312(e)(2)(ii) minimum-necessary: email is NOT fetched
   // here. Admins can resolve userId → email via /users when needed.
-  return rows.map((row) => {
-    const user = row.user as { name: string | null } | null;
-    const name = user?.name ?? null;
-    const userName = name && name.length > 0 ? name : null;
-    return {
-      id: row.id as string,
-      createdAt: row.createdAt as Date,
-      action: row.action as AuditAction,
-      userName,
-      targetType: row.targetType as string,
-      targetId: row.targetId as string,
-    };
+  return rows.map(toActivityEntry);
+}
+
+function toActivityEntry(row: Record<string, unknown>): ActivityEntry {
+  const user = row.user as { name: string | null } | null;
+  const name = user?.name ?? null;
+  const userName = name && name.length > 0 ? name : null;
+  return {
+    id: row.id as string,
+    createdAt: row.createdAt as Date,
+    action: row.action as AuditAction,
+    userName,
+    targetType: row.targetType as string,
+    targetId: row.targetId as string,
+  };
+}
+
+// Cursor-based "Load more" pagination. Tie-stable on (createdAt, id):
+// when two rows share createdAt, id (a sortable cuid/uuid in our schema)
+// breaks the tie deterministically so the next page never duplicates or
+// skips entries during steady-state writes. A missing cursor row yields
+// an empty page + nextCursor=null — safer than throwing for a UI that
+// might race a soft-delete.
+export async function getRecentActivityPage(
+  prisma: ActivityFeedPrisma,
+  opts: { cursor?: string | null; limit?: number } = {},
+): Promise<ActivityFeedPage> {
+  const limit = clampLimit(
+    opts.limit ?? ACTIVITY_FEED_LIMIT,
+    1,
+    ACTIVITY_FEED_PAGE_LIMIT_MAX,
+  );
+  const cursor = opts.cursor ?? null;
+
+  let where: Record<string, unknown> | undefined;
+  if (cursor) {
+    if (!prisma.auditLog.findUnique) {
+      // No findUnique on the stub — treat as no-cursor request rather
+      // than crash. Production prisma always supplies findUnique.
+      where = undefined;
+    } else {
+      const head = await prisma.auditLog.findUnique({
+        where: { id: cursor },
+        select: { createdAt: true },
+      });
+      if (!head) {
+        return { entries: [], nextCursor: null };
+      }
+      where = {
+        OR: [
+          { createdAt: { lt: head.createdAt } },
+          { createdAt: head.createdAt, id: { lt: cursor } },
+        ],
+      };
+    }
+  }
+
+  // Fetch limit+1 to detect whether another page exists without a
+  // separate count query.
+  const rows = await prisma.auditLog.findMany({
+    take: limit + 1,
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: {
+      id: true,
+      createdAt: true,
+      action: true,
+      targetType: true,
+      targetId: true,
+      user: { select: { name: true } },
+    },
+    ...(where ? { where } : {}),
   });
+
+  const hasMore = rows.length > limit;
+  const sliced = hasMore ? rows.slice(0, limit) : rows;
+  const entries = sliced.map(toActivityEntry);
+  const last = entries[entries.length - 1];
+  return {
+    entries,
+    nextCursor: hasMore && last ? last.id : null,
+  };
+}
+
+function clampLimit(value: number, min: number, max: number): number {
+  const n = Math.floor(Number(value) || min);
+  return Math.max(min, Math.min(max, n));
 }
 
 // Structural witness for the caller — Prisma client or a stub. Method
@@ -134,6 +234,7 @@ const TONE_MAP: Record<AuditAction, BadgeTone> = {
   POLICY_CREATE: "info",
   LINK_GENERATE: "info",
   LINK_ACCESS: "info",
+  LINK_SHARE_INFO_VIEW: "info",
   USER_INVITE: "info",
   DOCUMENT_SOFT_DELETE: "warning",
   POLICY_UPDATE: "warning",

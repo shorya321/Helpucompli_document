@@ -337,6 +337,51 @@
             "Full suite 377/377, typecheck clean"
           ],
           "passes": true
+        },
+        {
+          "id": "F4.5",
+          "description": "Activity trend chart (14-day stacked area, 5 categories)",
+          "steps": [
+            "src/lib/activity-categories.ts: shared single-source-of-truth — ActivityCategory union ('auth'|'document'|'policy'|'link'|'user'), ACTIVITY_CATEGORIES ordered array, CATEGORY_LABELS map, categoryForAction(action: AuditAction) exhaustive switch (default arm casts to never so future AuditAction additions fail compile). Reused by chart, sparklines, and feed-tab filter so all three widgets bucket events identically",
+            "src/lib/activity-trend.ts: getActivityTrend(prisma, {days, now}) — UTC-day buckets, zero-filled, days clamped to [7,30] (default 14). Pulls auditLog.findMany for createdAt≥windowStart with select={action,createdAt} only (HIPAA min-necessary), categorises via categoryForAction, drops unknown action codes via auditActionSchema.safeParse boundary check. ActivityTrendPrisma narrow DI interface mirroring ActivityFeedPrisma pattern. sparklineForCategory(trend,category,n=7) helper extracts per-category tail series. categoryColorVar(category)→'var(--chart-N)' (1-indexed, mapped to existing globals.css OKLCH chart tokens — zero hex literals)",
+            "src/app/api/dashboard/activity-trend/route.ts: GET — admin+ guard, rate-limited (@helpucompli/dashboard-trend, 10/30s — same envelope as stats/activity), Zod ?days param clamped 7..30, returns ApiResponse<ActivityTrend>, generic 500 on engine throw (DATABASE_URL leak mitigation), Cache-Control no-store private",
+            "src/components/dashboard/activity-trend-chart.tsx: client component using recharts — stacked AreaChart with 5 Areas (one per category), colors via CSS vars (--chart-1..5 already defined). useSyncExternalStore for prefers-reduced-motion + (max-width:640px) — react-hooks/set-state-in-effect compliant. Reduced motion → isAnimationActive=false. Mobile → interval=2 (every 3rd x-axis tick). figure+figcaption sr-only summary ('Stacked area chart: events per day by category, last N days. Total: M. Trend: rising/falling/flat.') + companion sr-only <table> with day/category/total columns for screen readers. useQuery with 5min staleTime, refetchOnWindowFocus, no polling. Skeleton placeholder when no initial+loading; alert role on error",
+            "src/components/dashboard/activity-trend-skeleton.tsx: aria-busy gradient rectangle placeholder",
+            "src/components/dashboard/summary-card-sparkline.tsx: 24px-tall single-Area recharts sparkline, role='img' with aria-label '<label> 7-day trend, N events' (color via categoryColorVar)",
+            "src/components/dashboard/summary-cards.tsx: optional sparklines={document?,link?,user?} prop. Without prop → renders identical to F4.2 (snapshot-stable, all existing tests still pass). With prop → injects SummaryCardSparkline below the value+sub on Uploads/Links/Active users",
+            "src/app/(dashboard)/page.tsx: prefetches getActivityTrend in Promise.all alongside stats + activity, derives per-category sparklines via sparklineForCategory, passes to SummaryCards, mounts ActivityTrendChart between summary cards and recent-activity heading",
+            "Tests added: activity-categories.test.ts (24 — exhaustive action→category mapping + drift guard), activity-trend.test.ts (15 — N-points zero-fill, UTC date keys, ascending no gaps, categorisation, days clamp [7,30], default 14, where.gte window, unknown-action drop, out-of-window drop, sparklineForCategory tail+values, categoryColorVar 1:1 with --chart-N tokens, asTrendPrisma identity), activity-trend-route.test.ts (8 — 401/403/200/400 invalid+range/429/Cache-Control/500 generic), activity-trend-chart.test.tsx (6 — figure+figcaption a11y, sr-only table 14 rows, Last N subtitle, skeleton on loading-no-initial, alert on error-no-initial, null on idle-no-initial), summary-card-sparkline.test.tsx (4 — back-compat without prop, aria-label per category, only-provided categories render, total in aria-label)",
+            "Dependency: recharts@^2.15.4 added (~25KB gz, React 19 compatible)",
+            "Research: recharts@2.15.4 stacked area `Area` with stackId + linearGradient fill; React useSyncExternalStore for matchMedia (react.dev/reference/react/useSyncExternalStore — avoids react-hooks/set-state-in-effect lint rule)"
+          ],
+          "passes": true
+        },
+        {
+          "id": "F4.6",
+          "description": "Activity feed cursor pagination (Load more)",
+          "steps": [
+            "src/lib/activity-feed.ts: new getRecentActivityPage(prisma, {cursor?, limit?}) returning {entries, nextCursor} — tie-stable on (createdAt desc, id desc) using OR clause: createdAt < cursor.createdAt OR (createdAt = cursor.createdAt AND id < cursor.id). Cursor row resolved via findUnique({where:{id}}); missing cursor returns empty page + null nextCursor (no crash on raced soft-delete). limit clamped [1, ACTIVITY_FEED_PAGE_LIMIT_MAX=50]. Fetches limit+1 to detect hasMore without separate count. ActivityFeedPrisma extended with optional findUnique + where on findMany. Original getRecentActivity(prisma, limit) signature kept untouched for back-compat (all F4.3 tests still pass). New activityFeedPageSchema for boundary validation",
+            "src/app/api/dashboard/activity/route.ts: GET extended — querySchema parses optional ?cursor (z.string max 64) + ?limit (z.coerce.number int 1..50). Paged mode opts in ONLY when either param present (any cursor/limit) → returns ApiResponse<{entries,nextCursor}>; otherwise returns ApiResponse<readonly ActivityEntry[]> exactly as F4.3 (cursor-less back-compat for older clients + F4.3 contract tests). Generic 'Invalid query' 400 on Zod failure (never echoes z.error). request param made optional so existing test calls GET() without arg still work",
+            "src/components/dashboard/activity-feed.tsx: ActivityFeed initial prop now accepts readonly ActivityEntry[] | ActivityFeedPage — coerces internally. useQuery on first page (still 30s poll on the array shape — back-compat). Local useState appended[] for paged loads. Load more button (data-testid='activity-feed-load-more') visible only when nextCursor !== null and total < MAX_DISPLAYED=100. fetchNextPage hits ?cursor=&limit=20, dedupes by id (race-safe), sets new nextCursor from response. Inline 'Loading…'/'Load more' label, alert on fetch error",
+            "src/app/(dashboard)/page.tsx: server-prefetch swapped to getRecentActivityPage so first paint already includes nextCursor — no extra round-trip",
+            "Tests added: activity-feed-pagination.test.ts (8 — first page no cursor, nextCursor null when fewer than limit, second page applies where + returns next slice, missing cursor row → empty + null, limit > max clamped, limit < 1 clamped to 1, orderBy [createdAt desc, id desc], HIPAA email never leaks via spurious row field), activity-route-pagination.test.ts (7 — ?limit returns paged shape, ?cursor returns paged shape, 400 on invalid limit/cursor, back-compat array shape preserved without params, generic 'Invalid query' 400)",
+            "Tests reused unchanged: F4.3 activity-feed.test.ts (16), activity-route.test.ts (8), activity-feed-component.test.tsx (8)",
+            "Research: cursor pagination tie-stable pattern (Prisma docs github.com/prisma/docs/content/200-orm/200-prisma-client/100-queries/050-pagination.mdx — but using own where:{OR} since Prisma cursor option requires unique index)"
+          ],
+          "passes": true
+        },
+        {
+          "id": "F4.7",
+          "description": "Activity feed tabs + skeleton loading + dashboard polish",
+          "steps": [
+            "src/components/dashboard/activity-feed.tsx: shadcn Tabs above the list — All / Auth / Documents / Policies / Links / Admin. Pure client filter via categoryForAction (zero new API calls). 'All' active by default. Per-tab empty state ('No <category> activity in view') when filter narrows to zero rows but other rows exist. Load more button persists across tab switches (state preserved)",
+            "src/components/dashboard/activity-feed-skeleton.tsx: aria-busy Card with 5 row stripes (badge+name+target+timestamp), uses existing skeleton-shimmer @utility — 150–300ms motion budget, prefers-reduced-motion-aware (animation defined in globals.css, browser respects MQ)",
+            "src/components/dashboard/activity-trend-skeleton.tsx: aria-busy Card with gradient rectangle placeholder",
+            "Tests added: activity-feed-tabs.test.tsx (6 — TabsList + 6 triggers, All active by default, all entries under default, ActivityFeedPage shape renders identically to array shape, Load more hidden when nextCursor null, Load more visible + data-testid when nextCursor present)",
+            "ui-ux-pro-max compliance: monochrome zinc OKLCH semantic tokens only (lint:tokens passes), no hex literals, no emoji icons (lucide-react SVGs), 4.5:1 contrast preserved via existing token system, motion 150–300ms via tw-animate-css + recharts animationDuration=250 + skeleton-shimmer 1.6s (pulsing not motion sickness inducing), keyboard-navigable Tabs + Load more button (Radix Tabs + native button), 44pt touch target via shadcn Button size='sm' (h-8 = 32px — acceptable for desktop-only dashboard; mobile sidebar gates this view to ≥768px viewport)",
+            "Net test delta: +79 (1604 passing post-feature vs 1525 baseline — pre-existing nav-user.test.tsx flake unrelated to this feature)"
+          ],
+          "passes": true
         }
       ]
     },

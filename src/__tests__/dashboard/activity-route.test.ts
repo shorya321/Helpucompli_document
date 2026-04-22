@@ -138,7 +138,7 @@ describe("GET /api/dashboard/activity", () => {
         "https://docs.helpucompli.com/role": "admin",
       },
     });
-    // targetId above 128 chars — must be rejected at the boundary.
+    // targetId above 1024 chars — must be rejected at the boundary.
     mocks.getRecentActivity.mockResolvedValueOnce([
       {
         id: "x",
@@ -146,7 +146,7 @@ describe("GET /api/dashboard/activity", () => {
         action: "DOCUMENT_UPLOAD",
         userName: "Alice",
         targetType: "document",
-        targetId: "a".repeat(200),
+        targetId: "a".repeat(2000),
       },
     ]);
     const res = await GET();

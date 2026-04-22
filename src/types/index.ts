@@ -21,6 +21,7 @@ export type AuditAction =
   | "LINK_ACCESS"
   | "LINK_DENIED"
   | "LINK_REVOKE"
+  | "LINK_SHARE_INFO_VIEW"
   | "USER_INVITE"
   | "USER_ROLE_CHANGE"
   | "USER_DISABLE"

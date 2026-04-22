@@ -11,9 +11,23 @@ import {
   RECENT_WINDOW_DAYS,
   type DashboardStats,
 } from "@/lib/dashboard-stats";
+import { SummaryCardSparkline } from "./summary-card-sparkline";
+import type { ActivityCategory } from "@/lib/activity-categories";
+
+interface SparklinePoint {
+  readonly date: string;
+  readonly value: number;
+}
+
+export interface SummaryCardSparklines {
+  readonly document?: readonly SparklinePoint[];
+  readonly link?: readonly SparklinePoint[];
+  readonly user?: readonly SparklinePoint[];
+}
 
 interface SummaryCardsProps {
   readonly stats: DashboardStats;
+  readonly sparklines?: SummaryCardSparklines;
 }
 
 interface SummaryCard {
@@ -21,9 +35,16 @@ interface SummaryCard {
   readonly value: number;
   readonly icon: LucideIcon;
   readonly sub?: string;
+  readonly sparkline?: {
+    readonly data: readonly SparklinePoint[];
+    readonly category: ActivityCategory;
+  };
 }
 
-export function SummaryCards({ stats }: SummaryCardsProps) {
+export function SummaryCards({ stats, sparklines }: SummaryCardsProps) {
+  const docSpark = sparklines?.document;
+  const linkSpark = sparklines?.link;
+  const userSpark = sparklines?.user;
   const cards: readonly SummaryCard[] = [
     { label: "Documents", value: stats.totalDocuments, icon: FileText },
     { label: "Buckets", value: stats.totalBuckets, icon: Database },
@@ -32,14 +53,27 @@ export function SummaryCards({ stats }: SummaryCardsProps) {
       value: stats.recentUploads,
       icon: Upload,
       sub: `Last ${RECENT_WINDOW_DAYS} days`,
+      sparkline: docSpark
+        ? { data: docSpark, category: "document" }
+        : undefined,
     },
     {
       label: "Links",
       value: stats.recentLinks,
       icon: Link2,
       sub: `Last ${RECENT_WINDOW_DAYS} days`,
+      sparkline: linkSpark
+        ? { data: linkSpark, category: "link" }
+        : undefined,
     },
-    { label: "Active users", value: stats.activeUsers, icon: Users },
+    {
+      label: "Active users",
+      value: stats.activeUsers,
+      icon: Users,
+      sparkline: userSpark
+        ? { data: userSpark, category: "user" }
+        : undefined,
+    },
   ];
 
   return (
@@ -68,6 +102,13 @@ export function SummaryCards({ stats }: SummaryCardsProps) {
                   <p className="text-muted-foreground mt-1.5 text-xs">
                     {card.sub}
                   </p>
+                ) : null}
+                {card.sparkline ? (
+                  <SummaryCardSparkline
+                    data={card.sparkline.data}
+                    category={card.sparkline.category}
+                    label={card.label}
+                  />
                 ) : null}
               </CardContent>
             </Card>
