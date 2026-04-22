@@ -11,6 +11,11 @@
  */
 
 :root {
+  /*
+   * Spacing rhythm: 4 / 8 / 12 / 16 / 24 / 32 / 48 / 64 px (Tailwind default
+   * 4px grid). Radius ladder: sm (6px) / md (8px) / lg (10px base) / xl (14px)
+   * / 2xl (18px hero). Shadow ladder: xs → sm → md → lg for layered depth.
+   */
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.129 0.042 264.695);
@@ -23,13 +28,7 @@
   --secondary: oklch(0.968 0.007 247.896);
   --secondary-foreground: oklch(0.208 0.042 265.755);
   --muted: oklch(0.968 0.007 247.896);
-  /*
-   * --muted-foreground overridden vs reference
-   * (reference ships oklch(0.554 ...) = medium gray).
-   * User preference: secondary text should be fully visible, not
-   * dull. Light mode uses the same value as --foreground (near-black).
-   */
-  --muted-foreground: oklch(0.129 0.042 264.695);
+  --muted-foreground: oklch(0.554 0.046 257.417);
   --accent: oklch(0.968 0.007 247.896);
   --accent-foreground: oklch(0.208 0.042 265.755);
   --destructive: oklch(0.577 0.245 27.325);
@@ -37,6 +36,13 @@
   --border: oklch(0.929 0.013 255.508);
   --input: oklch(0.929 0.013 255.508);
   --ring: oklch(0.704 0.04 256.788);
+  --shadow-xs: 0 1px 2px 0 oklch(0 0 0 / 0.04);
+  --shadow-sm:
+    0 1px 2px 0 oklch(0 0 0 / 0.05), 0 1px 3px 0 oklch(0 0 0 / 0.04);
+  --shadow-md:
+    0 2px 6px -1px oklch(0 0 0 / 0.06), 0 1px 2px 0 oklch(0 0 0 / 0.04);
+  --shadow-lg:
+    0 8px 24px -4px oklch(0 0 0 / 0.08), 0 2px 6px -2px oklch(0 0 0 / 0.04);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -65,12 +71,7 @@
   --secondary: oklch(0.279 0.041 260.031);
   --secondary-foreground: oklch(0.984 0.003 247.858);
   --muted: oklch(0.279 0.041 260.031);
-  /*
-   * --muted-foreground overridden vs reference (reference ships
-   * oklch(0.704 ...) medium-light gray). User preference: secondary
-   * text fully visible in dark mode — matches --foreground near-white.
-   */
-  --muted-foreground: oklch(0.984 0.003 247.858);
+  --muted-foreground: oklch(0.708 0.04 256.788);
   --accent: oklch(0.279 0.041 260.031);
   --accent-foreground: oklch(0.984 0.003 247.858);
   --destructive: oklch(0.704 0.191 22.216);
@@ -78,6 +79,13 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.551 0.027 264.364);
+  --shadow-xs: 0 1px 2px 0 oklch(0 0 0 / 0.35);
+  --shadow-sm:
+    0 1px 2px 0 oklch(0 0 0 / 0.4), 0 1px 3px 0 oklch(0 0 0 / 0.35);
+  --shadow-md:
+    0 2px 6px -1px oklch(0 0 0 / 0.45), 0 1px 2px 0 oklch(0 0 0 / 0.35);
+  --shadow-lg:
+    0 8px 24px -4px oklch(0 0 0 / 0.5), 0 2px 6px -2px oklch(0 0 0 / 0.35);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -93,6 +101,11 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -223,4 +236,24 @@
   to {
     height: 0;
   }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@utility skeleton-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    var(--muted) 0%,
+    color-mix(in oklch, var(--muted) 60%, var(--background)) 50%,
+    var(--muted) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
 }

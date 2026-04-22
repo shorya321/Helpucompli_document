@@ -42,27 +42,26 @@ export function Topbar({ user, role }: TopbarProps) {
   return (
     <header
       className={cn(
-        "header-fixed peer/header z-50 h-16 w-[inherit] sticky top-0",
-        isElevated ? "shadow" : "shadow-none",
+        "header-fixed peer/header z-50 h-16 w-[inherit] sticky top-0 border-b border-border/60 bg-background/75 backdrop-blur-md transition-shadow duration-200 ease-out",
+        isElevated ? "shadow-sm" : "shadow-none",
       )}
     >
-      <div
-        className={cn(
-          "relative flex h-full items-center gap-3 p-4 sm:gap-4",
-          isElevated &&
-            "after:absolute after:inset-0 after:-z-10 after:bg-background/20 after:backdrop-blur-lg",
-        )}
-      >
-        <SidebarTrigger variant="outline" className="max-md:scale-125" />
-        <Separator orientation="vertical" className="h-6" />
+      <div className="relative flex h-full items-center gap-2 px-4 sm:gap-3 sm:px-6">
+        <SidebarTrigger variant="ghost" className="max-md:scale-125" />
+        <Separator
+          orientation="vertical"
+          className="h-5 data-[orientation=vertical]:h-5"
+        />
 
-        <div className="me-auto max-w-sm flex-1">
+        <div className="me-auto w-full max-w-md flex-1">
           <SearchTrigger />
         </div>
 
-        <ThemeSwitch />
-        <ConfigDrawer />
-        <ProfileDropdown user={user} role={role} />
+        <div className="flex items-center gap-1">
+          <ThemeSwitch />
+          <ConfigDrawer />
+          <ProfileDropdown user={user} role={role} />
+        </div>
       </div>
     </header>
   );
