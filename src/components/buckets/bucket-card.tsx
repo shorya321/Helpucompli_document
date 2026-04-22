@@ -27,27 +27,27 @@ export function BucketCard({ bucket }: BucketCardProps) {
   return (
     <Link
       href={`/buckets/${bucket.id}`}
-      className="block no-underline"
+      className="group block no-underline focus-visible:outline-none"
     >
-      <Card className="hover:bg-accent/30 h-full transition-colors">
-        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-3">
-          <CardTitle className="break-all text-base font-semibold">
+      <Card className="h-full gap-4 transition-all hover:-translate-y-px hover:border-ring/40 hover:shadow-md">
+        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-0">
+          <CardTitle className="break-all text-base font-semibold leading-tight group-hover:text-foreground">
             {bucket.name}
           </CardTitle>
           <Badge
             variant={bucket.isActive ? "secondary" : "outline"}
-            className="shrink-0 text-[0.6rem] uppercase tracking-wide"
+            className="shrink-0 text-[10px] uppercase tracking-wide"
           >
             {bucket.isActive ? "Active" : "Inactive"}
           </Badge>
         </CardHeader>
         <CardContent>
           {bucket.description ? (
-            <p className="text-muted-foreground mb-4 text-sm">
+            <p className="text-muted-foreground mb-4 text-sm leading-relaxed line-clamp-2">
               {bucket.description}
             </p>
           ) : null}
-          <dl className="grid grid-cols-3 gap-3">
+          <dl className="grid grid-cols-3 gap-3 border-t border-border/60 pt-4">
             <Metric label="Region" value={bucket.region} />
             <Metric label="Documents" value={String(bucket.documentCount)} />
             <Metric label="Storage" value={formatStorage(bucket.storageBytes)} />
@@ -66,10 +66,10 @@ interface MetricProps {
 function Metric({ label, value }: MetricProps) {
   return (
     <div>
-      <dt className="text-muted-foreground m-0 text-[0.65rem] font-semibold uppercase tracking-wider">
+      <dt className="text-muted-foreground m-0 text-[10px] font-semibold uppercase tracking-wider">
         {label}
       </dt>
-      <dd className="text-foreground mt-0.5 break-words text-sm font-medium tabular-nums">
+      <dd className="text-foreground mt-1 break-words font-mono text-sm font-medium tabular-nums">
         {value}
       </dd>
     </div>

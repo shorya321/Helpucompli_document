@@ -1,3 +1,5 @@
+import { Database, Plus } from "lucide-react";
+
 import { auth0 } from "@/lib/auth0";
 import { resolveRole } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
@@ -118,32 +120,40 @@ function BucketsView({ role, buckets, options, loadError }: BucketsViewProps) {
   const status = options.filters?.status ?? "active";
 
   return (
-    <section className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-foreground m-0 text-2xl font-bold tracking-tight">
+    <section className="flex flex-col gap-8">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-col gap-1.5">
+          <h1 className="text-foreground m-0 text-3xl font-semibold tracking-tight">
             Buckets
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-muted-foreground text-sm">
             {role === "viewer"
               ? "Buckets you have access to."
               : "All managed document buckets."}
           </p>
         </div>
         {canCreate ? (
-          <Button asChild>
-            <a href="/buckets?new=1">Create bucket</a>
+          <Button asChild size="sm">
+            <a href="/buckets?new=1">
+              <Plus aria-hidden="true" />
+              Create bucket
+            </a>
           </Button>
         ) : null}
       </header>
 
-      <Card className="p-4">
+      <Card className="gap-0 p-5">
         <form
           method="GET"
           className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] items-end gap-3"
         >
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="sort">Sort</Label>
+            <Label
+              htmlFor="sort"
+              className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider"
+            >
+              Sort
+            </Label>
             <select
               id="sort"
               name="sort"
@@ -156,7 +166,12 @@ function BucketsView({ role, buckets, options, loadError }: BucketsViewProps) {
             </select>
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="dir">Direction</Label>
+            <Label
+              htmlFor="dir"
+              className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider"
+            >
+              Direction
+            </Label>
             <select
               id="dir"
               name="dir"
@@ -168,7 +183,12 @@ function BucketsView({ role, buckets, options, loadError }: BucketsViewProps) {
             </select>
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="region">Region</Label>
+            <Label
+              htmlFor="region"
+              className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider"
+            >
+              Region
+            </Label>
             <Input
               id="region"
               name="region"
@@ -178,7 +198,12 @@ function BucketsView({ role, buckets, options, loadError }: BucketsViewProps) {
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="status">Status</Label>
+            <Label
+              htmlFor="status"
+              className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider"
+            >
+              Status
+            </Label>
             <select
               id="status"
               name="status"
@@ -197,7 +222,7 @@ function BucketsView({ role, buckets, options, loadError }: BucketsViewProps) {
       </Card>
 
       {loadError ? (
-        <p role="alert" className="text-destructive">
+        <p role="alert" className="text-destructive text-sm">
           Unable to load buckets. Please try again.
         </p>
       ) : buckets.length === 0 ? (
@@ -211,7 +236,7 @@ function BucketsView({ role, buckets, options, loadError }: BucketsViewProps) {
       ) : (
         <ul
           role="list"
-          className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(18rem,1fr))] gap-4 p-0"
+          className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(18rem,1fr))] gap-4 p-0 lg:gap-5"
         >
           {buckets.map((b) => (
             <li key={b.id}>
@@ -226,8 +251,11 @@ function BucketsView({ role, buckets, options, loadError }: BucketsViewProps) {
 
 function EmptyState({ message }: { readonly message: string }) {
   return (
-    <div className="border-border bg-card text-muted-foreground rounded-lg border border-dashed p-8 text-center">
-      {message}
+    <div className="border-border bg-card text-muted-foreground flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-12 text-center">
+      <div className="bg-muted text-muted-foreground flex size-12 items-center justify-center rounded-full">
+        <Database aria-hidden="true" className="size-5" />
+      </div>
+      <p className="text-sm">{message}</p>
     </div>
   );
 }
