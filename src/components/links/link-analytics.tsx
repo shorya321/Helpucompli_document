@@ -28,27 +28,26 @@ export function LinkAnalyticsView({ stats }: LinkAnalyticsProps) {
   ];
 
   return (
-    <section className="mb-6 flex flex-col gap-4">
+    <section className="flex flex-col gap-5">
       <ul
         role="list"
-        className="m-0 grid list-none grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3 p-0"
+        className="m-0 grid list-none grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-4 p-0 md:gap-5"
       >
         {cards.map((c) => {
           const Icon = c.icon;
           return (
             <li key={c.label}>
-              <Card className="h-full gap-2 py-5">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
+              <Card className="group h-full gap-3 py-5 hover:shadow-md">
+                <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-0">
+                  <CardTitle className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider">
                     {c.label}
                   </CardTitle>
-                  <Icon
-                    aria-hidden="true"
-                    className="text-muted-foreground h-4 w-4"
-                  />
+                  <span className="bg-muted text-muted-foreground flex size-8 items-center justify-center rounded-md transition-colors group-hover:bg-accent group-hover:text-accent-foreground">
+                    <Icon aria-hidden="true" className="size-4" />
+                  </span>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-foreground text-2xl font-bold tabular-nums">
+                  <div className="text-foreground font-mono text-3xl font-semibold tracking-tight tabular-nums">
                     {c.value}
                   </div>
                 </CardContent>
@@ -61,21 +60,19 @@ export function LinkAnalyticsView({ stats }: LinkAnalyticsProps) {
       {stats.topDocuments.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
-            <h3 className="text-muted-foreground m-0 text-xs font-semibold uppercase tracking-wider">
+            <h3 className="text-muted-foreground m-0 text-[11px] font-semibold uppercase tracking-wider">
               Most-shared documents
             </h3>
           </CardHeader>
           <CardContent>
-            <ol className="m-0 flex list-none flex-col gap-1 p-0">
+            <ol className="m-0 flex list-none flex-col divide-y divide-border/60 p-0">
               {stats.topDocuments.map((d) => (
                 <li
                   key={d.documentId}
-                  className="flex justify-between text-sm"
+                  className="flex items-center justify-between gap-3 py-2 text-sm"
                 >
-                  <span className="text-foreground">
-                    {d.filename}
-                  </span>
-                  <span className="text-muted-foreground tabular-nums">
+                  <span className="text-foreground truncate">{d.filename}</span>
+                  <span className="text-muted-foreground whitespace-nowrap font-mono text-xs tabular-nums">
                     {d.linkCount} link{d.linkCount === 1 ? "" : "s"}
                   </span>
                 </li>

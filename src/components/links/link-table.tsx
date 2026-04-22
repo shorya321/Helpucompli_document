@@ -57,7 +57,7 @@ function StatusBadge({ status }: { readonly status: LinkStatus }) {
     return (
       <Badge
         variant="secondary"
-        className="text-[0.65rem] uppercase tracking-wide"
+        className="font-mono text-[10px] uppercase tracking-wide"
       >
         active
       </Badge>
@@ -67,7 +67,7 @@ function StatusBadge({ status }: { readonly status: LinkStatus }) {
     return (
       <Badge
         variant="destructive"
-        className="text-[0.65rem] uppercase tracking-wide"
+        className="font-mono text-[10px] uppercase tracking-wide"
       >
         revoked
       </Badge>
@@ -76,7 +76,7 @@ function StatusBadge({ status }: { readonly status: LinkStatus }) {
   return (
     <Badge
       variant="outline"
-      className="text-muted-foreground text-[0.65rem] uppercase tracking-wide"
+      className="text-muted-foreground font-mono text-[10px] uppercase tracking-wide"
     >
       expired
     </Badge>

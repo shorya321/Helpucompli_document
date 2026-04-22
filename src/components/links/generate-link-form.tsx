@@ -164,9 +164,14 @@ export function GenerateLinkForm({
         <CardTitle>Generate share link</CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={onSubmit} className="flex flex-col gap-4">
+        <form onSubmit={onSubmit} className="flex flex-col gap-5">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="gl-document">Document</Label>
+            <Label
+              htmlFor="gl-document"
+              className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider"
+            >
+              Document
+            </Label>
             <select
               id="gl-document"
               value={documentId}
@@ -185,7 +190,12 @@ export function GenerateLinkForm({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="gl-policy">Policy (optional)</Label>
+            <Label
+              htmlFor="gl-policy"
+              className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider"
+            >
+              Policy (optional)
+            </Label>
             <select
               id="gl-policy"
               value={policyId}
@@ -209,7 +219,12 @@ export function GenerateLinkForm({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="gl-ttl">TTL</Label>
+            <Label
+              htmlFor="gl-ttl"
+              className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider"
+            >
+              TTL
+            </Label>
             <select
               id="gl-ttl"
               value={ttl}
@@ -244,9 +259,12 @@ export function GenerateLinkForm({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="gl-max">
+            <Label
+              htmlFor="gl-max"
+              className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider"
+            >
               Max downloads{" "}
-              <span className="text-muted-foreground font-normal">
+              <span className="text-muted-foreground font-normal normal-case tracking-normal">
                 (optional, blank = unlimited within policy cap)
               </span>
             </Label>
