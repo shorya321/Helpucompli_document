@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -68,6 +68,17 @@ interface CreateResp {
   readonly maxDownloads: number | null;
 }
 
+interface EffectivePolicyPreview {
+  readonly source: "object" | "prefix" | "bucket" | "default" | "none";
+  readonly policyId: string | null;
+  readonly linkTtlSeconds: number;
+  readonly maxDownloads: number | null;
+  readonly requireAuth: boolean;
+  readonly allowedDomains: readonly string[];
+  readonly allowedIpRanges: readonly string[];
+}
+
+
 export function GenerateLinkForm({
   documents,
   policies,
@@ -81,6 +92,9 @@ export function GenerateLinkForm({
       : "",
   );
   const [policyId, setPolicyId] = useState("");
+  const [effectivePolicy, setEffectivePolicy] =
+    useState<EffectivePolicyPreview | null>(null);
+  const [effectiveLoading, setEffectiveLoading] = useState(false);
   // "never" sentinel = superadmin-only. Stored in the same state as the
   // finite presets so the TTL <select> is a single control, not a pair
   // of widgets. Submit converts "never" → { ttlSecondsOverride: null,
@@ -97,6 +111,55 @@ export function GenerateLinkForm({
     () => (result ? buildEmbedCode(result.shareableUrl) : ""),
     [result],
   );
+
+  // Fetch effective policy whenever the document changes. Aborts any
+  // in-flight request so a fast dropdown change does not flash stale
+  // banner content. Errors are swallowed — the preview is advisory and
+  // must never block link creation. When no document is selected we
+  // skip the fetch entirely; the document <select> onChange clears
+  // `effectivePolicy` before the effect re-runs, so there is no stale
+  // banner risk here.
+  useEffect(() => {
+    if (documentId === "") return;
+    const ctl = new AbortController();
+    let active = true;
+    // Note: loading flag is set synchronously in the document <select>
+    // onChange handler (not here) so this effect does not call setState
+    // outside an async callback, matching the project's ESLint
+    // `react-hooks/set-state-in-effect` guard.
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/policies/effective?documentId=${encodeURIComponent(documentId)}`,
+          { signal: ctl.signal, cache: "no-store" },
+        );
+        if (!active) return;
+        if (!res.ok) {
+          setEffectivePolicy(null);
+          return;
+        }
+        const body = (await res.json()) as ApiResponse<EffectivePolicyPreview>;
+        if (!active) return;
+        if (body.data) setEffectivePolicy(body.data);
+        else setEffectivePolicy(null);
+      } catch {
+        if (active && !ctl.signal.aborted) setEffectivePolicy(null);
+      } finally {
+        if (active) setEffectiveLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+      ctl.abort();
+    };
+  }, [documentId]);
+
+  const selectedPolicyName = useMemo(() => {
+    if (!effectivePolicy?.policyId) return null;
+    return (
+      policies.find((p) => p.id === effectivePolicy.policyId)?.name ?? null
+    );
+  }, [effectivePolicy, policies]);
 
   const isValid = documentId !== "";
 
@@ -176,7 +239,15 @@ export function GenerateLinkForm({
               id="gl-document"
               value={documentId}
               required
-              onChange={(e) => setDocumentId(e.target.value)}
+              onChange={(e) => {
+                setDocumentId(e.target.value);
+                // Clear stale banner before the effect re-fetches.
+                // Skipping this would leak a previous doc's inherited
+                // policy into the view for the newly-selected doc until
+                // the fetch resolves.
+                setEffectivePolicy(null);
+                setEffectiveLoading(e.target.value !== "");
+              }}
               disabled={submitting}
               className={nativeSelectClass}
             >
@@ -203,18 +274,33 @@ export function GenerateLinkForm({
               disabled={submitting}
               className={nativeSelectClass}
             >
-              <option value="">No policy (default settings)</option>
+              <option value="">Use inherited policy</option>
               {policies.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>
               ))}
             </select>
-            {policyId === "" && (
-              <span className="border-border bg-muted text-muted-foreground rounded-md border px-3 py-2 text-xs">
-                ⚠ Anonymous unrestricted share — anyone with the URL can
-                download until expiry or revoke.
-              </span>
+            <span className="text-muted-foreground text-xs">
+              Bucket and folder policies still apply when no override is
+              selected.
+            </span>
+            {documentId !== "" && (
+              <EffectivePolicyBanner
+                effective={effectivePolicy}
+                loading={effectiveLoading}
+                override={
+                  policyId === ""
+                    ? null
+                    : {
+                        id: policyId,
+                        name:
+                          policies.find((p) => p.id === policyId)?.name ??
+                          "Selected policy",
+                      }
+                }
+                inheritedName={selectedPolicyName}
+              />
             )}
           </div>
 
@@ -370,5 +456,110 @@ export function GenerateLinkForm({
         </form>
       </CardContent>
     </Card>
+  );
+}
+
+interface EffectivePolicyBannerProps {
+  readonly effective: EffectivePolicyPreview | null;
+  readonly loading: boolean;
+  readonly override: { readonly id: string; readonly name: string } | null;
+  readonly inheritedName: string | null;
+}
+
+// Rendered under the policy select whenever a document is chosen.
+// Shows: (a) the override the creator picked, if any; (b) the policy
+// that would apply if they did not override, with the rule summary.
+// If the creator picked "Use inherited policy" AND the inherited policy
+// would deny anonymous recipients, we render an amber warning so they
+// do not ship a link that 403s on open.
+function EffectivePolicyBanner({
+  effective,
+  loading,
+  override,
+  inheritedName,
+}: EffectivePolicyBannerProps) {
+  if (loading && !effective) {
+    return (
+      <span
+        role="status"
+        aria-live="polite"
+        className="border-border bg-muted text-muted-foreground rounded-md border px-3 py-2 text-xs"
+      >
+        Checking effective policy…
+      </span>
+    );
+  }
+  if (!effective) return null;
+
+  if (override) {
+    return (
+      <span className="border-border bg-muted text-foreground rounded-md border px-3 py-2 text-xs">
+        <span className="font-medium">Override:</span> {override.name} will
+        replace the inherited rules for this link.
+      </span>
+    );
+  }
+
+  const displayName =
+    inheritedName ??
+    (effective.source === "none" || effective.source === "default"
+      ? "Default (anonymous, no restrictions)"
+      : `Policy ${effective.policyId?.slice(0, 8) ?? ""}`);
+
+  const scope =
+    effective.source === "object"
+      ? "from this document"
+      : effective.source === "prefix"
+        ? "from a folder rule"
+        : effective.source === "bucket"
+          ? "from the bucket"
+          : "no inherited policy found";
+
+  const rules: string[] = [];
+  rules.push(
+    effective.requireAuth ? "login required" : "anonymous allowed",
+  );
+  rules.push(`TTL ${Math.round(effective.linkTtlSeconds / 60)}m`);
+  if (effective.maxDownloads !== null) {
+    rules.push(`max ${effective.maxDownloads} downloads`);
+  }
+  if (effective.allowedIpRanges.length > 0) {
+    rules.push(`${effective.allowedIpRanges.length} IP range(s)`);
+  }
+  if (effective.allowedDomains.length > 0) {
+    rules.push(`${effective.allowedDomains.length} referer domain(s)`);
+  }
+
+  // requireAuth with no override = recipient 403 on anonymous open.
+  // Loud banner so the creator does not ship a broken link.
+  if (effective.requireAuth) {
+    return (
+      <span
+        role="alert"
+        className="border-destructive/40 bg-destructive/10 text-foreground rounded-md border px-3 py-2 text-xs"
+      >
+        <span className="font-medium">Inherited: {displayName}</span>{" "}
+        <span className="text-muted-foreground">({scope})</span>
+        <br />
+        <span className="font-medium">
+          ⚠ Recipients must be logged in.
+        </span>{" "}
+        Anonymous opens will return 403. Pick a more permissive policy
+        above if this link is for external users.
+        <br />
+        <span className="text-muted-foreground">Rules: {rules.join(" · ")}</span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="border-border bg-muted text-muted-foreground rounded-md border px-3 py-2 text-xs">
+      <span className="text-foreground font-medium">
+        Inherited: {displayName}
+      </span>{" "}
+      ({scope})
+      <br />
+      Rules: {rules.join(" · ")}
+    </span>
   );
 }
