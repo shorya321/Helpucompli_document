@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
 import { resolveHasRole, resolveRole } from "@/lib/auth-guard";
+import { getConfig } from "@/lib/config";
 import { ensureUser } from "@/lib/ensure-user";
 import { prisma } from "@/lib/prisma";
 import { createRateLimiter } from "@/lib/rate-limit";
@@ -120,7 +121,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
     return json<ShareInfoResponse>({ data: null, error: "Gone" }, 410);
   }
 
-  const origin = new URL(req.url).origin;
+  const origin = getConfig().APP_BASE_URL.replace(/\/+$/, "");
   const shareableUrl = `${origin}/api/links/${link.presignedUrlHash}`;
   const embedCode = buildEmbedCode(shareableUrl);
 

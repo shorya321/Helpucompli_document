@@ -35,6 +35,9 @@ const params = (id: string) => Promise.resolve({ id });
 const ID = "22222222-2222-4222-8222-222222222222";
 const TOKEN = "abc123TokenValueDefghiJklmnoPqrsTuvwxyz0-_";
 const ORIGIN = "https://docs.example.com";
+// shareableUrl derives from APP_BASE_URL (stubbed in vitest.setup.ts),
+// not from the request origin — that was the 0.0.0.0:3000 prod bug.
+const APP_BASE = "http://localhost:3000";
 
 function req(origin = ORIGIN) {
   return new NextRequest(`${origin}/api/links/admin/${ID}/share-info`, {
@@ -178,7 +181,7 @@ describe("GET /api/links/admin/[id]/share-info", () => {
       } | null;
     };
     expect(body.data?.token).toBe(TOKEN);
-    expect(body.data?.shareableUrl).toBe(`${ORIGIN}/api/links/${TOKEN}`);
+    expect(body.data?.shareableUrl).toBe(`${APP_BASE}/api/links/${TOKEN}`);
     expect(body.data?.embedCode).toContain("<iframe");
     expect(body.data?.embedCode).toContain(TOKEN);
     expect(body.data?.expiresAt).toBe(future.toISOString());

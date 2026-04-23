@@ -166,8 +166,11 @@ describe("POST /api/links", () => {
       };
     };
     expect(body.data.token).toBe("abcDEF123_-");
+    // shareableUrl host derives from APP_BASE_URL (stubbed in
+    // vitest.setup.ts), NOT from the request origin — that was the
+    // 0.0.0.0:3000 prod bug.
     expect(body.data.shareableUrl).toBe(
-      "http://docs.helpucompli.com/api/links/abcDEF123_-",
+      "http://localhost:3000/api/links/abcDEF123_-",
     );
     expect(new Date(body.data.expiresAt).getTime()).toBe(expiresAt.getTime());
 

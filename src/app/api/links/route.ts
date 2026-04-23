@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth0";
 import { resolveHasRole, resolveRole } from "@/lib/auth-guard";
+import { getConfig } from "@/lib/config";
 import { prisma } from "@/lib/prisma";
 import { ensureUser } from "@/lib/ensure-user";
 import { createRateLimiter } from "@/lib/rate-limit";
@@ -174,9 +175,10 @@ export async function POST(req: NextRequest) {
       userAgent: extractUserAgent(req),
       callerRole: role,
     });
-    // Build the shareable URL relative to the *request origin* so test
-    // and production hosts both work without a hard-coded domain.
-    const origin = new URL(req.url).origin;
+    // Use validated APP_BASE_URL so the link host matches the public
+    // domain even when the Next.js server binds to 0.0.0.0 behind a
+    // reverse proxy. Strip trailing slash to avoid `//api/links/...`.
+    const origin = getConfig().APP_BASE_URL.replace(/\/+$/, "");
     return json(
       {
         data: {
