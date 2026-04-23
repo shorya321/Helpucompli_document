@@ -73,3 +73,11 @@ prisma/migrations/*.sql.bak
 
 # per-developer session progress log — noisy diffs, not needed in history
 claude-progress.json
+
+# design mockups — static HTML prototypes, not shipped code
+design-mockups/
+
+# scratch / tool-generated / noisy docs
+docs/superpowers/
+docs/design.md
+docs/POST-LAUNCH-OBSERVATIONS.md
