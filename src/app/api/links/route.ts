@@ -177,14 +177,23 @@ export async function POST(req: NextRequest) {
     });
     // Use validated APP_BASE_URL so the link host matches the public
     // domain even when the Next.js server binds to 0.0.0.0 behind a
-    // reverse proxy. Strip trailing slash to avoid `//api/links/...`.
+    // reverse proxy. Strip trailing slash to avoid `//l/...`.
+    //
+    // The canonical shareable URL points at the embeddable HTML viewer
+    // (/l/<token>). The viewer handles browser direct-view, embed
+    // crawlers (OpenGraph unfurl), and iframe rendering with the
+    // policy's allowedDomains wired into CSP frame-ancestors. The
+    // legacy /api/links/<token> route still exists for programmatic
+    // clients that need the raw 302 to a presigned URL; it remains
+    // unchanged in behavior so previously-distributed links keep
+    // working.
     const origin = getConfig().APP_BASE_URL.replace(/\/+$/, "");
     return json(
       {
         data: {
           id: result.id,
           token: result.token,
-          shareableUrl: `${origin}/api/links/${result.token}`,
+          shareableUrl: `${origin}/l/${result.token}`,
           expiresAt:
             result.expiresAt === null ? null : result.expiresAt.toISOString(),
           ttlSeconds: result.ttlSeconds,

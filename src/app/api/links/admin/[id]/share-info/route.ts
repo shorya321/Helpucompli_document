@@ -122,7 +122,12 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
   }
 
   const origin = getConfig().APP_BASE_URL.replace(/\/+$/, "");
-  const shareableUrl = `${origin}/api/links/${link.presignedUrlHash}`;
+  // Canonical shareable URL points at the embeddable HTML viewer so
+  // paste-to-embed flows (Notion / Confluence / WordPress / SharePoint
+  // / generic iframes) work on admin-approved domains. Legacy
+  // /api/links/<token> still serves a 302 for programmatic clients and
+  // already-distributed links — kept unchanged for backward compat.
+  const shareableUrl = `${origin}/l/${link.presignedUrlHash}`;
   const embedCode = buildEmbedCode(shareableUrl);
 
   try {

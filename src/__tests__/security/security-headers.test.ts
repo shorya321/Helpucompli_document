@@ -13,6 +13,7 @@ vi.mock("@/lib/config", () => ({
 import {
   STATIC_SECURITY_HEADERS,
   buildCsp,
+  buildFrameAncestorsDirective,
   generateNonce,
 } from "@/lib/security-headers";
 
@@ -73,6 +74,11 @@ describe("buildCsp", () => {
     expect(buildCsp(nonce, { isDev: false })).toMatch(/frame-ancestors 'none'/);
   });
 
+  it("omits frame-ancestors when omitFrameAncestors=true (link viewer owns its own directive)", () => {
+    const csp = buildCsp(nonce, { isDev: false, omitFrameAncestors: true });
+    expect(csp).not.toContain("frame-ancestors");
+  });
+
   it("sets object-src 'none'", () => {
     expect(buildCsp(nonce, { isDev: false })).toMatch(/object-src 'none'/);
   });
@@ -109,6 +115,56 @@ describe("buildCsp", () => {
 
   it("does not contain newlines (single-line header value)", () => {
     expect(buildCsp(nonce, { isDev: false })).not.toContain("\n");
+  });
+});
+
+describe("buildFrameAncestorsDirective", () => {
+  it("returns frame-ancestors 'none' for empty list (HIPAA-safe default)", () => {
+    expect(buildFrameAncestorsDirective([])).toBe("frame-ancestors 'none'");
+  });
+
+  it("emits https:// prefix for each valid hostname", () => {
+    expect(
+      buildFrameAncestorsDirective(["partner.example.com", "sub.other.io"]),
+    ).toBe(
+      "frame-ancestors https://partner.example.com https://sub.other.io",
+    );
+  });
+
+  it("accepts wildcard labels (*.example.com)", () => {
+    expect(buildFrameAncestorsDirective(["*.example.com"])).toBe(
+      "frame-ancestors https://*.example.com",
+    );
+  });
+
+  it("silently drops scheme-like or path-like entries (no injection)", () => {
+    expect(
+      buildFrameAncestorsDirective([
+        "https://evil.com/../bypass",
+        "javascript:alert(1)",
+        " space in host ",
+      ]),
+    ).toBe("frame-ancestors 'none'");
+  });
+
+  it("skips empty / non-string entries", () => {
+    expect(
+      buildFrameAncestorsDirective([
+        "",
+        "good.example.com",
+        // @ts-expect-error — deliberate runtime sanity check
+        null,
+        "another.example.com",
+      ]),
+    ).toBe(
+      "frame-ancestors https://good.example.com https://another.example.com",
+    );
+  });
+
+  it("lowercases hostnames (CSP source expressions are case-insensitive in host, keep canonical form)", () => {
+    expect(buildFrameAncestorsDirective(["Partner.EXAMPLE.com"])).toBe(
+      "frame-ancestors https://partner.example.com",
+    );
   });
 });
 

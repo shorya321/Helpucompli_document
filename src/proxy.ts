@@ -11,8 +11,26 @@ import {
 // standard web `Request` type, NOT `NextRequest`.
 // Ref: https://github.com/auth0/nextjs-auth0/blob/main/README.md#on-next-js-16
 
-function applyStaticHeaders(headers: Headers): void {
+// The embeddable link viewer at /l/<token> owns its own frame-ancestors
+// CSP (derived from the policy's allowedDomains at request time). For
+// that one path we skip the static `X-Frame-Options: DENY` and omit the
+// middleware CSP's `frame-ancestors 'none'` so the viewer's response
+// headers are authoritative. Every other path keeps the strict default.
+// Token shape must match LINK_TOKEN_RE in src/lib/link-access.ts.
+const LINK_VIEWER_PATH_RE = /^\/l\/[A-Za-z0-9_-]{20,128}\/?$/;
+
+function isLinkViewerPath(pathname: string): boolean {
+  return LINK_VIEWER_PATH_RE.test(pathname);
+}
+
+function applyStaticHeaders(
+  headers: Headers,
+  opts?: { skipFrameOptions?: boolean },
+): void {
   for (const [k, v] of Object.entries(STATIC_SECURITY_HEADERS)) {
+    if (opts?.skipFrameOptions && k.toLowerCase() === "x-frame-options") {
+      continue;
+    }
     headers.set(k, v);
   }
 }
@@ -20,22 +38,27 @@ function applyStaticHeaders(headers: Headers): void {
 export async function proxy(request: Request) {
   const cfg = getConfig();
   const nonce = generateNonce();
+  const pathname = new URL(request.url).pathname;
+  const isLinkViewer = isLinkViewerPath(pathname);
   const csp = buildCsp(nonce, {
     isDev: cfg.NODE_ENV !== "production",
     awsRegion: cfg.AWS_REGION,
     auth0Domain: cfg.AUTH0_DOMAIN,
+    // Viewer response sets its own frame-ancestors (policy-driven) —
+    // omit here to avoid emitting two conflicting directives.
+    omitFrameAncestors: isLinkViewer,
   });
 
   const authRes = await auth0.middleware(request);
-
-  const pathname = new URL(request.url).pathname;
 
   // /auth/* routes are fully owned by the Auth0 SDK — they do not render
   // downstream Next.js pages, so nonce injection is unnecessary. Still
   // attach CSP + static headers to the response.
   if (pathname.startsWith("/auth/")) {
-    authRes.headers.set("Content-Security-Policy", csp);
-    applyStaticHeaders(authRes.headers);
+    if (!isLinkViewer) {
+      authRes.headers.set("Content-Security-Policy", csp);
+    }
+    applyStaticHeaders(authRes.headers, { skipFrameOptions: isLinkViewer });
     return authRes;
   }
 
@@ -65,8 +88,16 @@ export async function proxy(request: Request) {
     response.headers.set(key, value);
   }
 
-  response.headers.set("Content-Security-Policy", csp);
-  applyStaticHeaders(response.headers);
+  // Link viewer owns its own CSP (policy-driven frame-ancestors). Letting
+  // the middleware set a second CSP header would either override the
+  // viewer's directive (`.set` semantics on a shared Headers object) or
+  // force an intersection that never permits framing. Either way the
+  // embed breaks. Skip here and let the /l/<token> handler be sole CSP
+  // author for its responses.
+  if (!isLinkViewer) {
+    response.headers.set("Content-Security-Policy", csp);
+  }
+  applyStaticHeaders(response.headers, { skipFrameOptions: isLinkViewer });
   return response;
 }
 

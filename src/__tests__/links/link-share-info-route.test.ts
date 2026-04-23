@@ -181,7 +181,7 @@ describe("GET /api/links/admin/[id]/share-info", () => {
       } | null;
     };
     expect(body.data?.token).toBe(TOKEN);
-    expect(body.data?.shareableUrl).toBe(`${APP_BASE}/api/links/${TOKEN}`);
+    expect(body.data?.shareableUrl).toBe(`${APP_BASE}/l/${TOKEN}`);
     expect(body.data?.embedCode).toContain("<iframe");
     expect(body.data?.embedCode).toContain(TOKEN);
     expect(body.data?.expiresAt).toBe(future.toISOString());

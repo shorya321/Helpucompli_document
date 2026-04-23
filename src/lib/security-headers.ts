@@ -23,6 +23,12 @@ export interface CspOptions {
   isDev: boolean;
   awsRegion?: string;
   auth0Domain?: string;
+  // When true, omit the `frame-ancestors` directive from the emitted
+  // CSP so a downstream response handler can set its own policy-driven
+  // frame-ancestors value without collision. Used by the embeddable
+  // link viewer (/l/<token>) — every other caller leaves this false so
+  // the strict `'none'` default stands.
+  omitFrameAncestors?: boolean;
 }
 
 /**
@@ -45,7 +51,8 @@ export function generateNonce(): string {
  * in development only. Production React does not.
  */
 export function buildCsp(nonce: string, opts: CspOptions): string {
-  const { isDev, awsRegion = "us-east-1", auth0Domain } = opts;
+  const { isDev, awsRegion = "us-east-1", auth0Domain, omitFrameAncestors } =
+    opts;
   const auth0Origin = auth0Domain ? `https://${auth0Domain}` : "";
   const s3UploadOrigin = `https://*.s3.${awsRegion}.amazonaws.com`;
 
@@ -73,7 +80,7 @@ export function buildCsp(nonce: string, opts: CspOptions): string {
       ...(auth0Origin ? [auth0Origin] : []),
       s3UploadOrigin,
     ],
-    "frame-ancestors": ["'none'"],
+    ...(omitFrameAncestors ? {} : { "frame-ancestors": ["'none'"] }),
     "frame-src": ["'self'", s3UploadOrigin],
     "base-uri": ["'self'"],
     "form-action": ["'self'", ...(auth0Origin ? [auth0Origin] : [])],
@@ -86,4 +93,44 @@ export function buildCsp(nonce: string, opts: CspOptions): string {
       values.length > 0 ? `${name} ${values.join(" ")}` : name,
     )
     .join("; ");
+}
+
+// ---------------------------------------------------------------------------
+// Dynamic frame-ancestors directive — built from an access policy's
+// `allowedDomains`. Used exclusively by the shareable-link viewer at
+// /l/<token> to permit iframe embedding on admin-declared domains.
+//
+// Contract:
+//   - empty list  → "frame-ancestors 'none'" (HIPAA-safe default;
+//                   pasting into an embed field still refuses).
+//   - non-empty   → "frame-ancestors https://<d1> https://<d2> …"
+//   - malformed entries (whitespace, scheme-like strings, empty) are
+//     silently skipped. An all-malformed list falls back to 'none'.
+//
+// Hostnames must match the same loose check used by the policy-engine
+// Referer check: bare host, lowercase, no path, no scheme. Wildcard
+// labels ("*.example.com") are passed through — CSP3 Source Expressions
+// accept them literally.
+// ---------------------------------------------------------------------------
+
+const HOSTNAME_RE = /^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$/;
+const WILDCARD_HOST_RE = /^\*\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
+
+export function buildFrameAncestorsDirective(
+  allowedDomains: readonly string[],
+): string {
+  const sources: string[] = [];
+  for (const raw of allowedDomains) {
+    if (typeof raw !== "string") continue;
+    const host = raw.trim().toLowerCase();
+    if (host.length === 0) continue;
+    if (host.includes("://") || host.includes("/") || host.includes(" ")) {
+      continue;
+    }
+    if (HOSTNAME_RE.test(host) || WILDCARD_HOST_RE.test(host)) {
+      sources.push(`https://${host}`);
+    }
+  }
+  if (sources.length === 0) return "frame-ancestors 'none'";
+  return `frame-ancestors ${sources.join(" ")}`;
 }

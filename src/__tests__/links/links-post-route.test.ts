@@ -169,8 +169,12 @@ describe("POST /api/links", () => {
     // shareableUrl host derives from APP_BASE_URL (stubbed in
     // vitest.setup.ts), NOT from the request origin — that was the
     // 0.0.0.0:3000 prod bug.
+    // shareableUrl now points at the embeddable /l/<token> HTML viewer
+    // — the canonical form that works in browser direct-view, embed
+    // platform unfurls, and iframes. Legacy /api/links/<token> still
+    // serves a 302 for already-distributed links (backward compat).
     expect(body.data.shareableUrl).toBe(
-      "http://localhost:3000/api/links/abcDEF123_-",
+      "http://localhost:3000/l/abcDEF123_-",
     );
     expect(new Date(body.data.expiresAt).getTime()).toBe(expiresAt.getTime());
 

@@ -15,21 +15,39 @@ const nextConfig: NextConfig = {
   // Docs: https://nextjs.org/docs/app/api-reference/next-config-js/output
   output: "standalone",
   async headers() {
+    // Headers shared by every response (including the embeddable link
+    // viewer). HSTS, XCTO, XSSP, Referrer-Policy do not affect framing
+    // and must be applied globally.
+    const commonHeaders = [
+      { key: "X-Content-Type-Options", value: "nosniff" },
+      { key: "X-XSS-Protection", value: "1; mode=block" },
+      // `no-referrer` drops the Origin leak on cross-origin
+      // logout → Auth0 navigation (module 04 sec-review MED-3).
+      { key: "Referrer-Policy", value: "no-referrer" },
+      {
+        key: "Strict-Transport-Security",
+        value: "max-age=63072000; includeSubDomains; preload",
+      },
+    ];
     return [
       {
-        source: "/(.*)",
+        // Every path EXCEPT the shareable-link viewer keeps the strict
+        // `X-Frame-Options: DENY`. The viewer at /l/<token> emits its
+        // own policy-driven CSP `frame-ancestors <allowedDomains>` so
+        // embed platforms can iframe the document on admin-approved
+        // domains only. Empty `allowedDomains` still falls back to
+        // `frame-ancestors 'none'` inside the viewer.
+        source: "/((?!l/).*)",
         headers: [
-          { key: "X-Content-Type-Options", value: "nosniff" },
+          ...commonHeaders,
           { key: "X-Frame-Options", value: "DENY" },
-          { key: "X-XSS-Protection", value: "1; mode=block" },
-          // `no-referrer` drops the Origin leak on cross-origin
-          // logout → Auth0 navigation (module 04 sec-review MED-3).
-          { key: "Referrer-Policy", value: "no-referrer" },
-          {
-            key: "Strict-Transport-Security",
-            value: "max-age=63072000; includeSubDomains; preload",
-          },
         ],
+      },
+      {
+        // Link viewer: same common headers, no X-Frame-Options (CSP
+        // frame-ancestors from the route handler is authoritative).
+        source: "/l/:path*",
+        headers: commonHeaders,
       },
     ];
   },
