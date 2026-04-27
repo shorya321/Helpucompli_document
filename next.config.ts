@@ -59,8 +59,24 @@ const nextConfig: NextConfig = {
         // gated upstream — the only sensitive byte source the viewer
         // can fetch is /l/<hash>/raw, which still runs full auth +
         // policy + audit + rate-limit via resolveAndAuthorizeLink.
+        //
+        // `Access-Control-Allow-Origin: *` is required so the bundled
+        // viewer works inside third-party embeds. WordPress / Notion /
+        // Confluence wrap the embed in `<iframe sandbox>` (no
+        // `allow-same-origin`), which gives the iframe document
+        // `Origin: null`. ES module imports (`<script type="module">`)
+        // always fetch in `cors` mode per the HTML spec, so loading
+        // `pdf.min.mjs` from a null-origin context fails without an
+        // ACAO header. These files are static PDF.js library code —
+        // identical to the bytes pdfjs-dist ships on jsDelivr/unpkg —
+        // and contain no user data, so wildcard CORS is safe. The
+        // sensitive byte source (the document itself) lives at
+        // `/l/<hash>/raw` and keeps its own auth/policy gating.
         source: "/pdfjs/:path*",
-        headers: commonHeaders,
+        headers: [
+          ...commonHeaders,
+          { key: "Access-Control-Allow-Origin", value: "*" },
+        ],
       },
     ];
   },
