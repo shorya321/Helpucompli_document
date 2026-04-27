@@ -224,14 +224,25 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         },
       },
       policy: {
-        select: { requireAuth: true },
+        select: { requireAuth: true, allowedDomains: true },
       },
     },
   });
 
   if (!link) return notFound();
   if (!link.document || link.document.isDeleted) return notFound();
-  if (link.allowPublicEmbed !== true) return notFound();
+  // The link is embeddable when EITHER `allowPublicEmbed=true`
+  // (open to any HTTPS parent) OR the attached policy has a non-
+  // empty `allowedDomains` (domain-restricted embed; the viewer's
+  // CSP `frame-ancestors` narrows the parent hosts to that list).
+  // Without either signal there is no embedding flow to advertise,
+  // so return 404 — same shape as an unknown token, no leakage of
+  // link existence.
+  const hasAllowedDomains =
+    (link.policy?.allowedDomains?.length ?? 0) > 0;
+  if (link.allowPublicEmbed !== true && !hasAllowedDomains) {
+    return notFound();
+  }
 
   const status = computeLinkStatus({
     isRevoked: link.isRevoked,

@@ -111,8 +111,44 @@ describe("GET /api/oembed", () => {
     expect(res.status).toBe(404);
   });
 
-  it("404 when link.allowPublicEmbed is false (default)", async () => {
+  it("404 when allowPublicEmbed=false AND no policy (no embed signal at all)", async () => {
     mocks.findLink.mockResolvedValueOnce(linkRow({ allowPublicEmbed: false }));
+    const res = await GET(req(oembedUrl(SHARE_URL)));
+    expect(res.status).toBe(404);
+  });
+
+  it("404 when allowPublicEmbed=false AND policy.allowedDomains is empty", async () => {
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({
+        allowPublicEmbed: false,
+        policy: { requireAuth: false, allowedDomains: [] },
+      }),
+    );
+    const res = await GET(req(oembedUrl(SHARE_URL)));
+    expect(res.status).toBe(404);
+  });
+
+  it("200 when allowPublicEmbed=false BUT policy.allowedDomains is non-empty (domain-restricted embed)", async () => {
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({
+        allowPublicEmbed: false,
+        policy: { requireAuth: false, allowedDomains: ["embed.test.com"] },
+      }),
+    );
+    const res = await GET(req(oembedUrl(SHARE_URL)));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.html).toMatch(/<iframe /);
+    expect(body.html).toContain(`src="${SHARE_URL}"`);
+  });
+
+  it("404 when allowPublicEmbed=false + allowedDomains non-empty BUT requireAuth=true (auth wins)", async () => {
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({
+        allowPublicEmbed: false,
+        policy: { requireAuth: true, allowedDomains: ["embed.test.com"] },
+      }),
+    );
     const res = await GET(req(oembedUrl(SHARE_URL)));
     expect(res.status).toBe(404);
   });

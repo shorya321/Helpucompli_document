@@ -221,6 +221,39 @@ describe("enforcePolicy", () => {
     ).toMatchObject({ allow: true });
   });
 
+  it("publicEmbedBypass=true + allowedDomains + Referer present and matching allows (browser iframe load from allowed parent)", () => {
+    const policy = { ...openPolicy, allowedDomains: ["embed.test.com"] };
+    expect(
+      enforcePolicy(policy, {
+        ...baseCtx,
+        referer: "https://embed.test.com/post/42",
+        publicEmbedBypass: true,
+      }),
+    ).toMatchObject({ allow: true });
+  });
+
+  it("publicEmbedBypass=true + allowedDomains + Referer present and NOT matching DENIES (defense in depth alongside CSP frame-ancestors)", () => {
+    const policy = { ...openPolicy, allowedDomains: ["embed.test.com"] };
+    expect(
+      enforcePolicy(policy, {
+        ...baseCtx,
+        referer: "https://attacker.example/foo",
+        publicEmbedBypass: true,
+      }),
+    ).toEqual({ allow: false });
+  });
+
+  it("publicEmbedBypass=true + empty allowedDomains + arbitrary Referer allows (no domain restriction to enforce)", () => {
+    const policy = { ...openPolicy, allowedDomains: [] };
+    expect(
+      enforcePolicy(policy, {
+        ...baseCtx,
+        referer: "https://anywhere.example/",
+        publicEmbedBypass: true,
+      }),
+    ).toMatchObject({ allow: true });
+  });
+
   it("publicEmbedBypass=false (default / undefined) preserves the legacy deny — regression guard", () => {
     const policy = { ...openPolicy, allowedDomains: ["example.com"] };
     // Explicit false:

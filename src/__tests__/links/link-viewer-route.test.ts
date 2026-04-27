@@ -277,9 +277,39 @@ describe("GET /l/[hash] — embeddable link viewer", () => {
     expect(body).toContain(encodeURIComponent(`http://localhost:3000/l/${TOKEN}`));
   });
 
-  it("allowPublicEmbed=false (default) → does NOT emit oEmbed discovery tag (regression guard)", async () => {
+  it("allowPublicEmbed=false AND empty allowedDomains → does NOT emit oEmbed discovery tag (regression guard)", async () => {
     mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
     const body = await (await GET(req(), { params: params(TOKEN) })).text();
     expect(body).not.toContain('type="application/json+oembed"');
+  });
+
+  it("allowPublicEmbed=false + policy.allowedDomains non-empty → EMITS oEmbed discovery tag (domain-restricted embed)", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(
+      okResult({
+        link: {
+          id: "link-5",
+          documentId: "d-1",
+          policyId: "p-1",
+          allowPublicEmbed: false,
+        },
+        effective: {
+          source: "object",
+          policyId: "p-1",
+          linkTtlSeconds: 900,
+          maxDownloads: null,
+          requireAuth: false,
+          allowedDomains: ["embed.test.com"],
+          allowedIpRanges: [],
+        },
+      }),
+    );
+    const res = await GET(req(), { params: params(TOKEN) });
+    const body = await res.text();
+    expect(body).toContain('rel="alternate"');
+    expect(body).toContain('type="application/json+oembed"');
+    // Frame-ancestors stays narrow to the listed host (no `https:` widen).
+    const csp = res.headers.get("content-security-policy") ?? "";
+    expect(csp).toContain("frame-ancestors https://embed.test.com");
+    expect(csp).not.toMatch(/frame-ancestors https:(?!\/\/)/);
   });
 });

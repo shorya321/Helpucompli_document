@@ -419,7 +419,7 @@ describe("GET /api/links/[hash]", () => {
     expect(ctx.publicEmbedBypass).toBe(true);
   });
 
-  it("private link does NOT set publicEmbedBypass (legacy enforcement path) — regression guard", async () => {
+  it("private link with NO policy does NOT set publicEmbedBypass (legacy enforcement path) — regression guard", async () => {
     mocks.findLink.mockResolvedValueOnce(linkRow({ allowPublicEmbed: false }));
     mocks.resolvePolicy.mockResolvedValueOnce(defaultEffective);
     mocks.enforcePolicy.mockReturnValueOnce(allow);
@@ -432,5 +432,91 @@ describe("GET /api/links/[hash]", () => {
       publicEmbedBypass?: boolean;
     };
     expect(ctx.publicEmbedBypass).toBe(false);
+  });
+
+  // ---- domain-restricted embed: allowPublicEmbed=false but policy.allowedDomains non-empty ----
+  // The user wants `policy.allowedDomains` alone (without flipping the
+  // public-embed flag) to enable iframe embedding on those exact hosts.
+  // Same render-amplification problem as public-embed: server-side
+  // oEmbed discovery + browser iframe load = ≥2 hits per WP page view,
+  // so counter increment is skipped and `publicEmbedBypass` is set.
+
+  it("domain-restricted link (allowPublicEmbed=false + allowedDomains set) sets publicEmbedBypass=true", async () => {
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({
+        allowPublicEmbed: false,
+        policyId: "p-1",
+        policy: {
+          id: "p-1",
+          linkTtlSeconds: 900,
+          maxDownloads: null,
+          requireAuth: false,
+          allowedDomains: ["embed.test.com"],
+          allowedIpRanges: [],
+        },
+      }),
+    );
+    mocks.enforcePolicy.mockReturnValueOnce(allow);
+    mocks.presignGetUrl.mockResolvedValueOnce("https://s3/x?sig=1");
+    await GET(req(), {
+      params: params("tok_abc_with_long_enough_token_value_xyz"),
+    });
+    const ctx = mocks.enforcePolicy.mock.calls[0]?.[1] as {
+      publicEmbedBypass?: boolean;
+    };
+    expect(ctx.publicEmbedBypass).toBe(true);
+  });
+
+  it("domain-restricted link does NOT increment counter (render amplification guard)", async () => {
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({
+        allowPublicEmbed: false,
+        policyId: "p-1",
+        policy: {
+          id: "p-1",
+          linkTtlSeconds: 900,
+          maxDownloads: 5,
+          requireAuth: false,
+          allowedDomains: ["embed.test.com"],
+          allowedIpRanges: [],
+        },
+        downloadCount: 5,
+      }),
+    );
+    mocks.enforcePolicy.mockReturnValueOnce(allow);
+    mocks.presignGetUrl.mockResolvedValueOnce("https://s3/x?sig=1");
+    const res = await GET(req(), {
+      params: params("tok_abc_with_long_enough_token_value_xyz"),
+    });
+    expect(res.status).toBe(302);
+    expect(mocks.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("private link with policy that has EMPTY allowedDomains does NOT bypass (regression guard)", async () => {
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({
+        allowPublicEmbed: false,
+        policyId: "p-1",
+        policy: {
+          id: "p-1",
+          linkTtlSeconds: 900,
+          maxDownloads: null,
+          requireAuth: false,
+          allowedDomains: [],
+          allowedIpRanges: [],
+        },
+      }),
+    );
+    mocks.enforcePolicy.mockReturnValueOnce(allow);
+    mocks.updateMany.mockResolvedValueOnce({ count: 1 });
+    mocks.presignGetUrl.mockResolvedValueOnce("https://s3/x?sig=1");
+    await GET(req(), {
+      params: params("tok_abc_with_long_enough_token_value_xyz"),
+    });
+    const ctx = mocks.enforcePolicy.mock.calls[0]?.[1] as {
+      publicEmbedBypass?: boolean;
+    };
+    expect(ctx.publicEmbedBypass).toBe(false);
+    expect(mocks.updateMany).toHaveBeenCalledOnce();
   });
 });
