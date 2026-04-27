@@ -31,13 +31,17 @@ const nextConfig: NextConfig = {
     ];
     return [
       {
-        // Every path EXCEPT the shareable-link viewer keeps the strict
-        // `X-Frame-Options: DENY`. The viewer at /l/<token> emits its
-        // own policy-driven CSP `frame-ancestors <allowedDomains>` so
-        // embed platforms can iframe the document on admin-approved
-        // domains only. Empty `allowedDomains` still falls back to
-        // `frame-ancestors 'none'` inside the viewer.
-        source: "/((?!l/).*)",
+        // Every path EXCEPT the shareable-link viewer and the bundled
+        // PDF.js asset directory keeps the strict `X-Frame-Options:
+        // DENY`. The viewer at /l/<token> emits its own policy-driven
+        // CSP `frame-ancestors <allowedDomains>` so embed platforms
+        // can iframe the document on admin-approved domains only.
+        // Empty `allowedDomains` still falls back to `frame-ancestors
+        // 'none'` inside the viewer. /pdfjs/* serves the static PDF.js
+        // canvas viewer that the link viewer iframes for application/pdf
+        // — it must be embeddable as a same-origin sub-resource of the
+        // viewer page.
+        source: "/((?!l/|pdfjs/).*)",
         headers: [
           ...commonHeaders,
           { key: "X-Frame-Options", value: "DENY" },
@@ -47,6 +51,15 @@ const nextConfig: NextConfig = {
         // Link viewer: same common headers, no X-Frame-Options (CSP
         // frame-ancestors from the route handler is authoritative).
         source: "/l/:path*",
+        headers: commonHeaders,
+      },
+      {
+        // PDF.js viewer assets: same common headers, no X-Frame-Options
+        // so the link viewer can iframe /pdfjs/viewer.html. Access is
+        // gated upstream — the only sensitive byte source the viewer
+        // can fetch is /l/<hash>/raw, which still runs full auth +
+        // policy + audit + rate-limit via resolveAndAuthorizeLink.
+        source: "/pdfjs/:path*",
         headers: commonHeaders,
       },
     ];
