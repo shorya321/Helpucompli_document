@@ -211,11 +211,20 @@ export async function resolveAndAuthorizeLink(
     }
   }
 
+  // Public-embed links treat `maxDownloads` as advisory only (each WP
+  // page render produces multiple viewer hits — counting them would
+  // exhaust any finite cap on a handful of legitimate views). Force
+  // the cap to `null` for the status computation so a row with
+  // downloadCount >= maxDownloads is still served. Revoke + expiresAt
+  // are still respected.
+  const isPublicEmbedLink = link.allowPublicEmbed === true;
   const status = computeLinkStatus({
     isRevoked: link.isRevoked as boolean,
     expiresAt: (link.expiresAt as Date | null) ?? null,
     downloadCount: link.downloadCount as number,
-    maxDownloads: (link.maxDownloads as number | null) ?? null,
+    maxDownloads: isPublicEmbedLink
+      ? null
+      : ((link.maxDownloads as number | null) ?? null),
   });
   if (status !== "active" || !link.document || link.document.isDeleted) {
     await writeAudit(
@@ -248,10 +257,16 @@ export async function resolveAndAuthorizeLink(
     linkDefaultPolicy;
 
   const referer = req.headers.get("referer");
+  const isPublicEmbed = isPublicEmbedLink;
   const decision = enforcePolicy(effective, {
     ipAddress,
     referer,
     isAuthenticated: !!session,
+    // When the link is opted into public embedding, the policy
+    // engine's Referer + IP checks would block server-side oEmbed
+    // discovery (no Referer; arbitrary edge IPs). Browser-side CSP
+    // frame-ancestors is the actual parent-host gate on that path.
+    publicEmbedBypass: isPublicEmbed,
   });
 
   if (!decision.allow) {
@@ -295,32 +310,41 @@ export async function resolveAndAuthorizeLink(
     Math.min(desired, remainingSecForClamp, MAX_GET_TTL_SECONDS),
   );
 
-  const cap = link.maxDownloads as number | null;
-  const now = new Date();
-  const where: Record<string, unknown> = {
-    id: link.id,
-    isRevoked: false,
-    OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-  };
-  if (cap !== null) where.downloadCount = { lt: cap };
-  const updated = await prisma.generatedLink.updateMany({
-    where: where as Parameters<
-      typeof prisma.generatedLink.updateMany
-    >[0]["where"],
-    data: { downloadCount: { increment: 1 } },
-  });
-  if (updated.count === 0) {
-    await writeAudit(
-      "LINK_DENIED",
-      { id: link.id, documentId: link.documentId, policyId: link.policyId },
-      {
-        ipAddress,
-        userAgent,
-        userId: dbUserId,
-        reason: "race-lost-or-just-exhausted",
-      },
-    );
-    return { kind: "forbidden" };
+  // Public-embed path skips counter increment + `maxDownloads` check.
+  // Each WP page render produces ≥2 viewer hits (server-side oEmbed
+  // discovery + browser iframe load); leaving the counter active
+  // turns any finite `maxDownloads` into a footgun that exhausts
+  // after a handful of legitimate page views. Public links rely on
+  // `expiresAt` + admin revoke for lifecycle. Audit row below still
+  // fires so admins see embed traffic.
+  if (!isPublicEmbed) {
+    const cap = link.maxDownloads as number | null;
+    const now = new Date();
+    const where: Record<string, unknown> = {
+      id: link.id,
+      isRevoked: false,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    };
+    if (cap !== null) where.downloadCount = { lt: cap };
+    const updated = await prisma.generatedLink.updateMany({
+      where: where as Parameters<
+        typeof prisma.generatedLink.updateMany
+      >[0]["where"],
+      data: { downloadCount: { increment: 1 } },
+    });
+    if (updated.count === 0) {
+      await writeAudit(
+        "LINK_DENIED",
+        { id: link.id, documentId: link.documentId, policyId: link.policyId },
+        {
+          ipAddress,
+          userAgent,
+          userId: dbUserId,
+          reason: "race-lost-or-just-exhausted",
+        },
+      );
+      return { kind: "forbidden" };
+    }
   }
 
   let presignedUrl: string;
@@ -332,12 +356,18 @@ export async function resolveAndAuthorizeLink(
       responseContentDisposition: "inline",
     });
   } catch {
-    await prisma.generatedLink
-      .update({
-        where: { id: link.id },
-        data: { downloadCount: { decrement: 1 } },
-      })
-      .catch(() => {});
+    // Only roll back the counter we actually incremented. Public-
+    // embed links skipped the increment above so they must skip the
+    // decrement here too — otherwise a presign failure on an
+    // embeddable link would push downloadCount below zero.
+    if (!isPublicEmbed) {
+      await prisma.generatedLink
+        .update({
+          where: { id: link.id },
+          data: { downloadCount: { decrement: 1 } },
+        })
+        .catch(() => {});
+    }
     await writeAudit(
       "LINK_DENIED",
       {

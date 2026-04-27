@@ -20,6 +20,14 @@ export interface EnforcementContext {
   readonly ipAddress: string;
   readonly referer: string | null;
   readonly isAuthenticated: boolean;
+  // Set true by the viewer route when `link.allowPublicEmbed=true`.
+  // Skips the Referer-based `allowedDomains` check and the IP-based
+  // `allowedIpRanges` check so server-side oEmbed discovery (no
+  // Referer, edge IPs) can succeed. CSP `frame-ancestors` becomes
+  // the sole parent-host gate, enforced at the browser. requireAuth
+  // is intentionally NOT bypassed — admin auth requirement always
+  // wins over the public-embed opt-in.
+  readonly publicEmbedBypass?: boolean;
 }
 
 export type EnforcementDecision =
@@ -152,15 +160,24 @@ export function enforcePolicy(
   if (policy.requireAuth && !ctx.isAuthenticated) {
     return { allow: false };
   }
-  if (policy.allowedIpRanges.length > 0) {
-    const matched = policy.allowedIpRanges.some((cidr) =>
-      ipInCidr(ctx.ipAddress, cidr),
-    );
-    if (!matched) return { allow: false };
-  }
-  if (policy.allowedDomains.length > 0) {
-    if (!refererAllowed(ctx.referer, policy.allowedDomains)) {
-      return { allow: false };
+  // The IP + Referer gates were designed for direct anonymous viewer
+  // access. They reject WordPress / Iframely / Notion / Slack server-
+  // side oEmbed discovery fetches (no Referer, edge IPs) and would
+  // hide our discovery `<link>` from every embedding platform. When
+  // the link is opted into public embedding, fall through both gates
+  // and rely on CSP frame-ancestors (sourced from `allowedDomains`)
+  // for parent-host restriction at the browser layer instead.
+  if (!ctx.publicEmbedBypass) {
+    if (policy.allowedIpRanges.length > 0) {
+      const matched = policy.allowedIpRanges.some((cidr) =>
+        ipInCidr(ctx.ipAddress, cidr),
+      );
+      if (!matched) return { allow: false };
+    }
+    if (policy.allowedDomains.length > 0) {
+      if (!refererAllowed(ctx.referer, policy.allowedDomains)) {
+        return { allow: false };
+      }
     }
   }
   return {

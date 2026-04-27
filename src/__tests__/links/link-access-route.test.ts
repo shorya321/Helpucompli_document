@@ -78,6 +78,7 @@ function linkRow(over: Partial<Record<string, unknown>> = {}) {
     maxDownloads: null,
     isRevoked: false,
     policyId: null,
+    allowPublicEmbed: false,
     document: {
       id: "d-1",
       s3Key: "shared/file.pdf",
@@ -340,5 +341,96 @@ describe("GET /api/links/[hash]", () => {
     };
     // min(3600, 1200, 7d) = 1200. max(900, 1200) = 1200.
     expect(presignArgs.ttlSeconds).toBe(1200);
+  });
+
+  // ---- allowPublicEmbed=true: counter + maxDownloads must be skipped ----
+  // Each WordPress page render produces ≥2 viewer hits (server-side
+  // oEmbed discovery + browser iframe load). If we counted every hit,
+  // a finite `maxDownloads` would exhaust on a handful of legitimate
+  // page views. Public-embed links rely on `expiresAt` + admin revoke
+  // for lifecycle, not the counter.
+
+  it("public-embed link does NOT call updateMany (counter increment skipped)", async () => {
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({ allowPublicEmbed: true }),
+    );
+    mocks.resolvePolicy.mockResolvedValueOnce(defaultEffective);
+    mocks.enforcePolicy.mockReturnValueOnce(allow);
+    mocks.presignGetUrl.mockResolvedValueOnce("https://s3/x?sig=1");
+    const res = await GET(req(), {
+      params: params("tok_abc_with_long_enough_token_value_xyz"),
+    });
+    expect(res.status).toBe(302);
+    expect(mocks.updateMany).not.toHaveBeenCalled();
+    expect(mocks.auditCreate.mock.calls[0]?.[0].data.action).toBe(
+      "LINK_ACCESS",
+    );
+  });
+
+  it("public-embed link with downloadCount === maxDownloads still serves (counter is meaningless on public-embed path)", async () => {
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({
+        allowPublicEmbed: true,
+        downloadCount: 5,
+        maxDownloads: 5,
+      }),
+    );
+    mocks.resolvePolicy.mockResolvedValueOnce(defaultEffective);
+    mocks.enforcePolicy.mockReturnValueOnce(allow);
+    mocks.presignGetUrl.mockResolvedValueOnce("https://s3/x?sig=1");
+    const res = await GET(req(), {
+      params: params("tok_abc_with_long_enough_token_value_xyz"),
+    });
+    expect(res.status).toBe(302);
+  });
+
+  it("private link (allowPublicEmbed=false / undefined) STILL increments counter — regression guard", async () => {
+    // Identical to the existing "302 redirect" happy-path; explicit
+    // re-statement so a future "skip increment for ALL links" mistake
+    // fails this test loudly.
+    mocks.findLink.mockResolvedValueOnce(linkRow());
+    mocks.resolvePolicy.mockResolvedValueOnce(defaultEffective);
+    mocks.enforcePolicy.mockReturnValueOnce(allow);
+    mocks.updateMany.mockResolvedValueOnce({ count: 1 });
+    mocks.presignGetUrl.mockResolvedValueOnce("https://s3/x?sig=1");
+    await GET(req(), {
+      params: params("tok_abc_with_long_enough_token_value_xyz"),
+    });
+    expect(mocks.updateMany).toHaveBeenCalledOnce();
+    const args = mocks.updateMany.mock.calls[0]?.[0] as {
+      data: Record<string, unknown>;
+    };
+    expect(args.data.downloadCount).toEqual({ increment: 1 });
+  });
+
+  it("public-embed link passes publicEmbedBypass=true to enforcePolicy (engine skips Referer + IP checks)", async () => {
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({ allowPublicEmbed: true }),
+    );
+    mocks.resolvePolicy.mockResolvedValueOnce(defaultEffective);
+    mocks.enforcePolicy.mockReturnValueOnce(allow);
+    mocks.presignGetUrl.mockResolvedValueOnce("https://s3/x?sig=1");
+    await GET(req(), {
+      params: params("tok_abc_with_long_enough_token_value_xyz"),
+    });
+    const ctx = mocks.enforcePolicy.mock.calls[0]?.[1] as {
+      publicEmbedBypass?: boolean;
+    };
+    expect(ctx.publicEmbedBypass).toBe(true);
+  });
+
+  it("private link does NOT set publicEmbedBypass (legacy enforcement path) — regression guard", async () => {
+    mocks.findLink.mockResolvedValueOnce(linkRow({ allowPublicEmbed: false }));
+    mocks.resolvePolicy.mockResolvedValueOnce(defaultEffective);
+    mocks.enforcePolicy.mockReturnValueOnce(allow);
+    mocks.updateMany.mockResolvedValueOnce({ count: 1 });
+    mocks.presignGetUrl.mockResolvedValueOnce("https://s3/x?sig=1");
+    await GET(req(), {
+      params: params("tok_abc_with_long_enough_token_value_xyz"),
+    });
+    const ctx = mocks.enforcePolicy.mock.calls[0]?.[1] as {
+      publicEmbedBypass?: boolean;
+    };
+    expect(ctx.publicEmbedBypass).toBe(false);
   });
 });

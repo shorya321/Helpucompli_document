@@ -230,7 +230,7 @@ describe("GET /l/[hash] — embeddable link viewer", () => {
     expect(csp).not.toMatch(/frame-ancestors 'none'/);
   });
 
-  it("allowPublicEmbed=true with policy.allowedDomains → unions both sources", async () => {
+  it("allowPublicEmbed=true with policy.allowedDomains → emits ONLY those hosts (admin's narrowing intent honored, no `https:` widening)", async () => {
     mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(
       okResult({
         link: {
@@ -252,9 +252,11 @@ describe("GET /l/[hash] — embeddable link viewer", () => {
     );
     const res = await GET(req(), { params: params(TOKEN) });
     const csp = res.headers.get("content-security-policy") ?? "";
-    expect(csp).toContain(
-      "frame-ancestors https://partner.example.com https:",
-    );
+    expect(csp).toContain("frame-ancestors https://partner.example.com");
+    // Critical regression guard: previous shipped behavior appended
+    // `https:` which silently widened the admin's allowlist to any
+    // HTTPS site. The narrowing intent must stay narrow.
+    expect(csp).not.toContain("https://partner.example.com https:");
   });
 
   it("allowPublicEmbed=true → emits oEmbed discovery <link rel=\"alternate\">", async () => {

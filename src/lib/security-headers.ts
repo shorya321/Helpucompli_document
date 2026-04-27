@@ -135,22 +135,28 @@ export function buildFrameAncestorsDirective(
   return `frame-ancestors ${sources.join(" ")}`;
 }
 
-// Per-link `allowPublicEmbed` opt-in: append the `https:` scheme source
-// to an existing frame-ancestors directive so the link viewer can be
-// embedded by any HTTPS site (WordPress Custom HTML / Embed block,
-// Circle, Notion, etc.). Replaces 'none' wholesale because CSP3 source
-// expressions cannot mix 'none' with positive sources — it must stand
-// alone or be replaced.
+// Per-link `allowPublicEmbed` opt-in. Sole authority on parent-host
+// restriction when the toggle is on, because the policy-engine's
+// Referer check is bypassed in this case (server-side oEmbed
+// discovery has no Referer; relying on it would block WordPress /
+// Circle / Notion crawlers).
 //
-// HTTPS-only on purpose: matches `buildFrameAncestorsDirective`'s
-// scheme convention and preserves transport security.
-export function mergePublicEmbedSource(directive: string): string {
-  if (directive === "frame-ancestors 'none'") {
+//   - empty allowedDomains → `frame-ancestors https:` (any HTTPS
+//     parent may iframe the link).
+//   - non-empty            → exactly the listed hosts. We do NOT
+//     append `https:`; the admin's narrowing intent must stay narrow.
+//
+// Replaces the earlier `mergePublicEmbedSource` helper, which
+// always appended `https:` and silently widened admin-set domain
+// allowlists. That behavior was wrong: a policy with
+// `allowedDomains=["wpsite.com"]` was meant to RESTRICT embedding to
+// wpsite.com, not permit any HTTPS parent.
+export function buildPublicEmbedFrameAncestors(
+  allowedDomains: readonly string[],
+): string {
+  const restricted = buildFrameAncestorsDirective(allowedDomains);
+  if (restricted === "frame-ancestors 'none'") {
     return "frame-ancestors https:";
   }
-  // Preserve any existing host sources so a policy with allowedDomains
-  // continues to match those parents explicitly. Adding `https:` makes
-  // the rule strictly more permissive — CSP source-list semantics OR
-  // sources together.
-  return `${directive} https:`;
+  return restricted;
 }

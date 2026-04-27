@@ -177,6 +177,59 @@ describe("enforcePolicy", () => {
       }),
     ).toEqual({ allow: true, linkTtlSeconds: 3600, maxDownloads: 5 });
   });
+
+  // ---- publicEmbedBypass — surfaces when link.allowPublicEmbed=true ----
+  // Server-side oEmbed discovery (WordPress, Iframely, Notion, Slack) has
+  // no Referer and edge IPs the admin cannot enumerate. The viewer route
+  // must serve those fetches so consumers can find the discovery <link>;
+  // CSP frame-ancestors is the actual parent-host gate at the browser.
+  // requireAuth is intentionally NOT bypassed.
+
+  it("publicEmbedBypass=true allows when allowedDomains is set and Referer is null (WP discovery)", () => {
+    const policy = { ...openPolicy, allowedDomains: ["partner.example.com"] };
+    expect(
+      enforcePolicy(policy, { ...baseCtx, publicEmbedBypass: true }),
+    ).toMatchObject({ allow: true });
+  });
+
+  it("publicEmbedBypass=true allows when allowedIpRanges is set and IP does not match (edge crawler)", () => {
+    const policy = { ...openPolicy, allowedIpRanges: ["10.0.0.0/8"] };
+    expect(
+      enforcePolicy(policy, {
+        ...baseCtx,
+        ipAddress: "203.0.113.4",
+        publicEmbedBypass: true,
+      }),
+    ).toMatchObject({ allow: true });
+  });
+
+  it("publicEmbedBypass=true STILL denies when requireAuth and unauthenticated (auth wins over public-embed)", () => {
+    const policy = { ...openPolicy, requireAuth: true };
+    expect(
+      enforcePolicy(policy, { ...baseCtx, publicEmbedBypass: true }),
+    ).toEqual({ allow: false });
+  });
+
+  it("publicEmbedBypass=true allows when requireAuth and authenticated", () => {
+    const policy = { ...openPolicy, requireAuth: true };
+    expect(
+      enforcePolicy(policy, {
+        ...baseCtx,
+        isAuthenticated: true,
+        publicEmbedBypass: true,
+      }),
+    ).toMatchObject({ allow: true });
+  });
+
+  it("publicEmbedBypass=false (default / undefined) preserves the legacy deny — regression guard", () => {
+    const policy = { ...openPolicy, allowedDomains: ["example.com"] };
+    // Explicit false:
+    expect(
+      enforcePolicy(policy, { ...baseCtx, publicEmbedBypass: false }),
+    ).toEqual({ allow: false });
+    // Undefined (existing call sites that haven't been updated):
+    expect(enforcePolicy(policy, baseCtx)).toEqual({ allow: false });
+  });
 });
 
 // ---------------------------------------------------------------------------
