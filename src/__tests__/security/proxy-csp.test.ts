@@ -136,4 +136,60 @@ describe("proxy (CSP nonce injection)", () => {
 
     expect(response.headers.get("x-middleware-next")).toBe("1");
   });
+
+  // ---- Embeddable link viewer + same-origin asset proxy frame controls ----
+  //
+  // /l/<token> owns its own policy-driven `frame-ancestors`. /l/<token>/raw
+  // is its same-origin asset proxy and must also be embeddable as a sub-
+  // resource of the viewer (otherwise iframe-loaded files like PDFs are
+  // blocked by the static `X-Frame-Options: DENY` even when the request is
+  // same-origin). Both paths skip the static X-Frame-Options and omit the
+  // middleware CSP's `frame-ancestors 'none'`. Every other path keeps the
+  // strict default — the third test guards against regex over-broadening.
+  const VIEWER_TOKEN =
+    "tok_abc_with_long_enough_token_value_xyz";
+
+  it("/l/<token> viewer skips X-Frame-Options and omits middleware frame-ancestors", async () => {
+    auth0Mock.middleware.mockResolvedValue(makeAuthResponse());
+    const request = new Request(
+      `https://docs.helpucompli.com/l/${VIEWER_TOKEN}`,
+    );
+
+    const response = await proxy(request);
+
+    expect(response.headers.get("X-Frame-Options")).toBeNull();
+    const csp = response.headers.get("Content-Security-Policy") ?? "";
+    // Middleware CSP must NOT carry frame-ancestors here — the viewer
+    // route owns that directive in its own response headers.
+    expect(csp).not.toContain("frame-ancestors");
+  });
+
+  it("/l/<token>/raw same-origin proxy skips X-Frame-Options and omits middleware frame-ancestors", async () => {
+    auth0Mock.middleware.mockResolvedValue(makeAuthResponse());
+    const request = new Request(
+      `https://docs.helpucompli.com/l/${VIEWER_TOKEN}/raw`,
+    );
+
+    const response = await proxy(request);
+
+    expect(response.headers.get("X-Frame-Options")).toBeNull();
+    const csp = response.headers.get("Content-Security-Policy") ?? "";
+    expect(csp).not.toContain("frame-ancestors");
+  });
+
+  it("/l/<token>/<other> (anything other than /raw) keeps the strict X-Frame-Options DENY + frame-ancestors 'none' default", async () => {
+    // Regression guard: do NOT broaden the regex by accident. Only the
+    // viewer page itself and its `/raw` asset proxy are exempt; any
+    // future siblings under /l/<token>/… must explicitly opt in.
+    auth0Mock.middleware.mockResolvedValue(makeAuthResponse());
+    const request = new Request(
+      `https://docs.helpucompli.com/l/${VIEWER_TOKEN}/something-else`,
+    );
+
+    const response = await proxy(request);
+
+    expect(response.headers.get("X-Frame-Options")).toBe("DENY");
+    const csp = response.headers.get("Content-Security-Policy") ?? "";
+    expect(csp).toContain("frame-ancestors 'none'");
+  });
 });

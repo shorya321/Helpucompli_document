@@ -127,6 +127,8 @@ Every embed element in `/l/[hash]` (image, video, audio, iframe) loads its bytes
 
 Why: Chrome's built-in PDF viewer refuses to render PDFs delivered cross-origin inside an iframe ("This page has been blocked by Chrome"). Same-origin delivery sidesteps that and produces uniform behavior across every file type.
 
+Middleware (`src/proxy.ts`) treats `/l/<token>/raw` as a viewer-class path so the static `X-Frame-Options: DENY` and the global CSP `frame-ancestors 'none'` are skipped on responses. The viewer page's own CSP `frame-src 'self'` remains the authoritative gate. `<img>` / `<video>` / `<audio>` elements ignore those headers regardless, so this exemption only affects iframe-loaded file types (PDF / HTML / TXT).
+
 ## Dependencies
 
 - `qrcode` — QR code generation (optional)

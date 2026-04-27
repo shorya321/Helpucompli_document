@@ -12,12 +12,21 @@ import {
 // Ref: https://github.com/auth0/nextjs-auth0/blob/main/README.md#on-next-js-16
 
 // The embeddable link viewer at /l/<token> owns its own frame-ancestors
-// CSP (derived from the policy's allowedDomains at request time). For
-// that one path we skip the static `X-Frame-Options: DENY` and omit the
-// middleware CSP's `frame-ancestors 'none'` so the viewer's response
-// headers are authoritative. Every other path keeps the strict default.
+// CSP (derived from the policy's allowedDomains at request time). The
+// same-origin asset proxy at /l/<token>/raw must also be embeddable —
+// the viewer's inner <img>/<video>/<audio>/<iframe> all load from it,
+// and an iframe-loaded PDF response with `X-Frame-Options: DENY` or
+// `frame-ancestors 'none'` is blocked by the browser even when same-
+// origin. For both paths we skip the static `X-Frame-Options: DENY`
+// and omit the middleware CSP's `frame-ancestors 'none'` so the
+// viewer's response headers (and the proxy's same-origin delivery)
+// aren't double-blocked. Every other path keeps the strict default.
+// `<img>` / `<video>` / `<audio>` ignore X-Frame-Options and
+// frame-ancestors regardless, so this change has no effect on the
+// image / video / audio embed flows.
 // Token shape must match LINK_TOKEN_RE in src/lib/link-access.ts.
-const LINK_VIEWER_PATH_RE = /^\/l\/[A-Za-z0-9_-]{20,128}\/?$/;
+const LINK_VIEWER_PATH_RE =
+  /^\/l\/[A-Za-z0-9_-]{20,128}(?:\/raw)?\/?$/;
 
 function isLinkViewerPath(pathname: string): boolean {
   return LINK_VIEWER_PATH_RE.test(pathname);
