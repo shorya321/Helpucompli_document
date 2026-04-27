@@ -198,6 +198,7 @@ export async function POST(req: NextRequest) {
             result.expiresAt === null ? null : result.expiresAt.toISOString(),
           ttlSeconds: result.ttlSeconds,
           maxDownloads: result.maxDownloads,
+          allowPublicEmbed: result.allowPublicEmbed,
         },
         error: null,
       },

@@ -44,7 +44,12 @@ function params(hash: string) {
 function okResult(over: Partial<Record<string, unknown>> = {}) {
   return {
     kind: "ok",
-    link: { id: "link-1", documentId: "d-1", policyId: "p-1" },
+    link: {
+      id: "link-1",
+      documentId: "d-1",
+      policyId: "p-1",
+      allowPublicEmbed: false,
+    },
     document: {
       id: "d-1",
       filename: "Spec.pdf",
@@ -194,5 +199,85 @@ describe("GET /l/[hash] — embeddable link viewer", () => {
     expect(csp).toContain(
       "object-src https://alpha-bucket.s3.us-east-1.amazonaws.com",
     );
+  });
+
+  // ---- allowPublicEmbed=true: oEmbed discovery + CSP merge ----
+
+  it("allowPublicEmbed=true → CSP frame-ancestors appends `https:` (any HTTPS parent permitted)", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(
+      okResult({
+        link: {
+          id: "link-2",
+          documentId: "d-1",
+          policyId: null,
+          allowPublicEmbed: true,
+        },
+        effective: {
+          source: "default",
+          policyId: null,
+          linkTtlSeconds: 900,
+          maxDownloads: null,
+          requireAuth: false,
+          allowedDomains: [],
+          allowedIpRanges: [],
+        },
+      }),
+    );
+    const res = await GET(req(), { params: params(TOKEN) });
+    expect(res.status).toBe(200);
+    const csp = res.headers.get("content-security-policy") ?? "";
+    expect(csp).toMatch(/frame-ancestors https:/);
+    expect(csp).not.toMatch(/frame-ancestors 'none'/);
+  });
+
+  it("allowPublicEmbed=true with policy.allowedDomains → unions both sources", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(
+      okResult({
+        link: {
+          id: "link-3",
+          documentId: "d-1",
+          policyId: "p-1",
+          allowPublicEmbed: true,
+        },
+        effective: {
+          source: "object",
+          policyId: "p-1",
+          linkTtlSeconds: 900,
+          maxDownloads: null,
+          requireAuth: false,
+          allowedDomains: ["partner.example.com"],
+          allowedIpRanges: [],
+        },
+      }),
+    );
+    const res = await GET(req(), { params: params(TOKEN) });
+    const csp = res.headers.get("content-security-policy") ?? "";
+    expect(csp).toContain(
+      "frame-ancestors https://partner.example.com https:",
+    );
+  });
+
+  it("allowPublicEmbed=true → emits oEmbed discovery <link rel=\"alternate\">", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(
+      okResult({
+        link: {
+          id: "link-4",
+          documentId: "d-1",
+          policyId: null,
+          allowPublicEmbed: true,
+        },
+      }),
+    );
+    const body = await (await GET(req(), { params: params(TOKEN) })).text();
+    expect(body).toContain('rel="alternate"');
+    expect(body).toContain('type="application/json+oembed"');
+    expect(body).toContain(`/api/oembed?url=`);
+    expect(body).toContain(encodeURIComponent(`http://localhost:3000/l/${TOKEN}`));
+  });
+
+  it("allowPublicEmbed=false (default) → does NOT emit oEmbed discovery tag (regression guard)", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
+    const body = await (await GET(req(), { params: params(TOKEN) })).text();
+    expect(body).not.toContain('type="application/json+oembed"');
   });
 });

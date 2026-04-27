@@ -51,6 +51,7 @@ export function categoryForAction(action: AuditAction): ActivityCategory {
     case "LINK_DENIED":
     case "LINK_REVOKE":
     case "LINK_SHARE_INFO_VIEW":
+    case "LINK_OEMBED_FETCHED":
       return "link";
     case "BUCKET_CREATE":
     case "BUCKET_DELETE":

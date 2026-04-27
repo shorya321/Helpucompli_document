@@ -30,6 +30,13 @@ export const linkCreateSchema = z
     // Superadmin-gated on the API route. When true, server stores
     // expiresAt=null and ttlSecondsOverride is ignored.
     neverExpires: z.boolean().default(false),
+    // Per-link opt-in for cross-platform iframe embedding. Default
+    // false → CSP `frame-ancestors 'none'` for unconfigured links and
+    // /api/oembed returns 404. Setting true makes the link embeddable
+    // on any HTTPS site (oEmbed discovery + CSP `https:` source).
+    // HIPAA: caller is responsible for not enabling on PHI-containing
+    // documents. Audited at create time + on every oEmbed fetch.
+    allowPublicEmbed: z.boolean().default(false),
   })
   .strict();
 

@@ -51,6 +51,7 @@ export interface LinkAccessOk {
     readonly id: string;
     readonly documentId: string;
     readonly policyId: string | null;
+    readonly allowPublicEmbed: boolean;
   };
   readonly document: LinkAccessDoc;
   readonly effective: EffectivePolicy;
@@ -176,6 +177,7 @@ export async function resolveAndAuthorizeLink(
         id: string;
         documentId: string;
         policyId: string | null;
+        allowPublicEmbed: boolean;
         document: {
           id: string;
           filename: string;
@@ -360,6 +362,7 @@ export async function resolveAndAuthorizeLink(
       id: link.id,
       documentId: link.documentId,
       policyId: link.policyId,
+      allowPublicEmbed: link.allowPublicEmbed === true,
     },
     document: {
       id: link.document.id,

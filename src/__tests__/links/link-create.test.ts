@@ -292,6 +292,34 @@ describe("createLink", () => {
     expect(meta.expiresAt).toBeNull();
   });
 
+  it("allowPublicEmbed defaults to false in row + audit when not provided (regression guard)", async () => {
+    const stub = makeStub({ document: baseDoc });
+    const result = await createLink(stub.client, baseInput, ctx);
+    expect(result.allowPublicEmbed).toBe(false);
+    const args = stub.tx.generatedLink.create.mock.calls[0]?.[0] as {
+      data: Record<string, unknown>;
+    };
+    expect(args.data.allowPublicEmbed).toBe(false);
+    const meta = stub.audit[0]?.metadata as Record<string, unknown>;
+    expect(meta.allowPublicEmbed).toBe(false);
+  });
+
+  it("allowPublicEmbed=true persists on row + records in audit metadata", async () => {
+    const stub = makeStub({ document: baseDoc });
+    const result = await createLink(
+      stub.client,
+      { ...baseInput, allowPublicEmbed: true },
+      ctx,
+    );
+    expect(result.allowPublicEmbed).toBe(true);
+    const args = stub.tx.generatedLink.create.mock.calls[0]?.[0] as {
+      data: Record<string, unknown>;
+    };
+    expect(args.data.allowPublicEmbed).toBe(true);
+    const meta = stub.audit[0]?.metadata as Record<string, unknown>;
+    expect(meta.allowPublicEmbed).toBe(true);
+  });
+
   it("resolveEffectiveSettings: null policy TTL + null override → ttlSeconds null (perpetual)", () => {
     const r = resolveEffectiveSettings({
       policy: { linkTtlSeconds: null, maxDownloads: 10 },

@@ -134,3 +134,23 @@ export function buildFrameAncestorsDirective(
   if (sources.length === 0) return "frame-ancestors 'none'";
   return `frame-ancestors ${sources.join(" ")}`;
 }
+
+// Per-link `allowPublicEmbed` opt-in: append the `https:` scheme source
+// to an existing frame-ancestors directive so the link viewer can be
+// embedded by any HTTPS site (WordPress Custom HTML / Embed block,
+// Circle, Notion, etc.). Replaces 'none' wholesale because CSP3 source
+// expressions cannot mix 'none' with positive sources — it must stand
+// alone or be replaced.
+//
+// HTTPS-only on purpose: matches `buildFrameAncestorsDirective`'s
+// scheme convention and preserves transport security.
+export function mergePublicEmbedSource(directive: string): string {
+  if (directive === "frame-ancestors 'none'") {
+    return "frame-ancestors https:";
+  }
+  // Preserve any existing host sources so a policy with allowedDomains
+  // continues to match those parents explicitly. Adding `https:` makes
+  // the rule strictly more permissive — CSP source-list semantics OR
+  // sources together.
+  return `${directive} https:`;
+}

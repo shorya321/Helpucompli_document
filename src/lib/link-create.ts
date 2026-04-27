@@ -124,6 +124,11 @@ export interface LinkCreateInput {
   // stored as null and TTL-related inputs are ignored. Link remains
   // bounded by maxDownloads + isRevoked.
   readonly neverExpires?: boolean;
+  // Per-link opt-in for iframe embedding on third-party sites. See
+  // schema.prisma `allow_public_embed` for the persisted shape and
+  // src/app/l/[hash]/route.ts + src/app/api/oembed/route.ts for the
+  // two consumers gated on this flag.
+  readonly allowPublicEmbed?: boolean;
 }
 
 export interface LinkCreateContext {
@@ -145,6 +150,7 @@ export interface LinkCreateResult {
   readonly expiresAt: Date | null;
   readonly ttlSeconds: number | null;
   readonly maxDownloads: number | null;
+  readonly allowPublicEmbed: boolean;
 }
 
 interface LinkTxClient {
@@ -240,6 +246,7 @@ export async function createLink(
     const token = generateLinkToken();
     const expiresAt: Date | null =
       ttlSeconds === null ? null : new Date(Date.now() + ttlSeconds * 1000);
+    const allowPublicEmbed = input.allowPublicEmbed === true;
 
     const row = await tx.generatedLink.create({
       data: {
@@ -251,6 +258,7 @@ export async function createLink(
         downloadCount: 0,
         maxDownloads,
         isRevoked: false,
+        allowPublicEmbed,
       },
     });
 
@@ -267,6 +275,7 @@ export async function createLink(
           maxDownloads,
           expiresAt: expiresAt === null ? null : expiresAt.toISOString(),
           neverExpires,
+          allowPublicEmbed,
         },
         ipAddress: ctx.ipAddress,
         userAgent: ctx.userAgent,
@@ -279,6 +288,7 @@ export async function createLink(
       expiresAt,
       ttlSeconds,
       maxDownloads,
+      allowPublicEmbed,
     };
   });
 }

@@ -66,6 +66,7 @@ interface CreateResp {
   readonly expiresAt: string | null;
   readonly ttlSeconds: number | null;
   readonly maxDownloads: number | null;
+  readonly allowPublicEmbed: boolean;
 }
 
 interface EffectivePolicyPreview {
@@ -101,6 +102,12 @@ export function GenerateLinkForm({
   // neverExpires: true }.
   const [ttl, setTtl] = useState<number | "never">(900);
   const [maxDownloads, setMaxDownloads] = useState("");
+  // Per-link opt-in for cross-platform iframe embedding (WordPress
+  // Embed/Custom-HTML block, Circle, Notion, Confluence). Default off
+  // = HIPAA-safe; the URL still works for direct browser viewing but
+  // any iframe parent gets `frame-ancestors 'none'`. When on, viewer
+  // emits oEmbed discovery and CSP appends `https:`.
+  const [allowPublicEmbed, setAllowPublicEmbed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<CreateResp | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -183,6 +190,7 @@ export function GenerateLinkForm({
           maxDownloadsOverride:
             maxDownloads === "" ? null : Number.parseInt(maxDownloads, 10),
           neverExpires: ttl === "never",
+          allowPublicEmbed,
         }),
       });
       const body = (await res.json()) as ApiResponse<CreateResp>;
@@ -365,6 +373,61 @@ export function GenerateLinkForm({
             />
           </div>
 
+          <div className="flex flex-col gap-1.5">
+            <Label
+              htmlFor="gl-embed"
+              className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider"
+            >
+              Embedding
+            </Label>
+            <label
+              htmlFor="gl-embed"
+              className="border-input bg-background flex items-start gap-2 rounded-md border px-3 py-2 text-sm"
+            >
+              <input
+                id="gl-embed"
+                type="checkbox"
+                checked={allowPublicEmbed}
+                disabled={submitting}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    // HIPAA footgun guard: turning embedding on lets ANY
+                    // HTTPS site iframe this link. Require explicit
+                    // confirm; revert on cancel. Mirrors the "Never
+                    // expires" pattern above.
+                    const ok = window.confirm(
+                      "Public embedding lets any HTTPS site iframe this link (WordPress, Circle, Notion). Do not enable for documents containing PHI. Continue?",
+                    );
+                    if (ok) setAllowPublicEmbed(true);
+                    return;
+                  }
+                  setAllowPublicEmbed(false);
+                }}
+                className="mt-0.5"
+              />
+              <span className="flex flex-col gap-1">
+                <span className="text-foreground font-medium">
+                  Allow public embedding
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  Lets WordPress, Circle, Notion, and any HTTPS site
+                  embed this link via the URL or the iframe snippet.
+                  Without this, third-party platforms show
+                  &quot;Sorry, this content could not be embedded&quot;.
+                </span>
+                {allowPublicEmbed && (
+                  <span
+                    role="alert"
+                    className="text-destructive text-xs font-medium"
+                  >
+                    ⚠ Non-PHI documents only. Every embed call is
+                    audited.
+                  </span>
+                )}
+              </span>
+            </label>
+          </div>
+
           {error && (
             <p role="alert" className="text-destructive m-0 text-sm">
               {error}
@@ -419,30 +482,43 @@ export function GenerateLinkForm({
                   {copied ? "Copied!" : "Copy URL"}
                 </Button>
               </div>
-              <div className="mt-2 flex items-start gap-2">
-                <Textarea
-                  readOnly
-                  value={embedCode}
-                  onFocus={(e) => e.currentTarget.select()}
-                  aria-label="Iframe embed code"
-                  rows={6}
-                  className="flex-1 whitespace-pre resize-y text-xs"
-                />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={onCopyEmbed}
-                  className="whitespace-nowrap"
-                >
-                  {embedCopied ? "Copied!" : "Copy embed"}
-                </Button>
-              </div>
-              <p className="text-muted-foreground mt-1 mb-0 text-xs">
-                Paste the embed snippet into any HTML page. If a policy
-                with Allowed Domains is attached, the page must be hosted
-                on one of those domains so the browser sends a matching
-                Referer.
-              </p>
+              {result.allowPublicEmbed ? (
+                <>
+                  <div className="mt-2 flex items-start gap-2">
+                    <Textarea
+                      readOnly
+                      value={embedCode}
+                      onFocus={(e) => e.currentTarget.select()}
+                      aria-label="Iframe embed code"
+                      rows={6}
+                      className="flex-1 whitespace-pre resize-y text-xs"
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={onCopyEmbed}
+                      className="whitespace-nowrap"
+                    >
+                      {embedCopied ? "Copied!" : "Copy embed"}
+                    </Button>
+                  </div>
+                  <p className="text-muted-foreground mt-1 mb-0 text-xs">
+                    Paste the URL into a WordPress Embed block (auto-
+                    preview via oEmbed) or paste the iframe snippet into
+                    any Custom HTML / code block (WordPress, Circle,
+                    Notion, Confluence). If a policy with Allowed
+                    Domains is attached, browsers must still send a
+                    matching Referer.
+                  </p>
+                </>
+              ) : (
+                <p className="text-muted-foreground mt-2 mb-0 text-xs">
+                  This link is set to non-embeddable. It works for
+                  direct browser viewing but third-party sites cannot
+                  iframe it. Enable &quot;Allow public embedding&quot;
+                  above before generating to get an embed snippet.
+                </p>
+              )}
               <div className="mt-3">
                 <QrCode url={result.shareableUrl} />
               </div>
