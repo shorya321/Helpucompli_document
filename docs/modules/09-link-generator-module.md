@@ -113,6 +113,19 @@ When `allowPublicEmbed=true` AND `policy.allowedDomains` is non-empty, the polic
 | `/api/links` | POST | admin+ | Generate new link |
 | `/api/links/[hash]` | GET | public | Access link (policy enforcement + redirect) |
 | `/api/links/[hash]` | DELETE | admin+ | Revoke link |
+| `/l/[hash]` | GET | public | Embeddable HTML viewer (oEmbed-compatible, dynamic CSP `frame-ancestors`) |
+| `/l/[hash]/raw` | GET | public | Same-origin streaming proxy for the viewer's `<img>` / `<video>` / `<audio>` / `<iframe>` |
+
+## Same-origin asset proxy `/l/[hash]/raw`
+
+Every embed element in `/l/[hash]` (image, video, audio, iframe) loads its bytes from `/l/[hash]/raw`, never from the S3 presigned URL directly. The proxy:
+
+- Reuses `resolveAndAuthorizeLink` so policy enforcement, audit, rate-limit, public-embed bypass, and the `Sec-Fetch-Dest` discriminator behave **byte-identically** to the viewer page. F8.7 / F9.3 / F9.8 invariants are preserved unchanged.
+- Server-fetches the presigned S3 URL and streams the body back, so the URL never lands in the DOM (no replay risk via DOM inspection).
+- Forwards `Range` headers and proxies `206 Partial Content` + `Content-Range` so Chrome's PDF viewer chunk-loads and HTML5 `<video>` seek work.
+- Sets `Content-Type` from the document, `Content-Disposition: inline; filename="…"; filename*=UTF-8''…` (RFC 5987), `Cache-Control: private, no-store`, `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff`.
+
+Why: Chrome's built-in PDF viewer refuses to render PDFs delivered cross-origin inside an iframe ("This page has been blocked by Chrome"). Same-origin delivery sidesteps that and produces uniform behavior across every file type.
 
 ## Dependencies
 

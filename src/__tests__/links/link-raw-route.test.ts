@@ -1,0 +1,266 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// Mock the shared authorize helper so these tests exercise only the
+// proxy/streaming layer of /l/[hash]/raw/route.ts. Helper unit tests
+// live in link-access-route.test.ts + link-access.test.ts.
+const mocks = vi.hoisted(() => ({
+  resolveAndAuthorizeLink: vi.fn(),
+}));
+
+vi.mock("@/lib/link-access", () => ({
+  resolveAndAuthorizeLink: mocks.resolveAndAuthorizeLink,
+}));
+
+import { GET } from "@/app/l/[hash]/raw/route";
+import { NextRequest } from "next/server";
+
+const TOKEN = "tok_abc_with_long_enough_token_value_xyz";
+const PRESIGNED =
+  "https://alpha-bucket.s3.us-east-1.amazonaws.com/shared/file.pdf?X-Amz-Signature=abc&X-Amz-Expires=900";
+
+let fetchSpy: ReturnType<typeof vi.spyOn> | null = null;
+
+afterEach(() => {
+  mocks.resolveAndAuthorizeLink.mockReset();
+  if (fetchSpy) {
+    fetchSpy.mockRestore();
+    fetchSpy = null;
+  }
+});
+
+beforeEach(() => {
+  mocks.resolveAndAuthorizeLink.mockReset();
+});
+
+function req(init?: { headers?: Record<string, string> }): NextRequest {
+  const headers = new Headers(init?.headers);
+  return new NextRequest(`http://x/l/${TOKEN}/raw`, { headers });
+}
+
+function params(hash: string): Promise<{ hash: string }> {
+  return Promise.resolve({ hash });
+}
+
+function okResult(over: Partial<Record<string, unknown>> = {}) {
+  return {
+    kind: "ok",
+    link: {
+      id: "link-1",
+      documentId: "d-1",
+      policyId: "p-1",
+      allowPublicEmbed: false,
+    },
+    document: {
+      id: "d-1",
+      filename: "Spec.pdf",
+      contentType: "application/pdf",
+      bucketName: "alpha-bucket",
+      s3Key: "shared/file.pdf",
+    },
+    effective: {
+      source: "object",
+      policyId: "p-1",
+      linkTtlSeconds: 900,
+      maxDownloads: null,
+      requireAuth: false,
+      allowedDomains: [],
+      allowedIpRanges: [],
+    },
+    presignedUrl: PRESIGNED,
+    ...over,
+  };
+}
+
+function fakeS3Response(opts: {
+  status?: number;
+  body?: BodyInit | null;
+  headers?: Record<string, string>;
+}): Response {
+  return new Response(opts.body ?? "fake bytes", {
+    status: opts.status ?? 200,
+    headers: opts.headers ?? {},
+  });
+}
+
+describe("GET /l/[hash]/raw — same-origin streaming proxy", () => {
+  it("403 when authorize helper returns forbidden, and upstream S3 is never called", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce({ kind: "forbidden" });
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+    const res = await GET(req(), { params: params(TOKEN) });
+    expect(res.status).toBe(403);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(res.headers.get("cache-control")).toBe("no-store, private");
+  });
+
+  it("429 + Retry-After when authorize helper returns rateLimited", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce({
+      kind: "rateLimited",
+      retryAfterSec: 17,
+    });
+    const res = await GET(req(), { params: params(TOKEN) });
+    expect(res.status).toBe(429);
+    expect(res.headers.get("retry-after")).toBe("17");
+  });
+
+  it("200 streams S3 body with Content-Type from the document and inline Content-Disposition", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
+    fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        fakeS3Response({
+          status: 200,
+          body: "PDFBYTES",
+          headers: { "content-length": "8" },
+        }),
+      );
+    const res = await GET(req(), { params: params(TOKEN) });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("application/pdf");
+    expect(res.headers.get("content-disposition")).toContain("inline");
+    expect(res.headers.get("content-disposition")).toContain(
+      'filename="Spec.pdf"',
+    );
+    expect(res.headers.get("cache-control")).toBe("private, no-store");
+    expect(res.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(res.headers.get("content-length")).toBe("8");
+    const text = await res.text();
+    expect(text).toBe("PDFBYTES");
+  });
+
+  it("forwards the Range header upstream and proxies a 206 + Content-Range response", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
+    fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        fakeS3Response({
+          status: 206,
+          body: "chunk",
+          headers: {
+            "content-range": "bytes 0-1023/4096",
+            "content-length": "1024",
+            "accept-ranges": "bytes",
+          },
+        }),
+      );
+    const res = await GET(req({ headers: { range: "bytes=0-1023" } }), {
+      params: params(TOKEN),
+    });
+    expect(res.status).toBe(206);
+    expect(res.headers.get("content-range")).toBe("bytes 0-1023/4096");
+    expect(res.headers.get("accept-ranges")).toBe("bytes");
+    // Verify the Range header was forwarded to S3.
+    expect(fetchSpy).toHaveBeenCalledWith(
+      PRESIGNED,
+      expect.objectContaining({
+        headers: expect.objectContaining({ Range: "bytes=0-1023" }),
+      }),
+    );
+  });
+
+  it("falls back to application/octet-stream when document has no contentType", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(
+      okResult({
+        document: {
+          id: "d-x",
+          filename: "blob.bin",
+          contentType: null,
+          bucketName: "alpha-bucket",
+          s3Key: "shared/blob.bin",
+        },
+      }),
+    );
+    fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(fakeS3Response({ status: 200, body: "x" }));
+    const res = await GET(req(), { params: params(TOKEN) });
+    expect(res.headers.get("content-type")).toBe("application/octet-stream");
+  });
+
+  it("encodes unicode filenames via RFC 5987 (ascii fallback + filename*=UTF-8'')", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(
+      okResult({
+        document: {
+          id: "d-u",
+          filename: "日本語ファイル.pdf",
+          contentType: "application/pdf",
+          bucketName: "alpha-bucket",
+          s3Key: "shared/jp.pdf",
+        },
+      }),
+    );
+    fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(fakeS3Response({ status: 200, body: "x" }));
+    const res = await GET(req(), { params: params(TOKEN) });
+    const cd = res.headers.get("content-disposition") ?? "";
+    expect(cd).toMatch(/^inline;/);
+    // ASCII fallback: every non-printable-ASCII glyph collapsed to _.
+    expect(cd).toContain('filename="_______.pdf"');
+    // RFC 5987 encoded form preserves the unicode bytes.
+    expect(cd).toContain(
+      `filename*=UTF-8''${encodeURIComponent("日本語ファイル.pdf")}`,
+    );
+  });
+
+  it("strips quote and backslash from the ASCII fallback filename", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(
+      okResult({
+        document: {
+          id: "d-q",
+          filename: 'a"b\\c.pdf',
+          contentType: "application/pdf",
+          bucketName: "alpha-bucket",
+          s3Key: "shared/q.pdf",
+        },
+      }),
+    );
+    fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(fakeS3Response({ status: 200, body: "x" }));
+    const res = await GET(req(), { params: params(TOKEN) });
+    const cd = res.headers.get("content-disposition") ?? "";
+    expect(cd).toContain('filename="a_b_c.pdf"');
+  });
+
+  it("does not call fetch with credentials and never leaks the presigned URL into response headers", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
+    fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(fakeS3Response({ status: 200, body: "x" }));
+    const res = await GET(req(), { params: params(TOKEN) });
+    for (const [, value] of res.headers.entries()) {
+      expect(value).not.toContain("X-Amz-Signature");
+      expect(value).not.toContain("amazonaws.com");
+    }
+  });
+
+  it("translates upstream S3 4xx (presign expired/object missing) into a 403", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
+    fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(fakeS3Response({ status: 403, body: "AccessDenied" }));
+    const res = await GET(req(), { params: params(TOKEN) });
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 502 when fetch to S3 throws (network blip)", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
+    fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(new Error("network down"));
+    const res = await GET(req(), { params: params(TOKEN) });
+    expect(res.status).toBe(502);
+  });
+
+  it("does not forward Range when the request omits it", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
+    fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(fakeS3Response({ status: 200, body: "x" }));
+    await GET(req(), { params: params(TOKEN) });
+    const callArgs = fetchSpy.mock.calls[0]?.[1] as RequestInit | undefined;
+    const headers = (callArgs?.headers ?? {}) as Record<string, string>;
+    expect(headers["Range"]).toBeUndefined();
+  });
+});

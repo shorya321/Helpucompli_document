@@ -139,14 +139,15 @@ describe("GET /l/[hash] — embeddable link viewer", () => {
     expect(body).toContain('<meta name="robots" content="noindex, nofollow">');
   });
 
-  it("PDF content-type → <iframe> embed element", async () => {
+  it("PDF content-type → <iframe> embed element pointing at same-origin /l/<hash>/raw", async () => {
     mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
     const body = await (await GET(req(), { params: params(TOKEN) })).text();
     expect(body).toContain("<iframe");
     expect(body).not.toContain("<img");
+    expect(body).toContain(`src="/l/${TOKEN}/raw"`);
   });
 
-  it("image/* content-type → <img> embed element", async () => {
+  it("image/* content-type → <img> embed element pointing at same-origin /l/<hash>/raw", async () => {
     mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(
       okResult({
         document: {
@@ -161,6 +162,49 @@ describe("GET /l/[hash] — embeddable link viewer", () => {
     const body = await (await GET(req(), { params: params(TOKEN) })).text();
     expect(body).toContain("<img");
     expect(body).not.toContain("<iframe");
+    expect(body).toContain(`src="/l/${TOKEN}/raw"`);
+  });
+
+  it("video/* content-type → <video> embed pointing at same-origin /l/<hash>/raw", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(
+      okResult({
+        document: {
+          id: "d-v",
+          filename: "clip.mp4",
+          contentType: "video/mp4",
+          bucketName: "alpha-bucket",
+          s3Key: "shared/clip.mp4",
+        },
+      }),
+    );
+    const body = await (await GET(req(), { params: params(TOKEN) })).text();
+    expect(body).toContain("<video");
+    expect(body).toContain(`src="/l/${TOKEN}/raw"`);
+  });
+
+  it("audio/* content-type → <audio> embed pointing at same-origin /l/<hash>/raw", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(
+      okResult({
+        document: {
+          id: "d-a",
+          filename: "song.mp3",
+          contentType: "audio/mpeg",
+          bucketName: "alpha-bucket",
+          s3Key: "shared/song.mp3",
+        },
+      }),
+    );
+    const body = await (await GET(req(), { params: params(TOKEN) })).text();
+    expect(body).toContain("<audio");
+    expect(body).toContain(`src="/l/${TOKEN}/raw"`);
+  });
+
+  it("never leaks the presigned S3 URL into the rendered HTML body (proxy keeps it server-side)", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
+    const body = await (await GET(req(), { params: params(TOKEN) })).text();
+    expect(body).not.toContain("s3.us-east-1.amazonaws.com");
+    expect(body).not.toContain("X-Amz-Signature");
+    expect(body).not.toContain("X-Amz-Expires");
   });
 
   it("HTML-escapes the filename in OG tags and title (XSS guard)", async () => {
@@ -180,25 +224,16 @@ describe("GET /l/[hash] — embeddable link viewer", () => {
     expect(body).toContain("&lt;script&gt;");
   });
 
-  it("HTML-escapes the presigned URL so & does not break the iframe src", async () => {
-    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
-    const body = await (await GET(req(), { params: params(TOKEN) })).text();
-    // Unescaped `&X-Amz-Expires` would let the browser interpret `&X`
-    // as an entity start. The attribute must contain `&amp;`.
-    expect(body).toContain("&amp;X-Amz-Expires=900");
-    expect(body).not.toContain("?X-Amz-Signature=abc&X-Amz-Expires=900");
-  });
-
-  it("CSP frame-src + object-src restricted to the S3 origin of the presigned URL", async () => {
+  it("CSP fetch directives are tightened to 'self' (no S3 origin needed — proxy is same-origin)", async () => {
     mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
     const res = await GET(req(), { params: params(TOKEN) });
     const csp = res.headers.get("content-security-policy") ?? "";
-    expect(csp).toContain(
-      "frame-src 'self' https://alpha-bucket.s3.us-east-1.amazonaws.com",
-    );
-    expect(csp).toContain(
-      "object-src https://alpha-bucket.s3.us-east-1.amazonaws.com",
-    );
+    expect(csp).toContain("img-src 'self' data:");
+    expect(csp).toContain("media-src 'self'");
+    expect(csp).toContain("frame-src 'self'");
+    expect(csp).toContain("object-src 'self'");
+    // Defense in depth: no S3 origin should appear in the CSP at all.
+    expect(csp).not.toContain("amazonaws.com");
   });
 
   // ---- allowPublicEmbed=true: oEmbed discovery + CSP merge ----
