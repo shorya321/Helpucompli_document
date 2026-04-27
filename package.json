@@ -20,7 +20,9 @@
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
     "typecheck": "tsc --noEmit",
-    "check-progress": "./scripts/check-progress.sh"
+    "check-progress": "./scripts/check-progress.sh",
+    "postinstall": "node scripts/copy-pdfjs.mjs",
+    "copy-pdfjs": "node scripts/copy-pdfjs.mjs"
   },
   "dependencies": {
     "@auth0/nextjs-auth0": "^4.16.0",
@@ -48,6 +50,7 @@
     "lucide-react": "^0.468.0",
     "next": "^16.0.0",
     "next-themes": "^0.4.6",
+    "pdfjs-dist": "^5.6.205",
     "pino": "^9.5.0",
     "qrcode": "^1.5.4",
     "radix-ui": "^1.4.3",

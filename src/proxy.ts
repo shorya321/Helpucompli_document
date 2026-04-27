@@ -127,6 +127,11 @@ export async function proxy(request: Request) {
 // over broadening this regex.
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|api/health).*)",
+    // `pdfjs` is excluded so the static PDF.js viewer.html and runtime
+    // .mjs files at /pdfjs/* serve without the strict app CSP. The
+    // viewer is loaded by the embeddable link viewer at /l/<token> and
+    // is itself static — auth on the rendered PDF runs at /l/<token>/raw,
+    // which the viewer fetches and which DOES go through this middleware.
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|api/health|pdfjs).*)",
   ],
 };

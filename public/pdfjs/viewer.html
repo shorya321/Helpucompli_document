@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>PDF preview</title>
+<style>
+  /* Self-contained styles. No external CSS so the viewer is portable
+     under /pdfjs/* without depending on the app's design tokens. */
+  html,body{margin:0;padding:0;height:100%;background:#1f2937;color:#e5e7eb;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif}
+  body{display:flex;flex-direction:column}
+  header{padding:8px 16px;background:#111827;display:flex;align-items:center;gap:12px;font-size:13px;border-bottom:1px solid #374151;flex:0 0 auto}
+  header strong{color:#f9fafb}
+  header .spacer{flex:1}
+  button{font:inherit;color:#e5e7eb;background:#374151;border:1px solid #4b5563;border-radius:4px;padding:4px 10px;cursor:pointer}
+  button:hover{background:#4b5563}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  #pages{flex:1 1 auto;overflow:auto;padding:16px;display:flex;flex-direction:column;align-items:center;gap:16px;background:#0b0f17}
+  canvas{max-width:100%;height:auto;background:#fff;display:block;box-shadow:0 4px 16px rgba(0,0,0,0.6);border-radius:2px}
+  #status{padding:24px;text-align:center;color:#9ca3af}
+  #error{padding:24px;text-align:center;color:#fca5a5}
+</style>
+</head>
+<body>
+<header>
+  <strong id="title">PDF</strong>
+  <span id="meta"></span>
+  <span class="spacer"></span>
+  <button id="zoom-out" title="Zoom out" disabled>−</button>
+  <button id="zoom-in" title="Zoom in" disabled>+</button>
+</header>
+<div id="pages"><div id="status">Loading…</div></div>
+<script type="module">
+  // Hard-coded library locations — same directory as this file. The
+  // postinstall script (scripts/copy-pdfjs.mjs) drops both .mjs files
+  // alongside this HTML.
+  import * as pdfjsLib from "./pdf.min.mjs";
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "./pdf.worker.min.mjs";
+
+  const status = document.getElementById("status");
+  const pagesEl = document.getElementById("pages");
+  const meta = document.getElementById("meta");
+  const zoomIn = document.getElementById("zoom-in");
+  const zoomOut = document.getElementById("zoom-out");
+
+  function showError(msg) {
+    pagesEl.innerHTML = "";
+    const div = document.createElement("div");
+    div.id = "error";
+    div.textContent = msg;
+    pagesEl.appendChild(div);
+  }
+
+  // Strict whitelist for the file URL: must be a same-origin link
+  // viewer raw asset path. Token shape mirrors LINK_TOKEN_RE.
+  const FILE_RE = /^\/l\/[A-Za-z0-9_-]{20,128}\/raw$/;
+  const params = new URLSearchParams(location.search);
+  const file = params.get("file") ?? "";
+  if (!FILE_RE.test(file)) {
+    showError("Invalid file reference.");
+    throw new Error("invalid file param");
+  }
+
+  let scale = 1.4;
+  let doc = null;
+  const pageEntries = [];
+
+  async function renderAll() {
+    pageEntries.length = 0;
+    pagesEl.innerHTML = "";
+    const total = doc.numPages;
+    meta.textContent = `${total} page${total === 1 ? "" : "s"}`;
+    for (let i = 1; i <= total; i++) {
+      const page = await doc.getPage(i);
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+      pagesEl.appendChild(canvas);
+      pageEntries.push({ page, canvas });
+      await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+    }
+  }
+
+  async function reflow() {
+    // Re-render at the new scale. Cheap because pdfjs caches the
+    // parsed page objects.
+    pagesEl.innerHTML = "";
+    for (const entry of pageEntries) {
+      const viewport = entry.page.getViewport({ scale });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+      pagesEl.appendChild(canvas);
+      entry.canvas = canvas;
+      await entry.page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+    }
+  }
+
+  zoomIn.addEventListener("click", () => {
+    scale = Math.min(4, scale * 1.2);
+    reflow();
+  });
+  zoomOut.addEventListener("click", () => {
+    scale = Math.max(0.4, scale / 1.2);
+    reflow();
+  });
+
+  try {
+    // `file` is same-origin; cookies are needed because /l/<hash>/raw
+    // runs through resolveAndAuthorizeLink which may rely on the
+    // session cookie when the policy requires auth.
+    const loadingTask = pdfjsLib.getDocument({ url: file, withCredentials: true });
+    doc = await loadingTask.promise;
+    zoomIn.disabled = false;
+    zoomOut.disabled = false;
+    document.getElementById("title").textContent = `PDF · ${doc.numPages} page${doc.numPages === 1 ? "" : "s"}`;
+    await renderAll();
+  } catch (err) {
+    console.error("[pdfjs viewer] load failed:", err);
+    showError("Failed to load PDF preview.");
+  }
+</script>
+</body>
+</html>

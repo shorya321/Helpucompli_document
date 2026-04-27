@@ -139,12 +139,52 @@ describe("GET /l/[hash] — embeddable link viewer", () => {
     expect(body).toContain('<meta name="robots" content="noindex, nofollow">');
   });
 
-  it("PDF content-type → <iframe> embed element pointing at same-origin /l/<hash>/raw", async () => {
+  it("PDF content-type → <iframe> pointing at same-origin /pdfjs/viewer.html with file=/l/<hash>/raw", async () => {
     mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
     const body = await (await GET(req(), { params: params(TOKEN) })).text();
     expect(body).toContain("<iframe");
     expect(body).not.toContain("<img");
-    expect(body).toContain(`src="/l/${TOKEN}/raw"`);
+    // PDFs use the canvas-rendering PDF.js viewer to bypass Chrome's
+    // built-in PDF-in-cross-origin-iframe block.
+    const expectedSrc = `/pdfjs/viewer.html?file=${encodeURIComponent(`/l/${TOKEN}/raw`)}`;
+    expect(body).toContain(`src="${expectedSrc}"`);
+    // Negative guard: PDF must NOT iframe /raw directly anymore — that
+    // hits Chrome's nested-iframe PDF block.
+    expect(body).not.toContain(`<iframe src="/l/${TOKEN}/raw"`);
+  });
+
+  it("HTML content-type → <iframe> pointing at /l/<hash>/raw directly (no PDF.js detour)", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(
+      okResult({
+        document: {
+          id: "d-h",
+          filename: "page.html",
+          contentType: "text/html",
+          bucketName: "alpha-bucket",
+          s3Key: "shared/page.html",
+        },
+      }),
+    );
+    const body = await (await GET(req(), { params: params(TOKEN) })).text();
+    expect(body).toContain(`<iframe src="/l/${TOKEN}/raw"`);
+    expect(body).not.toContain("/pdfjs/");
+  });
+
+  it("text/plain content-type → <iframe> pointing at /l/<hash>/raw directly", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(
+      okResult({
+        document: {
+          id: "d-t",
+          filename: "notes.txt",
+          contentType: "text/plain",
+          bucketName: "alpha-bucket",
+          s3Key: "shared/notes.txt",
+        },
+      }),
+    );
+    const body = await (await GET(req(), { params: params(TOKEN) })).text();
+    expect(body).toContain(`<iframe src="/l/${TOKEN}/raw"`);
+    expect(body).not.toContain("/pdfjs/");
   });
 
   it("image/* content-type → <img> embed element pointing at same-origin /l/<hash>/raw", async () => {

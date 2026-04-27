@@ -81,3 +81,9 @@ design-mockups/
 docs/superpowers/
 docs/design.md
 docs/POST-LAUNCH-OBSERVATIONS.md
+
+# pdfjs runtime — copied from node_modules by scripts/copy-pdfjs.mjs at
+# postinstall time. Hand-written viewer.html stays in git; the .mjs
+# files are generated artifacts from the pdfjs-dist dep.
+public/pdfjs/pdf.min.mjs
+public/pdfjs/pdf.worker.min.mjs

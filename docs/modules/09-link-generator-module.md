@@ -129,6 +129,27 @@ Why: Chrome's built-in PDF viewer refuses to render PDFs delivered cross-origin 
 
 Middleware (`src/proxy.ts`) treats `/l/<token>/raw` as a viewer-class path so the static `X-Frame-Options: DENY` and the global CSP `frame-ancestors 'none'` are skipped on responses. The viewer page's own CSP `frame-src 'self'` remains the authoritative gate. `<img>` / `<video>` / `<audio>` elements ignore those headers regardless, so this exemption only affects iframe-loaded file types (PDF / HTML / TXT).
 
+## PDF preview routes through self-hosted PDF.js (`/pdfjs/viewer.html`)
+
+Chrome's built-in PDF viewer refuses to render PDFs inside iframes whose ancestor chain crosses origins (consumer site → `/l/<token>` viewer iframe → PDF iframe). The browser shows "This page has been blocked by Chrome." HTML and plain-text files render fine in the same nested iframe context because no special viewer extension is involved.
+
+For PDFs the embeddable viewer at `/l/<token>` instead points its `<iframe>` at a self-hosted PDF.js canvas viewer:
+
+```
+consumer site
+ └── <iframe src=".../l/<token>">                       (cross-origin)
+      └── <iframe src=".../pdfjs/viewer.html?file=…">    (same-origin static asset)
+           └── PDF.js fetches /l/<token>/raw, renders to <canvas>
+```
+
+PDF.js (Mozilla, MIT-licensed, packaged via `pdfjs-dist`) renders each page to `<canvas>` from JavaScript, so Chrome's PDF viewer is never invoked and the rendering works in any iframe-nesting depth and every browser.
+
+- Runtime files (`pdf.min.mjs`, `pdf.worker.min.mjs`) are copied from `node_modules/pdfjs-dist/build/` into `public/pdfjs/` by `scripts/copy-pdfjs.mjs` at `npm install` time (`postinstall` hook). Generated `.mjs` files are git-ignored; the hand-written `public/pdfjs/viewer.html` shell stays in git.
+- The static viewer is served from `/pdfjs/*`, which is excluded from the middleware matcher in `src/proxy.ts` so the strict app CSP doesn't break the inline ES-module import.
+- Inside the viewer, `?file=` is whitelisted to `^/l/[A-Za-z0-9_-]{20,128}/raw$` — only same-origin link viewer raw assets can be loaded; arbitrary URLs are rejected.
+- Authentication / policy / audit / rate-limit run at `/l/<token>/raw` (the byte source), not at the viewer shell. The viewer is a dumb canvas frontend.
+- Image / video / audio / HTML / TXT preview paths are unchanged — they continue to use `<img>` / `<video>` / `<audio>` / `<iframe>` directly against `/l/<token>/raw`.
+
 ## Dependencies
 
 - `qrcode` — QR code generation (optional)
