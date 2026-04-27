@@ -18,6 +18,11 @@ WORKDIR /app
 FROM base AS deps
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma
+# scripts/ is required by the `postinstall` hook
+# (`node scripts/copy-pdfjs.mjs`). The .mjs payload it writes here is
+# discarded with the rest of the deps stage; the script is re-run in
+# the builder stage where the output ends up in the final image.
+COPY scripts ./scripts
 # `npm ci` is reproducible vs `npm install`. Prisma postinstall runs
 # `prisma generate` using the schema copied above.
 RUN npm ci
@@ -26,6 +31,11 @@ RUN npm ci
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# Populate public/pdfjs/*.mjs from the pdfjs-dist install. The .mjs
+# files are git-ignored, so `COPY . .` does not bring them; this runs
+# the same script that runs locally via `postinstall`. Output ends up
+# in the standalone build's public/ via `next build`.
+RUN node scripts/copy-pdfjs.mjs
 # Pin NODE_ENV=production so any Coolify-injected build-time NODE_ENV
 # cannot leak in and trip the HIPAA guard in src/lib/config.ts (https://
 # APP_BASE_URL requires NODE_ENV=production for Secure cookie flag).
