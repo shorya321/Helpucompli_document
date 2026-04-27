@@ -407,7 +407,16 @@ export function GenerateLinkForm({
               />
               <span className="flex flex-col gap-1">
                 <span className="text-foreground font-medium">
-                  Allow public embedding
+                  Allow embedding in iframes (WordPress, Notion, etc.)
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  Required to render this link inside another site.
+                  Combined with a policy that has &quot;Allowed
+                  Domains&quot;, the embed is restricted to those
+                  hosts via CSP frame-ancestors. Leave OFF to keep
+                  the link as a direct-access download — &quot;Allowed
+                  Domains&quot; on the policy still gates direct
+                  access strictly.
                 </span>
                 {allowPublicEmbed && (
                   <span

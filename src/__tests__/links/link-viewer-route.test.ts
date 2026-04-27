@@ -283,7 +283,7 @@ describe("GET /l/[hash] — embeddable link viewer", () => {
     expect(body).not.toContain('type="application/json+oembed"');
   });
 
-  it("allowPublicEmbed=false + policy.allowedDomains non-empty → EMITS oEmbed discovery tag (domain-restricted embed)", async () => {
+  it("allowPublicEmbed=false + policy.allowedDomains non-empty → does NOT emit oEmbed discovery tag (F9.3 regression — domain restriction gates access, embedding requires the explicit toggle)", async () => {
     mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(
       okResult({
         link: {
@@ -305,11 +305,11 @@ describe("GET /l/[hash] — embeddable link viewer", () => {
     );
     const res = await GET(req(), { params: params(TOKEN) });
     const body = await res.text();
-    expect(body).toContain('rel="alternate"');
-    expect(body).toContain('type="application/json+oembed"');
-    // Frame-ancestors stays narrow to the listed host (no `https:` widen).
+    expect(body).not.toContain('type="application/json+oembed"');
+    // Frame-ancestors still narrows to the listed host so the browser
+    // refuses any iframe attempt — defense in depth even with no
+    // discovery tag.
     const csp = res.headers.get("content-security-policy") ?? "";
     expect(csp).toContain("frame-ancestors https://embed.test.com");
-    expect(csp).not.toMatch(/frame-ancestors https:(?!\/\/)/);
   });
 });

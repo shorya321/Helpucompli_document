@@ -111,42 +111,22 @@ describe("GET /api/oembed", () => {
     expect(res.status).toBe(404);
   });
 
-  it("404 when allowPublicEmbed=false AND no policy (no embed signal at all)", async () => {
+  it("404 when allowPublicEmbed=false (default — no embed flow regardless of policy)", async () => {
     mocks.findLink.mockResolvedValueOnce(linkRow({ allowPublicEmbed: false }));
     const res = await GET(req(oembedUrl(SHARE_URL)));
     expect(res.status).toBe(404);
   });
 
-  it("404 when allowPublicEmbed=false AND policy.allowedDomains is empty", async () => {
+  it("404 when allowPublicEmbed=false EVEN IF policy.allowedDomains is set (domain restriction does NOT enable embed)", async () => {
+    // F9.3 / F8.7 regression guard: a policy with `allowedDomains`
+    // attached to a non-embeddable link must NOT trigger oEmbed
+    // discovery. The user-facing semantic is: `allowedDomains`
+    // gates direct link access; embedding requires the explicit
+    // per-link `allowPublicEmbed` toggle.
     mocks.findLink.mockResolvedValueOnce(
       linkRow({
         allowPublicEmbed: false,
-        policy: { requireAuth: false, allowedDomains: [] },
-      }),
-    );
-    const res = await GET(req(oembedUrl(SHARE_URL)));
-    expect(res.status).toBe(404);
-  });
-
-  it("200 when allowPublicEmbed=false BUT policy.allowedDomains is non-empty (domain-restricted embed)", async () => {
-    mocks.findLink.mockResolvedValueOnce(
-      linkRow({
-        allowPublicEmbed: false,
-        policy: { requireAuth: false, allowedDomains: ["embed.test.com"] },
-      }),
-    );
-    const res = await GET(req(oembedUrl(SHARE_URL)));
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as Record<string, unknown>;
-    expect(body.html).toMatch(/<iframe /);
-    expect(body.html).toContain(`src="${SHARE_URL}"`);
-  });
-
-  it("404 when allowPublicEmbed=false + allowedDomains non-empty BUT requireAuth=true (auth wins)", async () => {
-    mocks.findLink.mockResolvedValueOnce(
-      linkRow({
-        allowPublicEmbed: false,
-        policy: { requireAuth: true, allowedDomains: ["embed.test.com"] },
+        policy: { requireAuth: false },
       }),
     );
     const res = await GET(req(oembedUrl(SHARE_URL)));

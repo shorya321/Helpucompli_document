@@ -224,25 +224,21 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         },
       },
       policy: {
-        select: { requireAuth: true, allowedDomains: true },
+        select: { requireAuth: true },
       },
     },
   });
 
   if (!link) return notFound();
   if (!link.document || link.document.isDeleted) return notFound();
-  // The link is embeddable when EITHER `allowPublicEmbed=true`
-  // (open to any HTTPS parent) OR the attached policy has a non-
-  // empty `allowedDomains` (domain-restricted embed; the viewer's
-  // CSP `frame-ancestors` narrows the parent hosts to that list).
-  // Without either signal there is no embedding flow to advertise,
-  // so return 404 — same shape as an unknown token, no leakage of
-  // link existence.
-  const hasAllowedDomains =
-    (link.policy?.allowedDomains?.length ?? 0) > 0;
-  if (link.allowPublicEmbed !== true && !hasAllowedDomains) {
-    return notFound();
-  }
+  // `allowPublicEmbed` is the SOLE embed-enable signal. Without it,
+  // /api/oembed returns 404 — same shape as an unknown token, so no
+  // existence of the link is leaked. `policy.allowedDomains` does
+  // NOT enable embedding on its own; per F9.3 / F8.7 it gates
+  // direct link access strictly. When combined with
+  // `allowPublicEmbed=true`, the viewer's CSP `frame-ancestors`
+  // narrows the parent hosts to that list.
+  if (link.allowPublicEmbed !== true) return notFound();
 
   const status = computeLinkStatus({
     isRevoked: link.isRevoked,

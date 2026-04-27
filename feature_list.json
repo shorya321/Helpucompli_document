@@ -1,7 +1,7 @@
 {
   "project": "helpucompli-document-repository",
   "version": "1.1.0",
-  "total_features": 77,
+  "total_features": 78,
   "modules": [
     {
       "module": "01-auth",
@@ -836,6 +836,23 @@
             "Generate QR code for generated link URL",
             "Download QR as PNG image",
             "Test QR code scans to correct URL"
+          ],
+          "passes": true
+        },
+        {
+          "id": "F9.7",
+          "description": "Per-link allowPublicEmbed toggle + oEmbed discovery (WordPress, Notion, Confluence)",
+          "steps": [
+            "Add allowPublicEmbed boolean column to GeneratedLink (default false)",
+            "Surface a single per-link toggle in generate-link-form with HIPAA confirm prompt",
+            "/l/[hash] viewer emits oEmbed discovery <link> when allowPublicEmbed=true",
+            "/api/oembed serves rich/video iframe JSON when allowPublicEmbed=true; 404 otherwise",
+            "Viewer CSP frame-ancestors derived from policy.allowedDomains (empty => https:; non-empty => listed hosts only)",
+            "Policy engine: when allowPublicEmbed=true, link-access sets publicEmbedBypass=true so server-side oEmbed discovery (no Referer; arbitrary IPs) succeeds; CSP is the parent-host gate",
+            "Counter increment + maxDownloads skipped on the embed path (each render = 2+ viewer hits)",
+            "policy.requireAuth=true ALWAYS overrides — embed flow returns 404 to anonymous third-party servers",
+            "When allowPublicEmbed=false, F9.3 strict enforcement applies — Referer/IP/auth gates are NOT bypassed even if the policy has allowedDomains",
+            "Test the four (allowPublicEmbed x allowedDomains) quadrants end-to-end"
           ],
           "passes": true
         }

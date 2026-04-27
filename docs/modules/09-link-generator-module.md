@@ -61,6 +61,34 @@ When an external user clicks a generated link:
 - Admin can manually revoke a generated link before expiration
 - Revoked links return 403 on access
 
+### F9.8 — Per-link `allowPublicEmbed` toggle (cross-platform iframe embedding)
+
+A per-link boolean column on `generated_links`. Default `false`. When `true`, the link participates in the oEmbed flow (WordPress Embed block, Notion, Confluence, Iframely-backed Circle, etc.).
+
+**Behavior matrix:**
+
+| `allowPublicEmbed` | `policy.allowedDomains` | Direct browser nav (no Referer) | Browser nav from allowed domain | Browser nav from disallowed domain | iframe load from allowed domain | WordPress server-side oEmbed discovery |
+|---|---|---|---|---|---|---|
+| `false` | empty | 200 | n/a | n/a | not embeddable (CSP `'none'`) | 404 (no discovery tag) |
+| `false` | `['x.com']` | **403** (F9.6 strict) | 200 | 403 | server 403 | 404 |
+| `true` | empty | 200 | 200 | 200 | 200 (CSP `https:`) | 200 |
+| `true` | `['x.com']` | 200 (server bypass) | 200 | 200 (server bypass) | 200 + CSP allows | 200 |
+
+**Key invariants:**
+
+- `policy.allowedDomains` ALONE is NEVER an embed-enable signal. Embedding requires the explicit `allowPublicEmbed=true` toggle. When `allowPublicEmbed=false`, F9.6 strict enforcement applies regardless of policy contents — Referer / IP / auth gates are NOT bypassed.
+- When `allowPublicEmbed=true`, the policy engine's IP + Referer gates are bypassed at the link-access layer (server-side discovery has no Referer; crawler IPs cannot be pre-listed). The browser-layer CSP `frame-ancestors` derived from `policy.allowedDomains` becomes the parent-host gate.
+- `policy.requireAuth=true` ALWAYS overrides — embed flow returns 404 to anonymous third-party servers even when `allowPublicEmbed=true`.
+- The download counter + `maxDownloads` are skipped on the embed path (each render produces ≥2 viewer hits — server-side discovery + browser iframe load).
+- The form surfaces a HIPAA confirm prompt before flipping the toggle on. Every embed call is audited as `LINK_OEMBED_FETCHED`.
+
+**Endpoints:**
+
+| Route | Behavior |
+|---|---|
+| `GET /l/<hash>` | Viewer HTML. Emits `<link rel="alternate" type="application/json+oembed">` only when `allowPublicEmbed=true`. CSP `frame-ancestors` derived from policy. |
+| `GET /api/oembed?url=<viewer>&format=json` | Returns oEmbed JSON (`rich` for everything except `video/*`, which uses `video`). 404 when `allowPublicEmbed=false` or `policy.requireAuth=true`. |
+
 ## Files to Create
 
 | File | Purpose |

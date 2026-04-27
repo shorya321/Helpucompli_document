@@ -164,14 +164,18 @@ export function enforcePolicy(
   // access. They reject WordPress / Iframely / Notion / Slack server-
   // side oEmbed discovery fetches (no Referer, edge IPs) and would
   // hide our discovery `<link>` from every embedding platform. When
-  // the link is embeddable (`publicEmbedBypass=true`), apply a
-  // relaxed check instead: skip the IP gate (crawler IPs cannot be
-  // pre-listed), skip the absent-Referer case (server-side discovery
-  // fetches have no Referer), but if a Referer IS present it MUST
-  // still match `allowedDomains` — defense in depth alongside the
-  // browser-layer CSP `frame-ancestors`. This stops an iframe loaded
-  // from a non-allowed parent from passing the server even before
-  // the browser refuses to render it.
+  // the caller has set `publicEmbedBypass=true` (which only the
+  // viewer route does, and only when `link.allowPublicEmbed=true`),
+  // both gates are skipped. The browser-layer CSP `frame-ancestors`
+  // sourced from `policy.allowedDomains` is the actual parent-host
+  // restriction on that path. `requireAuth` is intentionally NOT
+  // bypassed.
+  //
+  // Rationale: per F9.3 / F8.7 a policy with `allowedDomains` set on
+  // a NON-embeddable link MUST gate access strictly (no exemption
+  // for absent Referer). The bypass only applies when an admin has
+  // explicitly opted into public embedding via the per-link
+  // `allowPublicEmbed` toggle.
   if (!ctx.publicEmbedBypass) {
     if (policy.allowedIpRanges.length > 0) {
       const matched = policy.allowedIpRanges.some((cidr) =>
@@ -183,10 +187,6 @@ export function enforcePolicy(
       if (!refererAllowed(ctx.referer, policy.allowedDomains)) {
         return { allow: false };
       }
-    }
-  } else if (policy.allowedDomains.length > 0 && ctx.referer) {
-    if (!refererAllowed(ctx.referer, policy.allowedDomains)) {
-      return { allow: false };
     }
   }
   return {

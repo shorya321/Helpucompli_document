@@ -211,17 +211,24 @@ export async function resolveAndAuthorizeLink(
     }
   }
 
-  // Embeddable links (either `allowPublicEmbed=true` OR a policy with
-  // a non-empty `allowedDomains`) treat `maxDownloads` as advisory
-  // only — each WP / Notion page render produces multiple viewer
-  // hits (server-side oEmbed discovery + browser iframe load), and
-  // counting them would exhaust any finite cap on a handful of
-  // legitimate page views. Force the cap to `null` for the status
-  // computation so a row with downloadCount >= maxDownloads is still
-  // served. Revoke + expiresAt are still respected.
-  const isEmbeddableLink =
-    link.allowPublicEmbed === true ||
-    ((link.policy?.allowedDomains?.length ?? 0) > 0);
+  // Embeddable links (the per-link `allowPublicEmbed` toggle) treat
+  // `maxDownloads` as advisory only — each WP / Notion page render
+  // produces multiple viewer hits (server-side oEmbed discovery +
+  // browser iframe load), and counting them would exhaust any
+  // finite cap on a handful of legitimate page views. Force the cap
+  // to `null` for the status computation so a row with
+  // downloadCount >= maxDownloads is still served. Revoke +
+  // expiresAt are still respected.
+  //
+  // The `allowPublicEmbed` flag is the SOLE embed-enable signal.
+  // `policy.allowedDomains` is enforced strictly by the policy
+  // engine per F9.3 / F8.7 ("If ANY check fails: return 403"). When
+  // the link is also embeddable, `allowedDomains` additionally
+  // narrows the CSP `frame-ancestors` so only those parents may
+  // iframe it. The two responsibilities never collapse — a domain-
+  // restricted policy on a non-embeddable link must still gate
+  // direct browser navigation.
+  const isEmbeddableLink = link.allowPublicEmbed === true;
   const status = computeLinkStatus({
     isRevoked: link.isRevoked as boolean,
     expiresAt: (link.expiresAt as Date | null) ?? null,
@@ -266,15 +273,13 @@ export async function resolveAndAuthorizeLink(
     ipAddress,
     referer,
     isAuthenticated: !!session,
-    // When the link is embeddable (either public-embed flag is set
-    // OR the attached policy has a non-empty `allowedDomains`), the
-    // policy engine's strict Referer + IP gates would block server-
-    // side oEmbed discovery (no Referer; arbitrary crawler IPs) and
-    // the embed flow would never reach the browser. With this flag
-    // set, `enforcePolicy` performs a relaxed check: absent Referer
-    // is allowed (server-side discovery), Referer present MUST still
-    // match `allowedDomains` if any (defense in depth alongside the
-    // browser-side CSP `frame-ancestors`).
+    // When the link is opted into public embedding, the policy
+    // engine's Referer + IP checks would block server-side oEmbed
+    // discovery (no Referer; arbitrary crawler IPs). With this
+    // flag set, `enforcePolicy` skips both gates and the browser-
+    // side CSP `frame-ancestors` (sourced from the policy's
+    // `allowedDomains`) becomes the parent-host gate instead.
+    // `requireAuth` is intentionally NOT bypassed.
     publicEmbedBypass: isPublicEmbed,
   });
 
@@ -319,13 +324,13 @@ export async function resolveAndAuthorizeLink(
     Math.min(desired, remainingSecForClamp, MAX_GET_TTL_SECONDS),
   );
 
-  // Embeddable-link path skips counter increment + `maxDownloads`
+  // Public-embed path skips counter increment + `maxDownloads`
   // check. Each WP / Notion page render produces ≥2 viewer hits
   // (server-side oEmbed discovery + browser iframe load); leaving
   // the counter active turns any finite `maxDownloads` into a foot-
   // gun that exhausts after a handful of legitimate page views.
-  // Embeddable links rely on `expiresAt` + admin revoke for life-
-  // cycle. Audit row below still fires so admins see embed traffic.
+  // Public links rely on `expiresAt` + admin revoke for lifecycle.
+  // Audit row below still fires so admins see embed traffic.
   if (!isPublicEmbed) {
     const cap = link.maxDownloads as number | null;
     const now = new Date();
@@ -365,8 +370,8 @@ export async function resolveAndAuthorizeLink(
       responseContentDisposition: "inline",
     });
   } catch {
-    // Only roll back the counter we actually incremented. Embeddable
-    // links skipped the increment above so they must skip the
+    // Only roll back the counter we actually incremented. Public-
+    // embed links skipped the increment above so they must skip the
     // decrement here too — otherwise a presign failure on an
     // embeddable link would push downloadCount below zero.
     if (!isPublicEmbed) {

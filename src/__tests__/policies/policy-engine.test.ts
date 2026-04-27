@@ -221,26 +221,21 @@ describe("enforcePolicy", () => {
     ).toMatchObject({ allow: true });
   });
 
-  it("publicEmbedBypass=true + allowedDomains + Referer present and matching allows (browser iframe load from allowed parent)", () => {
+  it("publicEmbedBypass=true + allowedDomains + Referer present and arbitrary value allows (CSP frame-ancestors handles parent-host gating at the browser, not server)", () => {
+    // Server-side enforcement is NOT defense-in-depth here. The
+    // browser's CSP `frame-ancestors` (sourced from the same
+    // `allowedDomains`) refuses to render iframes loaded from non-
+    // listed parents. Server-side rejection on Referer mismatch
+    // would also block legitimate uses where a logged-in admin opens
+    // the bare /l/<hash> URL in a tab to verify the link works.
     const policy = { ...openPolicy, allowedDomains: ["embed.test.com"] };
     expect(
       enforcePolicy(policy, {
         ...baseCtx,
-        referer: "https://embed.test.com/post/42",
+        referer: "https://anywhere.example/post/42",
         publicEmbedBypass: true,
       }),
     ).toMatchObject({ allow: true });
-  });
-
-  it("publicEmbedBypass=true + allowedDomains + Referer present and NOT matching DENIES (defense in depth alongside CSP frame-ancestors)", () => {
-    const policy = { ...openPolicy, allowedDomains: ["embed.test.com"] };
-    expect(
-      enforcePolicy(policy, {
-        ...baseCtx,
-        referer: "https://attacker.example/foo",
-        publicEmbedBypass: true,
-      }),
-    ).toEqual({ allow: false });
   });
 
   it("publicEmbedBypass=true + empty allowedDomains + arbitrary Referer allows (no domain restriction to enforce)", () => {
