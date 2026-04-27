@@ -181,7 +181,12 @@ describe("GET /api/oembed", () => {
     expect(body.cache_age).toBe(300);
   });
 
-  it("200 photo response for image/png with viewer URL (NOT raw S3)", async () => {
+  it("200 rich response (iframe) for image/png — viewer keeps the presigned URL fresh", async () => {
+    // oEmbed photo.url MUST be raw image bytes per spec; our viewer
+    // returns text/html, so WP rendered a broken-image icon when this
+    // returned `photo`. Iframe path delegates rendering to the viewer
+    // page, which emits <img src=presigned> with rotation handled per
+    // request. Regression guard against future "type: photo" changes.
     mocks.findLink.mockResolvedValueOnce(
       linkRow({
         document: {
@@ -194,8 +199,9 @@ describe("GET /api/oembed", () => {
     );
     const res = await GET(req(oembedUrl(SHARE_URL)));
     const body = (await res.json()) as Record<string, unknown>;
-    expect(body.type).toBe("photo");
-    expect(body.url).toBe(SHARE_URL);
+    expect(body.type).toBe("rich");
+    expect(body.html).toMatch(/<iframe /);
+    expect(body.html).toContain(`src="${SHARE_URL}"`);
   });
 
   it("200 video response for video/mp4 returns iframe HTML", async () => {
@@ -215,7 +221,7 @@ describe("GET /api/oembed", () => {
     expect(body.html).toMatch(/<iframe /);
   });
 
-  it("200 link response for audio/* (no iframe)", async () => {
+  it("200 rich response (iframe) for audio/mpeg — audio embeds inline instead of degrading to a card", async () => {
     mocks.findLink.mockResolvedValueOnce(
       linkRow({
         document: {
@@ -228,8 +234,26 @@ describe("GET /api/oembed", () => {
     );
     const res = await GET(req(oembedUrl(SHARE_URL)));
     const body = (await res.json()) as Record<string, unknown>;
-    expect(body.type).toBe("link");
-    expect(body.html).toBeUndefined();
+    expect(body.type).toBe("rich");
+    expect(body.html).toMatch(/<iframe /);
+    expect(body.html).toContain(`src="${SHARE_URL}"`);
+  });
+
+  it("200 rich response (iframe) for empty/unknown contentType — never silently degrades to a link card", async () => {
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({
+        document: {
+          id: "d-1",
+          filename: "binary.dat",
+          contentType: null,
+          isDeleted: false,
+        },
+      }),
+    );
+    const res = await GET(req(oembedUrl(SHARE_URL)));
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.type).toBe("rich");
+    expect(body.html).toMatch(/<iframe /);
   });
 
   it("clamps maxwidth/maxheight to safe bounds", async () => {

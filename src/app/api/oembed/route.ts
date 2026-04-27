@@ -26,7 +26,15 @@ export const dynamic = "force-dynamic";
 // File content itself is never returned by this endpoint; only metadata
 // (title, dimensions) and the iframe HTML pointing back to the viewer.
 
-interface OembedRichResponse {
+// Every supported file type emits an iframe-bearing oEmbed response —
+// `rich` for everything except `video/*` (which uses the `video` type
+// so consumer platforms surface video-player UI). The iframe always
+// points back at the /l/<token> viewer, which is the one place that
+// holds a fresh presigned S3 URL and runs policy + audit on every
+// load. We never return `photo` (would require raw image bytes URL,
+// but our viewer returns HTML) or `link` (would render a card with no
+// inline preview).
+interface OembedIframeResponse {
   readonly version: "1.0";
   readonly type: "rich" | "video";
   readonly provider_name: string;
@@ -39,31 +47,7 @@ interface OembedRichResponse {
   readonly thumbnail_url?: string;
 }
 
-interface OembedPhotoResponse {
-  readonly version: "1.0";
-  readonly type: "photo";
-  readonly provider_name: string;
-  readonly provider_url: string;
-  readonly title: string;
-  readonly url: string;
-  readonly width: number;
-  readonly height: number;
-  readonly cache_age?: number;
-}
-
-interface OembedLinkResponse {
-  readonly version: "1.0";
-  readonly type: "link";
-  readonly provider_name: string;
-  readonly provider_url: string;
-  readonly title: string;
-  readonly cache_age?: number;
-}
-
-type OembedResponse =
-  | OembedRichResponse
-  | OembedPhotoResponse
-  | OembedLinkResponse;
+type OembedResponse = OembedIframeResponse;
 
 const DEFAULT_WIDTH = 800;
 const DEFAULT_HEIGHT = 600;
@@ -154,14 +138,16 @@ function escapeText(value: string): string {
     .replace(/>/g, "&gt;");
 }
 
-function pickType(
-  mime: string | null,
-): "rich" | "photo" | "video" | "link" {
+function pickType(mime: string | null): "rich" | "video" {
   const m = (mime ?? "").toLowerCase();
-  if (m.startsWith("image/")) return "photo";
   if (m.startsWith("video/")) return "video";
-  if (m === "" || m.startsWith("audio/")) return "link";
-  // PDFs, HTML, text, anything else gets the iframe treatment.
+  // Everything else — PDFs, HTML, text, images, audio, empty/unknown
+  // MIMEs — uses `rich` with iframe HTML that loads /l/<token>. The
+  // viewer picks the right inline element (<img>, <audio>, <iframe>,
+  // …) on every load using a freshly presigned S3 URL. Returning
+  // `photo` would require raw image bytes, which we cannot serve
+  // from a path that runs policy + audit. Returning `link` would
+  // strip the inline preview (consumer renders a plain card).
   return "rich";
 }
 
@@ -269,56 +255,21 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const viewerEsc = escapeAttr(viewerUrl);
   const oembedType = pickType(link.document.contentType);
 
-  let body: OembedResponse;
-  if (oembedType === "rich") {
-    body = {
-      version: "1.0",
-      type: "rich",
-      provider_name: PROVIDER_NAME,
-      provider_url: appBase,
-      title: titleText,
-      html: `<iframe src="${viewerEsc}" width="${width}" height="${height}" frameborder="0" allowfullscreen title="${titleAttr}"></iframe>`,
-      width,
-      height,
-      cache_age: CACHE_AGE_SEC,
-    };
-  } else if (oembedType === "video") {
-    body = {
-      version: "1.0",
-      type: "video",
-      provider_name: PROVIDER_NAME,
-      provider_url: appBase,
-      title: titleText,
-      html: `<iframe src="${viewerEsc}" width="${width}" height="${height}" frameborder="0" allowfullscreen title="${titleAttr}"></iframe>`,
-      width,
-      height,
-      cache_age: CACHE_AGE_SEC,
-    };
-  } else if (oembedType === "photo") {
-    // Photo type points back at the viewer URL so the browser still
-    // hits our policy check + audit. Direct S3 URLs are short-lived
-    // and would expire inside any cache; the viewer URL is stable.
-    body = {
-      version: "1.0",
-      type: "photo",
-      provider_name: PROVIDER_NAME,
-      provider_url: appBase,
-      title: titleText,
-      url: viewerUrl,
-      width,
-      height,
-      cache_age: CACHE_AGE_SEC,
-    };
-  } else {
-    body = {
-      version: "1.0",
-      type: "link",
-      provider_name: PROVIDER_NAME,
-      provider_url: appBase,
-      title: titleText,
-      cache_age: CACHE_AGE_SEC,
-    };
-  }
+  // Single iframe-emitting branch. `oembedType` is `"rich"` for every
+  // MIME except `video/*`. Both render the same iframe markup; only
+  // the oEmbed `type` field differs so consumer platforms can apply
+  // any video-specific affordances (player controls, badges).
+  const body: OembedResponse = {
+    version: "1.0",
+    type: oembedType,
+    provider_name: PROVIDER_NAME,
+    provider_url: appBase,
+    title: titleText,
+    html: `<iframe src="${viewerEsc}" width="${width}" height="${height}" frameborder="0" allowfullscreen title="${titleAttr}"></iframe>`,
+    width,
+    height,
+    cache_age: CACHE_AGE_SEC,
+  };
 
   // Audit on every successful resolution so admins can see which
   // platforms are calling oEmbed for this token. Best-effort — never

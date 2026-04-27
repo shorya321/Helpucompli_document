@@ -409,12 +409,6 @@ export function GenerateLinkForm({
                 <span className="text-foreground font-medium">
                   Allow public embedding
                 </span>
-                <span className="text-muted-foreground text-xs">
-                  Lets WordPress, Circle, Notion, and any HTTPS site
-                  embed this link via the URL or the iframe snippet.
-                  Without this, third-party platforms show
-                  &quot;Sorry, this content could not be embedded&quot;.
-                </span>
                 {allowPublicEmbed && (
                   <span
                     role="alert"
