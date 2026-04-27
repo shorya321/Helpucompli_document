@@ -27,7 +27,18 @@ export interface EnforcementContext {
   // the sole parent-host gate, enforced at the browser. requireAuth
   // is intentionally NOT bypassed — admin auth requirement always
   // wins over the public-embed opt-in.
+  //
+  // Refinement: when `publicEmbedBypass=true` AND the policy has a
+  // non-empty `allowedDomains`, we use `secFetchDest` to distinguish
+  // browser-originated requests (Sec-Fetch-Dest header is set on
+  // every navigation since Chrome 76 / Firefox 90 / Safari 16.4)
+  // from server-side oEmbed crawlers (no Sec-Fetch-* headers). For
+  // browser requests we honor the admin's narrowing — Referer MUST
+  // match `allowedDomains`. Server-side fetches keep bypassing so
+  // discovery still works.
   readonly publicEmbedBypass?: boolean;
+  readonly secFetchDest?: string | null;
+  readonly secFetchSite?: string | null;
 }
 
 export type EnforcementDecision =
@@ -187,6 +198,25 @@ export function enforcePolicy(
       if (!refererAllowed(ctx.referer, policy.allowedDomains)) {
         return { allow: false };
       }
+    }
+  } else if (
+    policy.allowedDomains.length > 0 &&
+    ctx.secFetchDest != null
+  ) {
+    // Public-embed link with admin-narrowed `allowedDomains`. The
+    // request carries `Sec-Fetch-Dest`, which means it originated in
+    // a browser (direct nav, iframe, or other browser-initiated
+    // fetch). Honor the narrowing: Referer MUST match an allowed
+    // domain. Server-side oEmbed crawlers (no Sec-Fetch-Dest header)
+    // skip this branch and keep bypassing so WordPress / Notion /
+    // Confluence discovery still succeeds.
+    //
+    // Direct address-bar navigation typically has no Referer at all
+    // (`Sec-Fetch-Site: none`), so `refererAllowed(null, …)` returns
+    // false and the request is denied — exactly the user-facing
+    // outcome admins expect when they pin a link to a domain.
+    if (!refererAllowed(ctx.referer, policy.allowedDomains)) {
+      return { allow: false };
     }
   }
   return {

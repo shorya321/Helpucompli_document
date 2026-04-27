@@ -523,6 +523,81 @@ describe("GET /api/links/[hash]", () => {
     );
   });
 
+  // ---- Sec-Fetch-Dest forwarded to enforcePolicy on public-embed links ----
+  // The route extracts `sec-fetch-dest` + `sec-fetch-site` and threads
+  // them through to the policy engine so the engine can distinguish
+  // browser-originated requests from server-side oEmbed crawlers.
+
+  it("forwards sec-fetch-dest + sec-fetch-site headers to enforcePolicy on public-embed link", async () => {
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({
+        allowPublicEmbed: true,
+        policyId: "p-1",
+        policy: {
+          id: "p-1",
+          linkTtlSeconds: 900,
+          maxDownloads: null,
+          requireAuth: false,
+          allowedDomains: ["embed.test.com"],
+          allowedIpRanges: [],
+        },
+      }),
+    );
+    mocks.enforcePolicy.mockReturnValueOnce(allow);
+    mocks.presignGetUrl.mockResolvedValueOnce("https://s3/x?sig=1");
+    await GET(
+      req({
+        "sec-fetch-dest": "iframe",
+        "sec-fetch-site": "cross-site",
+        referer: "https://embed.test.com/post",
+      }),
+      { params: params("tok_abc_with_long_enough_token_value_xyz") },
+    );
+    const ctx = mocks.enforcePolicy.mock.calls[0]?.[1] as {
+      publicEmbedBypass?: boolean;
+      secFetchDest?: string | null;
+      secFetchSite?: string | null;
+    };
+    expect(ctx.publicEmbedBypass).toBe(true);
+    expect(ctx.secFetchDest).toBe("iframe");
+    expect(ctx.secFetchSite).toBe("cross-site");
+  });
+
+  it("WP-style server-side oEmbed fetch (no sec-fetch-* headers) → enforcePolicy receives null for both", async () => {
+    // Regression guard: server-side crawlers must not be lumped in
+    // with browsers. The engine treats `secFetchDest=null` as the
+    // crawler-bypass case.
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({
+        allowPublicEmbed: true,
+        policyId: "p-1",
+        policy: {
+          id: "p-1",
+          linkTtlSeconds: 900,
+          maxDownloads: null,
+          requireAuth: false,
+          allowedDomains: ["embed.test.com"],
+          allowedIpRanges: [],
+        },
+      }),
+    );
+    mocks.enforcePolicy.mockReturnValueOnce(allow);
+    mocks.presignGetUrl.mockResolvedValueOnce("https://s3/x?sig=1");
+    await GET(
+      new NextRequest(
+        "http://x/api/links/tok_abc_with_long_enough_token_value_xyz",
+        { headers: { "user-agent": "WordPress/6.4 oEmbed proxy" } },
+      ),
+      { params: params("tok_abc_with_long_enough_token_value_xyz") },
+    );
+    const ctx = mocks.enforcePolicy.mock.calls[0]?.[1] as {
+      secFetchDest?: string | null;
+      secFetchSite?: string | null;
+    };
+    expect(ctx.secFetchDest).toBeNull();
+    expect(ctx.secFetchSite).toBeNull();
+  });
+
   it("private link with policy that has EMPTY allowedDomains does NOT bypass (regression guard)", async () => {
     mocks.findLink.mockResolvedValueOnce(
       linkRow({

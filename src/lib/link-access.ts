@@ -268,6 +268,8 @@ export async function resolveAndAuthorizeLink(
     linkDefaultPolicy;
 
   const referer = req.headers.get("referer");
+  const secFetchDest = req.headers.get("sec-fetch-dest");
+  const secFetchSite = req.headers.get("sec-fetch-site");
   const isPublicEmbed = isEmbeddableLink;
   const decision = enforcePolicy(effective, {
     ipAddress,
@@ -280,7 +282,18 @@ export async function resolveAndAuthorizeLink(
     // side CSP `frame-ancestors` (sourced from the policy's
     // `allowedDomains`) becomes the parent-host gate instead.
     // `requireAuth` is intentionally NOT bypassed.
+    //
+    // Refinement: when `allowedDomains` is non-empty AND the
+    // request carries `Sec-Fetch-Dest` (modern browser), the
+    // engine ALSO requires the Referer to match those domains.
+    // Server-side oEmbed crawlers (no Sec-Fetch-Dest header) keep
+    // bypassing so WP / Notion discovery still works. This stops a
+    // user from opening a public-embed-with-allowedDomains link
+    // directly in a browser tab — they must reach it via an iframe
+    // on one of the listed parent sites.
     publicEmbedBypass: isPublicEmbed,
+    secFetchDest,
+    secFetchSite,
   });
 
   if (!decision.allow) {

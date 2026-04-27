@@ -249,6 +249,90 @@ describe("enforcePolicy", () => {
     ).toMatchObject({ allow: true });
   });
 
+  // ---- Sec-Fetch-Dest narrowing on public-embed + allowedDomains ----
+  // When the admin enables public embedding AND pins the link to a set
+  // of parent domains, the bypass should ONLY apply to server-side
+  // oEmbed crawlers (no Sec-Fetch-Dest). Browser-originated requests
+  // (direct nav OR iframe) MUST still match `allowedDomains` via the
+  // Referer header — otherwise pasting the URL in a fresh Chrome tab
+  // would open the document, which contradicts the admin's narrowing
+  // intent.
+
+  it("publicEmbedBypass=true + allowedDomains + Sec-Fetch-Dest=document + no Referer → DENIES (direct browser nav)", () => {
+    const policy = { ...openPolicy, allowedDomains: ["embed.test.com"] };
+    expect(
+      enforcePolicy(policy, {
+        ...baseCtx,
+        publicEmbedBypass: true,
+        secFetchDest: "document",
+        secFetchSite: "none",
+      }),
+    ).toEqual({ allow: false });
+  });
+
+  it("publicEmbedBypass=true + allowedDomains + Sec-Fetch-Dest=document + matching Referer → allows", () => {
+    const policy = { ...openPolicy, allowedDomains: ["embed.test.com"] };
+    expect(
+      enforcePolicy(policy, {
+        ...baseCtx,
+        referer: "https://embed.test.com/post/42",
+        publicEmbedBypass: true,
+        secFetchDest: "document",
+        secFetchSite: "cross-site",
+      }),
+    ).toMatchObject({ allow: true });
+  });
+
+  it("publicEmbedBypass=true + allowedDomains + Sec-Fetch-Dest=iframe + matching Referer → allows (cross-site iframe from allowed parent)", () => {
+    const policy = { ...openPolicy, allowedDomains: ["embed.test.com"] };
+    expect(
+      enforcePolicy(policy, {
+        ...baseCtx,
+        referer: "https://embed.test.com/page",
+        publicEmbedBypass: true,
+        secFetchDest: "iframe",
+        secFetchSite: "cross-site",
+      }),
+    ).toMatchObject({ allow: true });
+  });
+
+  it("publicEmbedBypass=true + allowedDomains + Sec-Fetch-Dest=iframe + non-matching Referer → DENIES (iframe from non-allowed parent — server defense in depth)", () => {
+    const policy = { ...openPolicy, allowedDomains: ["embed.test.com"] };
+    expect(
+      enforcePolicy(policy, {
+        ...baseCtx,
+        referer: "https://attacker.example/foo",
+        publicEmbedBypass: true,
+        secFetchDest: "iframe",
+        secFetchSite: "cross-site",
+      }),
+    ).toEqual({ allow: false });
+  });
+
+  it("publicEmbedBypass=true + allowedDomains + NO Sec-Fetch-Dest header (server-side oEmbed crawler) → allows even with no Referer", () => {
+    const policy = { ...openPolicy, allowedDomains: ["embed.test.com"] };
+    expect(
+      enforcePolicy(policy, {
+        ...baseCtx,
+        publicEmbedBypass: true,
+        secFetchDest: null,
+        secFetchSite: null,
+      }),
+    ).toMatchObject({ allow: true });
+  });
+
+  it("publicEmbedBypass=true + EMPTY allowedDomains + Sec-Fetch-Dest=document + no Referer → allows (no narrowing to enforce — admin signaled embed-anywhere)", () => {
+    const policy = { ...openPolicy, allowedDomains: [] };
+    expect(
+      enforcePolicy(policy, {
+        ...baseCtx,
+        publicEmbedBypass: true,
+        secFetchDest: "document",
+        secFetchSite: "none",
+      }),
+    ).toMatchObject({ allow: true });
+  });
+
   it("publicEmbedBypass=false (default / undefined) preserves the legacy deny — regression guard", () => {
     const policy = { ...openPolicy, allowedDomains: ["example.com"] };
     // Explicit false:

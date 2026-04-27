@@ -72,7 +72,7 @@ A per-link boolean column on `generated_links`. Default `false`. When `true`, th
 | `false` | empty | 200 | n/a | n/a | not embeddable (CSP `'none'`) | 404 (no discovery tag) |
 | `false` | `['x.com']` | **403** (F9.6 strict) | 200 | 403 | server 403 | 404 |
 | `true` | empty | 200 | 200 | 200 | 200 (CSP `https:`) | 200 |
-| `true` | `['x.com']` | 200 (server bypass) | 200 | 200 (server bypass) | 200 + CSP allows | 200 |
+| `true` | `['x.com']` | **403** (browser narrowed by Sec-Fetch-Dest) | 200 (Referer match) | **403** (Referer mismatch) | 200 (Referer match + CSP allows) | 200 (no Sec-Fetch-Dest) |
 
 **Key invariants:**
 
@@ -88,6 +88,10 @@ A per-link boolean column on `generated_links`. Default `false`. When `true`, th
 |---|---|
 | `GET /l/<hash>` | Viewer HTML. Emits `<link rel="alternate" type="application/json+oembed">` only when `allowPublicEmbed=true`. CSP `frame-ancestors` derived from policy. |
 | `GET /api/oembed?url=<viewer>&format=json` | Returns oEmbed JSON (`rich` for everything except `video/*`, which uses `video`). 404 when `allowPublicEmbed=false` or `policy.requireAuth=true`. |
+
+**Implementation note — `Sec-Fetch-Dest` discriminator:**
+
+When `allowPublicEmbed=true` AND `policy.allowedDomains` is non-empty, the policy engine refines its bypass: it inspects the `Sec-Fetch-Dest` request header (W3C Fetch Metadata, sent by all modern browsers since Chrome 76 / Firefox 90 / Safari 16.4). Browser-originated requests (header present) MUST satisfy the Referer-vs-`allowedDomains` check; server-side oEmbed crawlers (header absent) keep bypassing so WordPress / Notion / Confluence discovery still succeeds. This stops a user from opening a domain-pinned public-embed link directly in a Chrome tab — they must reach it via an iframe on one of the listed parent sites. Pre-Sec-Fetch browsers (Safari < 16.4, Firefox < 90, Chrome < 76 — pre-2022 desktop) bypass server-side narrowing but the browser-layer CSP `frame-ancestors` still blocks any iframe attempt.
 
 ## Files to Create
 

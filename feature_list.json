@@ -852,7 +852,8 @@
             "Counter increment + maxDownloads skipped on the embed path (each render = 2+ viewer hits)",
             "policy.requireAuth=true ALWAYS overrides — embed flow returns 404 to anonymous third-party servers",
             "When allowPublicEmbed=false, F9.3 strict enforcement applies — Referer/IP/auth gates are NOT bypassed even if the policy has allowedDomains",
-            "Test the four (allowPublicEmbed x allowedDomains) quadrants end-to-end"
+            "Test the four (allowPublicEmbed x allowedDomains) quadrants end-to-end",
+            "When allowPublicEmbed=true AND policy.allowedDomains is non-empty, use Sec-Fetch-Dest header to distinguish browser requests from server-side oEmbed crawlers — browsers MUST match Referer to an allowed domain; crawlers (no Sec-Fetch-Dest) keep bypassing so discovery still works"
           ],
           "passes": true
         }
