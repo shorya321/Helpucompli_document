@@ -11,11 +11,10 @@ function flatten(
 }
 
 describe("DASHBOARD_SIDEBAR_GROUPS", () => {
-  it("defines three groups (Workspace / Management / Account)", () => {
+  it("defines two groups (Workspace / Management)", () => {
     expect(DASHBOARD_SIDEBAR_GROUPS.map((g) => g.title)).toEqual([
       "Workspace",
       "Management",
-      "Account",
     ]);
   });
 });
@@ -36,7 +35,7 @@ describe("filterGroupsForRole", () => {
     expect(hrefs).toContain("/policies");
     expect(hrefs).toContain("/users");
     expect(hrefs).toContain("/audit");
-    expect(hrefs).toContain("/settings");
+    expect(hrefs).not.toContain("/settings");
   });
 
   it("admin loses /users but keeps /buckets /policies /audit", () => {
@@ -49,13 +48,13 @@ describe("filterGroupsForRole", () => {
     expect(hrefs).not.toContain("/users");
   });
 
-  it("viewer sees only Workspace + /settings", () => {
+  it("viewer sees only Workspace items", () => {
     const groups = filterGroupsForRole(DASHBOARD_SIDEBAR_GROUPS, "viewer");
     const hrefs = flatten(groups);
     expect(hrefs).toContain("/");
     expect(hrefs).toContain("/documents");
     expect(hrefs).toContain("/links");
-    expect(hrefs).toContain("/settings");
+    expect(hrefs).not.toContain("/settings");
     expect(hrefs).not.toContain("/buckets");
     expect(hrefs).not.toContain("/policies");
     expect(hrefs).not.toContain("/users");
@@ -65,6 +64,6 @@ describe("filterGroupsForRole", () => {
   it("drops groups that have no visible items", () => {
     const groups = filterGroupsForRole(DASHBOARD_SIDEBAR_GROUPS, "viewer");
     // Management group is empty for viewer -> should be dropped.
-    expect(groups.map((g) => g.title)).toEqual(["Workspace", "Account"]);
+    expect(groups.map((g) => g.title)).toEqual(["Workspace"]);
   });
 });

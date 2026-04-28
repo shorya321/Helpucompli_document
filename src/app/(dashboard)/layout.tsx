@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { auth0 } from "@/lib/auth0";
 import { resolveRole } from "@/lib/auth-guard";
+import { ensureUser } from "@/lib/ensure-user";
+import { prisma } from "@/lib/prisma";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -26,7 +28,12 @@ export default async function DashboardLayout({ children }: LayoutProps) {
   // correctly narrowed from `Role | null` to `Role` at this point.
   if (!role) throw new Error("unreachable: role narrowed by redirect");
 
+  // ensureUser upserts the DB row keyed by Auth0 sub. The DB id is
+  // passed to NavUser so the Account dropdown link can route to the
+  // canonical user detail page (/users/[id]).
+  const dbUser = await ensureUser(prisma, { session, role });
   const user = {
+    id: dbUser.id,
     name: (session.user.name as string | null | undefined) ?? null,
     email: (session.user.email as string | null | undefined) ?? null,
   };

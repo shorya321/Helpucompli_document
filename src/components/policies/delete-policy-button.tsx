@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 interface DeletePolicyButtonProps {
   readonly id: string;
@@ -13,15 +14,9 @@ export function DeletePolicyButton({ id, name }: DeletePolicyButtonProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
 
-  const onClick = () => {
-    if (
-      !window.confirm(
-        `Delete policy "${name}"? Any links currently using it will fall back to the default policy.`,
-      )
-    ) {
-      return;
-    }
+  const performDelete = () => {
     setError(null);
     startTransition(async () => {
       try {
@@ -38,16 +33,27 @@ export function DeletePolicyButton({ id, name }: DeletePolicyButtonProps) {
   };
 
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      onClick={onClick}
-      disabled={isPending}
-      title={error ?? undefined}
-      className="text-destructive hover:text-destructive hover:bg-destructive/10"
-    >
-      {isPending ? "Deleting…" : "Delete"}
-    </Button>
+    <>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={() => setOpen(true)}
+        disabled={isPending}
+        title={error ?? undefined}
+        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+      >
+        {isPending ? "Deleting…" : "Delete"}
+      </Button>
+      <ConfirmDialog
+        open={open}
+        title={`Delete policy "${name}"?`}
+        description="Any links currently using it will fall back to the default policy."
+        destructive
+        confirmLabel="Delete"
+        onConfirm={performDelete}
+        onClose={() => setOpen(false)}
+      />
+    </>
   );
 }

@@ -14,7 +14,7 @@ export const userListQuerySchema = z.object({
     .default("createdAt"),
   dir: z.enum(["asc", "desc"]).default("desc"),
   page: z.number().int().positive().default(1),
-  pageSize: z.number().int().positive().max(100).default(25),
+  pageSize: z.number().int().positive().max(100).default(10),
 });
 
 export type UserListQuery = z.infer<typeof userListQuerySchema>;
@@ -35,7 +35,7 @@ export function parseUserListQuery(
     dir: firstValue(params.dir) ?? "desc",
     page: params.page !== undefined ? Number(firstValue(params.page)) : 1,
     pageSize:
-      params.pageSize !== undefined ? Number(firstValue(params.pageSize)) : 25,
+      params.pageSize !== undefined ? Number(firstValue(params.pageSize)) : 10,
   };
   const parsed = userListQuerySchema.safeParse(raw);
   return parsed.success ? parsed.data : null;
@@ -75,7 +75,7 @@ export async function listUsers(
   input: Partial<UserListQuery>,
 ): Promise<UserListResult> {
   const page = input.page ?? 1;
-  const pageSize = input.pageSize ?? 25;
+  const pageSize = input.pageSize ?? 10;
   const sort = input.sort ?? "createdAt";
   const dir = input.dir ?? "desc";
 

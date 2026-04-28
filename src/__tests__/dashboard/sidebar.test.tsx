@@ -9,7 +9,11 @@ vi.mock("next/navigation", () => ({
 import { Sidebar } from "@/components/layout/sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 
-const STUB_USER = { name: "Test User", email: "test@example.com" };
+const STUB_USER = {
+  id: "u-test",
+  name: "Test User",
+  email: "test@example.com",
+};
 
 function renderSidebar(role: "superadmin" | "admin" | "viewer"): string {
   return renderToString(
@@ -33,15 +37,15 @@ describe("Sidebar", () => {
     expect(html).toMatch(/href="\/buckets"/);
   });
 
-  it("only shows documents + links + home + settings for viewer role", () => {
+  it("only shows documents + links + home for viewer role", () => {
     const html = renderSidebar("viewer");
     expect(html).toMatch(/href="\/documents"/);
     expect(html).toMatch(/href="\/links"/);
-    expect(html).toMatch(/href="\/settings"/);
+    expect(html).not.toMatch(/href="\/settings"/);
     expect(html).not.toMatch(/href="\/buckets"/);
     expect(html).not.toMatch(/href="\/policies"/);
     expect(html).not.toMatch(/href="\/audit"/);
-    expect(html).not.toMatch(/href="\/users"/);
+    expect(html).not.toMatch(/href="\/users\b"/);
   });
 
   it("marks the link matching the current pathname as active via aria-current", () => {
@@ -60,11 +64,10 @@ describe("Sidebar", () => {
     expect(html).toMatch(/data-slot="sidebar"/);
   });
 
-  it("renders the three nav group labels (Workspace / Management / Account)", () => {
+  it("renders the two nav group labels (Workspace / Management)", () => {
     const html = renderSidebar("superadmin");
     expect(html).toContain("Workspace");
     expect(html).toContain("Management");
-    expect(html).toContain("Account");
   });
 
   it("surfaces the NavUser footer with the current displayName", () => {

@@ -10,7 +10,7 @@ describe("parseUserListQuery", () => {
     const parsed = parseUserListQuery({});
     expect(parsed).toMatchObject({
       page: 1,
-      pageSize: 25,
+      pageSize: 10,
       sort: "createdAt",
       dir: "desc",
     });
@@ -102,6 +102,6 @@ describe("listUsers", () => {
     expect(result.total).toBe(1);
     expect(result.users[0]?.email).toBe("a@b.com");
     expect(result.page).toBe(1);
-    expect(result.pageSize).toBe(25);
+    expect(result.pageSize).toBe(10);
   });
 });

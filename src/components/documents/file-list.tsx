@@ -2,9 +2,12 @@ import Link from "next/link";
 import { Folder, FileText } from "lucide-react";
 import { formatStorage } from "@/components/buckets/bucket-card";
 import { buildBreadcrumb } from "@/lib/documents-browse";
-import { DownloadButton } from "@/components/documents/download-button";
 import { ContextMenu } from "@/components/documents/context-menu";
-import { buildDocumentMenu } from "@/components/documents/context-menu-items";
+import {
+  buildDocumentMenu,
+  buildFolderMenu,
+} from "@/components/documents/context-menu-items";
+import { DocumentRowMenu } from "@/components/documents/document-row-menu";
 
 export type FileListEntry =
   | {
@@ -24,6 +27,7 @@ interface FileListProps {
   readonly bucketId?: string;
   readonly canHardDelete?: boolean;
   readonly canGenerateLink?: boolean;
+  readonly canDeleteFolder?: boolean;
   readonly prefix: string;
   readonly entries: ReadonlyArray<FileListEntry>;
   readonly view: "grid" | "list";
@@ -56,41 +60,107 @@ function FileRow({
   canHardDelete,
   canGenerateLink,
 }: FileRowProps) {
+  // Build once, share between right-click ContextMenu and kebab
+  // DocumentRowMenu so role-gating + ordering stay in lockstep.
+  const items = bucketId
+    ? buildDocumentMenu({
+        bucket,
+        prefix,
+        bucketId,
+        s3Key: entry.key,
+        canHardDelete,
+        canGenerateLink,
+      })
+    : null;
+
   const inner = (
     <>
       <span className="text-foreground inline-flex items-baseline gap-2 break-all font-medium">
         <FileText aria-hidden="true" className="text-muted-foreground h-4 w-4 shrink-0" />
         {filenameFromKey(entry.key)}
       </span>
-      <span className="inline-flex items-baseline gap-3">
+      <span className="inline-flex items-center gap-3">
         <span className="text-muted-foreground font-mono text-xs tabular-nums">
           {formatStorage(entry.size)}
         </span>
-        {bucketId ? (
-          <DownloadButton bucketId={bucketId} s3Key={entry.key} />
-        ) : null}
+        {items ? <DocumentRowMenu items={items} /> : null}
       </span>
     </>
   );
 
-  if (!bucketId) {
+  if (!items) {
     return <li className={rowClass(view)}>{inner}</li>;
   }
 
   return (
     <li className={rowClass(view)}>
-      <ContextMenu
-        items={buildDocumentMenu({
-          bucket,
-          prefix,
-          bucketId,
-          s3Key: entry.key,
-          canHardDelete,
-          canGenerateLink,
-        })}
-      >
-        <span className="flex w-full flex-wrap items-baseline justify-between gap-3">
+      <ContextMenu items={items}>
+        <span className="flex w-full flex-wrap items-center justify-between gap-3">
           {inner}
+        </span>
+      </ContextMenu>
+    </li>
+  );
+}
+
+interface FolderRowProps {
+  readonly entry: Extract<FileListEntry, { kind: "folder" }>;
+  readonly view: "grid" | "list";
+  readonly bucket: string;
+  readonly bucketId?: string;
+  readonly parentPrefix: string;
+  readonly canDeleteFolder: boolean;
+  readonly canHardDelete: boolean;
+}
+
+function FolderRow({
+  entry,
+  view,
+  bucket,
+  bucketId,
+  parentPrefix,
+  canDeleteFolder,
+  canHardDelete,
+}: FolderRowProps) {
+  const wrapperClass =
+    view === "grid"
+      ? "border-border bg-card rounded-lg border px-4 py-2.5 transition-all hover:border-ring/40 hover:shadow-sm"
+      : "border-border/50 border-b px-4 py-2.5 last:border-b-0 transition-colors hover:bg-muted/40";
+
+  const link = (
+    <Link
+      href={hrefForFolder(bucket, entry.prefix)}
+      className="text-foreground hover:text-foreground inline-flex items-center gap-2 break-all text-sm font-medium no-underline transition-colors"
+    >
+      <Folder
+        aria-hidden="true"
+        className="text-muted-foreground size-4 shrink-0"
+      />
+      {entry.name}/
+    </Link>
+  );
+
+  const items =
+    bucketId && canDeleteFolder
+      ? buildFolderMenu({
+          bucket,
+          parentPrefix,
+          bucketId,
+          folderPrefix: entry.prefix,
+          canHardDelete,
+        })
+      : null;
+
+  if (!items) {
+    return <li className={wrapperClass}>{link}</li>;
+  }
+
+  return (
+    <li className={wrapperClass}>
+      <ContextMenu items={items}>
+        <span className="flex w-full items-center justify-between gap-3">
+          {link}
+          <DocumentRowMenu items={items} />
         </span>
       </ContextMenu>
     </li>
@@ -113,6 +183,7 @@ export function FileList({
   bucketId,
   canHardDelete = false,
   canGenerateLink = false,
+  canDeleteFolder = false,
   prefix,
   entries,
   view,
@@ -176,25 +247,16 @@ export function FileList({
         >
           {entries.map((e) =>
             e.kind === "folder" ? (
-              <li
+              <FolderRow
                 key={`folder:${e.prefix}`}
-                className={
-                  view === "grid"
-                    ? "border-border bg-card rounded-lg border px-4 py-2.5 transition-all hover:border-ring/40 hover:shadow-sm"
-                    : "border-border/50 border-b px-4 py-2.5 last:border-b-0 transition-colors hover:bg-muted/40"
-                }
-              >
-                <Link
-                  href={hrefForFolder(bucket, e.prefix)}
-                  className="text-foreground hover:text-foreground inline-flex items-center gap-2 break-all text-sm font-medium no-underline transition-colors"
-                >
-                  <Folder
-                    aria-hidden="true"
-                    className="text-muted-foreground size-4 shrink-0"
-                  />
-                  {e.name}/
-                </Link>
-              </li>
+                entry={e}
+                view={view}
+                bucket={bucket}
+                bucketId={bucketId}
+                parentPrefix={prefix}
+                canDeleteFolder={canDeleteFolder}
+                canHardDelete={canHardDelete}
+              />
             ) : (
               <FileRow
                 key={`file:${e.key}`}

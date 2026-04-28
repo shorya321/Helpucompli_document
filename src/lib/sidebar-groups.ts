@@ -4,7 +4,6 @@ import {
   FolderKanban,
   Home,
   Link2,
-  Settings,
   Shield,
   Users,
   type LucideIcon,
@@ -45,12 +44,6 @@ export const DASHBOARD_SIDEBAR_GROUPS: readonly NavGroupConfig[] = [
       { href: "/policies", label: "Policies", icon: Shield, roles: ADMIN_UP },
       { href: "/users", label: "Users", icon: Users, roles: SUPER_ONLY },
       { href: "/audit", label: "Audit Log", icon: Activity, roles: ADMIN_UP },
-    ],
-  },
-  {
-    title: "Account",
-    items: [
-      { href: "/settings", label: "Settings", icon: Settings, roles: ALL },
     ],
   },
 ] as const;

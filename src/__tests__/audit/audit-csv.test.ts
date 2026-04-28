@@ -13,6 +13,7 @@ function row(over: Partial<AuditQueryRow> = {}): AuditQueryRow {
     userId: "u-1",
     userName: "Alice",
     userEmail: "alice@x.com",
+    metadata: null,
     ...over,
   };
 }

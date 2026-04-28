@@ -37,6 +37,10 @@ export interface AuditQueryRow {
   readonly userId: string | null;
   readonly userName: string | null;
   readonly userEmail: string | null;
+  // JSON blob written by logAudit() callers — surfaced to the audit UI
+  // so reviewers can see action-specific context (e.g. allowPublicEmbed
+  // on LINK_GENERATE, mode=folder_marker on DOCUMENT_UPLOAD-folder).
+  readonly metadata: Record<string, unknown> | null;
 }
 
 export interface AuditQueryResult {
@@ -99,6 +103,7 @@ export async function queryAuditLogs(
       targetId: true,
       ipAddress: true,
       userId: true,
+      metadata: true,
       user: { select: { id: true, name: true, email: true } },
     },
   };
@@ -119,6 +124,7 @@ export async function queryAuditLogs(
       | undefined;
     const userName = user?.name && user.name.length > 0 ? user.name : null;
     const userEmail = user?.email && user.email.length > 0 ? user.email : null;
+    const rawMeta = row.metadata as Record<string, unknown> | null | undefined;
     return {
       id: row.id as string,
       createdAt: row.createdAt as Date,
@@ -129,6 +135,7 @@ export async function queryAuditLogs(
       userId: (row.userId as string | null) ?? user?.id ?? null,
       userName,
       userEmail,
+      metadata: rawMeta ?? null,
     };
   });
 

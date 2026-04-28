@@ -67,3 +67,52 @@ export function buildDocumentMenu({
         ]),
   ];
 }
+
+// Folder context menu — Delete (admin+) and Delete permanently
+// (superadmin). Same href shape as buildDocumentMenu so the dialog
+// mount in page.tsx parses both via shared `op` + `prefix` params.
+// `canDelete` mirrors role gating: admins see Delete, viewers see
+// nothing (caller short-circuits before invoking this builder).
+export function buildFolderMenu({
+  bucket,
+  parentPrefix = "",
+  bucketId,
+  folderPrefix,
+  canHardDelete,
+  basePath = "/documents",
+}: {
+  readonly bucket: string;
+  // Parent of the folder being acted on — preserves browse state so the
+  // dialog mounts in the same view the user is in.
+  readonly parentPrefix?: string;
+  readonly bucketId: string;
+  readonly folderPrefix: string; // ends with "/"
+  readonly canHardDelete: boolean;
+  readonly basePath?: string;
+}): ReadonlyArray<ContextMenuItem> {
+  const browse =
+    `bucket=${encodeURIComponent(bucket)}` +
+    (parentPrefix ? `&prefix=${encodeURIComponent(parentPrefix)}` : "");
+  const q = (op: string) =>
+    `${basePath}?${browse}&op=${op}` +
+    `&bucketId=${encodeURIComponent(bucketId)}` +
+    `&folderPrefix=${encodeURIComponent(folderPrefix)}`;
+  return [
+    {
+      key: "delete-folder",
+      label: "Delete",
+      href: q("delete-folder"),
+      danger: true,
+    },
+    ...(!canHardDelete
+      ? []
+      : [
+          {
+            key: "hard-delete-folder",
+            label: "Delete permanently",
+            href: q("hard-delete-folder"),
+            danger: true,
+          } as ContextMenuItem,
+        ]),
+  ];
+}

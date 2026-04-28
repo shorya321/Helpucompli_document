@@ -52,7 +52,7 @@ function buildQuery(filters: AuditFiltersValue, cursor: string | null): string {
   if (filters.dateTo) sp.set("dateTo", `${filters.dateTo}T23:59:59Z`);
   for (const a of filters.actions) sp.append("actions", a);
   if (cursor) sp.set("cursor", cursor);
-  sp.set("limit", "50");
+  sp.set("limit", "10");
   const qs = sp.toString();
   return qs ? `?${qs}` : "";
 }
@@ -119,19 +119,54 @@ export function AuditTable({ initial }: AuditTableProps) {
         header: "User",
       },
       {
-        accessorKey: "action",
+        id: "action",
         header: "Action",
-        cell: ({ getValue }) => {
-          const action = getValue<string>();
+        cell: ({ row }) => {
+          const r = row.original;
+          // Folder creation is logged as DOCUMENT_UPLOAD with
+          // targetType=folder + metadata.mode=folder_marker (no
+          // dedicated enum value — see src/app/api/s3/folders/route.ts).
+          // Display synthetic "FOLDER_CREATE" so reviewers can tell
+          // folders apart from real document uploads at a glance. The
+          // colour tone still derives from the underlying action so
+          // grouping behaviour is unchanged.
+          const display =
+            r.action === "DOCUMENT_UPLOAD" && r.targetType === "folder"
+              ? "FOLDER_CREATE"
+              : r.action;
           const variant =
-            TONE_VARIANT[actionBadgeTone(action as Parameters<typeof actionBadgeTone>[0])];
+            TONE_VARIANT[
+              actionBadgeTone(
+                r.action as Parameters<typeof actionBadgeTone>[0],
+              )
+            ];
+          // Surface allowPublicEmbed (per-link iframe opt-in) inline so
+          // reviewers can spot embed-enabled links without expanding
+          // metadata. The bit is recorded by link-create at audit time
+          // (`metadata.allowPublicEmbed`) but is not in any DB column
+          // on the audit row itself — it lives in the JSON blob.
+          const showEmbed =
+            r.action === "LINK_GENERATE" &&
+            r.metadata !== null &&
+            (r.metadata as { allowPublicEmbed?: boolean })
+              .allowPublicEmbed === true;
           return (
-            <Badge
-              variant={variant}
-              className="font-mono text-[10px] uppercase tracking-wide"
-            >
-              {action}
-            </Badge>
+            <span className="inline-flex items-center gap-1">
+              <Badge
+                variant={variant}
+                className="font-mono text-[10px] uppercase tracking-wide"
+              >
+                {display}
+              </Badge>
+              {showEmbed ? (
+                <Badge
+                  variant="outline"
+                  className="font-mono text-[10px] uppercase tracking-wide"
+                >
+                  EMBED
+                </Badge>
+              ) : null}
+            </span>
           );
         },
       },

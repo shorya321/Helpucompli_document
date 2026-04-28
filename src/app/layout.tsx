@@ -59,6 +59,15 @@ export default async function RootLayout({
       }
     >
       <head>
+        {/*
+          Inline anti-FOUC script. RootLayout is a Server Component, so
+          this <script> is server-rendered into the HTML and executes on
+          initial paint before React hydrates. React 19 / Turbopack may
+          surface an informational "script tag in JSX" warning in dev —
+          ignore it. next/script with beforeInteractive cannot be used
+          here: it injects a nonce="" attribute that hydration-mismatches
+          against the client's nonce={undefined}.
+        */}
         <script
           suppressHydrationWarning
           // eslint-disable-next-line react/no-danger

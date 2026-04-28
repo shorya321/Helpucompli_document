@@ -105,6 +105,7 @@ export default async function LinksPage({ searchParams }: LinksPageProps) {
           status: "all",
           sort: "createdAt",
           dir: "desc",
+          limit: 10,
         }),
         getLinkAnalytics(asLinkAnalyticsPrisma(prisma)),
       ]);

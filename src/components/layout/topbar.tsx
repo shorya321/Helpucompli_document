@@ -11,6 +11,7 @@ import { ThemeSwitch } from "@/components/layout/theme-switch";
 import type { Role } from "@/types";
 
 export interface TopbarUser {
+  readonly id: string;
   readonly name: string | null | undefined;
   readonly email: string | null | undefined;
 }

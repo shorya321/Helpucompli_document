@@ -7,6 +7,7 @@ import { ArrowDown, ArrowUp, Check, Code2, Link2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Label } from "@/components/ui/label";
 import {
   Table,
@@ -49,7 +50,7 @@ const SORT_OPTIONS: ReadonlyArray<{
 }> = [
   { value: "createdAt", label: "Created" },
   { value: "expiresAt", label: "Expires" },
-  { value: "downloadCount", label: "Downloads" },
+  { value: "downloadCount", label: "Hits" },
 ];
 
 function StatusBadge({ status }: { readonly status: LinkStatus }) {
@@ -94,7 +95,7 @@ function buildQuery(
   sp.set("sort", sort);
   sp.set("dir", dir);
   if (cursor) sp.set("cursor", cursor);
-  sp.set("limit", "50");
+  sp.set("limit", "10");
   return `?${sp.toString()}`;
 }
 
@@ -160,19 +161,31 @@ export function LinkTable({ initial }: LinkTableProps) {
   const [copied, setCopied] = useState<{ id: string; kind: CopyKind } | null>(
     null,
   );
-  const onRevoke = async (id: string) => {
-    if (!window.confirm("Revoke this link? Anyone holding the URL will get 403.")) {
-      return;
-    }
+  // Replaces native window.confirm/alert with shadcn Dialog. confirm
+  // = revoke prompt (destructive). alert = single-button error notice.
+  const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
+  const [errorAlert, setErrorAlert] = useState<{
+    title: string;
+    description?: string;
+  } | null>(null);
+
+  const performRevoke = async (id: string) => {
     setRevoking(id);
     try {
       await revokeLink(id);
       await queryClient.invalidateQueries({ queryKey: ["links"] });
     } catch {
-      window.alert("Failed to revoke. Try again.");
+      setErrorAlert({
+        title: "Revoke failed",
+        description: "Failed to revoke. Try again.",
+      });
     } finally {
       setRevoking(null);
     }
+  };
+
+  const onRevoke = (id: string) => {
+    setConfirmRevoke(id);
   };
 
   // Re-reveal the bearer token via the audited share-info endpoint and
@@ -191,9 +204,11 @@ export function LinkTable({ initial }: LinkTableProps) {
         );
       }, 2000);
     } catch {
-      window.alert(
-        "Failed to copy. The link may be revoked, expired, or rate-limited.",
-      );
+      setErrorAlert({
+        title: "Copy failed",
+        description:
+          "Failed to copy. The link may be revoked, expired, or rate-limited.",
+      });
     } finally {
       setCopying(null);
     }
@@ -305,7 +320,7 @@ export function LinkTable({ initial }: LinkTableProps) {
                 <TableHead>Document</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Created by</TableHead>
-                <TableHead>Downloads</TableHead>
+                <TableHead>Hits</TableHead>
                 <TableHead>Expires</TableHead>
                 <TableHead className="text-right" aria-label="Actions" />
               </TableRow>
@@ -444,6 +459,25 @@ export function LinkTable({ initial }: LinkTableProps) {
           {isFetching ? "Loading…" : `${rows.length} rows`}
         </span>
       </div>
+      <ConfirmDialog
+        open={confirmRevoke !== null}
+        title="Revoke this link?"
+        description="Anyone holding the URL will get 403."
+        destructive
+        confirmLabel="Revoke"
+        onConfirm={async () => {
+          const id = confirmRevoke;
+          if (id) await performRevoke(id);
+        }}
+        onClose={() => setConfirmRevoke(null)}
+      />
+      <ConfirmDialog
+        open={errorAlert !== null}
+        variant="alert"
+        title={errorAlert?.title ?? ""}
+        description={errorAlert?.description}
+        onClose={() => setErrorAlert(null)}
+      />
     </section>
   );
 }

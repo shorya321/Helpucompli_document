@@ -21,6 +21,7 @@ import {
 import type { Role } from "@/types";
 
 export interface NavUserInfo {
+  readonly id: string;
   readonly name: string | null | undefined;
   readonly email: string | null | undefined;
 }
@@ -98,7 +99,7 @@ export function NavUser({ user, role }: NavUserProps) {
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem asChild>
-                <a href="/settings/profile">
+                <a href={`/users/${user.id}`}>
                   <UserRound aria-hidden="true" />
                   Account
                 </a>

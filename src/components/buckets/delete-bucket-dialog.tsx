@@ -80,13 +80,14 @@ export function DeleteBucketDialog({
       <DialogContent className="sm:max-w-lg">
         <form onSubmit={onSubmit} className="flex flex-col gap-4">
           <DialogHeader>
-            <DialogTitle>Delete bucket</DialogTitle>
+            <DialogTitle>Decommission bucket</DialogTitle>
           </DialogHeader>
 
           <p className="border-destructive/40 bg-destructive/10 text-destructive rounded-md border px-3 py-2 text-sm">
-            This deactivates the PostgreSQL row and deletes the S3 bucket. It
-            cannot be undone. The bucket must already be empty (no active
-            documents). A BUCKET_DELETE audit entry is recorded.
+            This deactivates the bucket record and permanently deletes the S3
+            bucket. It cannot be undone. The bucket must already be empty (no
+            active documents). Audit history is preserved. The bucket name
+            cannot be reused after decommissioning.
           </p>
 
           <div className="flex flex-col gap-2">
@@ -118,7 +119,7 @@ export function DeleteBucketDialog({
               variant="destructive"
               disabled={pending || !matches}
             >
-              {pending ? "Deleting…" : "Delete bucket"}
+              {pending ? "Decommissioning…" : "Decommission bucket"}
             </Button>
           </DialogFooter>
         </form>

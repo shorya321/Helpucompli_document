@@ -153,7 +153,7 @@ export function DocumentSearch({ initialBucketId }: DocumentSearchProps) {
     getCoreRowModel: getCoreRowModel(),
   });
 
-  const pageSize = 25;
+  const pageSize = 10;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (

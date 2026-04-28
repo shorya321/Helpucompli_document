@@ -29,7 +29,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
   const params = await searchParams;
   const query = parseUserListQuery(params) ?? {
     page: 1,
-    pageSize: 25,
+    pageSize: 10,
     sort: "createdAt" as const,
     dir: "desc" as const,
   };

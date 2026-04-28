@@ -21,7 +21,9 @@ import {
  *   - Flash prevention runs via a server-rendered
  *     dangerouslySetInnerHTML script in src/app/layout.tsx <head>,
  *     before the React tree hydrates. That path is a server-component
- *     render and does not trigger the React 19 client warning.
+ *     render and executes on initial paint. React 19 / Turbopack may
+ *     log an informational "script tag in JSX" warning in dev — it's a
+ *     false positive for server-rendered scripts and is ignored.
  *   - React context handles theme state, localStorage persistence, and
  *     matchMedia listening at runtime.
  *

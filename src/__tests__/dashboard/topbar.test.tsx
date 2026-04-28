@@ -9,7 +9,7 @@ function renderTopbar(
 ): string {
   return renderToString(
     <SidebarProvider>
-      <Topbar user={user} role={role} />
+      <Topbar user={{ id: "u-test", ...user }} role={role} />
     </SidebarProvider>,
   );
 }

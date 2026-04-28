@@ -19,6 +19,8 @@
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
+    "db:clean": "prisma db execute --file ./prisma/clean.sql --schema ./prisma/schema.prisma",
+    "db:clean:all": "prisma db execute --file ./prisma/clean-all.sql --schema ./prisma/schema.prisma",
     "typecheck": "tsc --noEmit",
     "check-progress": "./scripts/check-progress.sh",
     "postinstall": "node scripts/copy-pdfjs.mjs",

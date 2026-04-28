@@ -201,7 +201,7 @@ function DetailsView({
               <Button variant="outline" size="sm" asChild>
                 <a href={`/buckets/${details.id}?delete=1`}>
                   <Trash2 aria-hidden="true" className="size-3.5" />
-                  Delete bucket
+                  Decommission bucket
                 </a>
               </Button>
             ) : null}

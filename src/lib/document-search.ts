@@ -19,7 +19,7 @@ export const documentSearchQuerySchema = z.object({
   sort: z.enum(["filename", "uploadedAt", "sizeBytes"]).default("uploadedAt"),
   dir: z.enum(["asc", "desc"]).default("desc"),
   page: z.number().int().positive().default(1),
-  pageSize: z.number().int().positive().max(100).default(25),
+  pageSize: z.number().int().positive().max(100).default(10),
 });
 
 export type DocumentSearchQuery = z.infer<typeof documentSearchQuerySchema>;
@@ -45,7 +45,7 @@ export function parseDocumentSearchQuery(
     dir: firstValue(params.dir) ?? "desc",
     page: params.page !== undefined ? Number(firstValue(params.page)) : 1,
     pageSize:
-      params.pageSize !== undefined ? Number(firstValue(params.pageSize)) : 25,
+      params.pageSize !== undefined ? Number(firstValue(params.pageSize)) : 10,
   };
   const parsed = documentSearchQuerySchema.safeParse(raw);
   return parsed.success ? parsed.data : null;
@@ -95,7 +95,7 @@ export async function searchDocuments(
   input: Partial<DocumentSearchQuery>,
 ): Promise<DocumentSearchResult> {
   const page = input.page ?? 1;
-  const pageSize = input.pageSize ?? 25;
+  const pageSize = input.pageSize ?? 10;
   const sort = input.sort ?? "uploadedAt";
   const dir = input.dir ?? "desc";
 

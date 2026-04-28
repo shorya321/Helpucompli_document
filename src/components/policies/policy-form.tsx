@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DomainInput } from "@/components/policies/domain-input";
@@ -24,6 +25,15 @@ const TTL_PRESETS: ReadonlyArray<{ value: number; label: string }> = [
 interface PolicyFormProps {
   readonly initial?: Partial<PolicyInput> & { id?: string };
   readonly buckets: ReadonlyArray<{ id: string; name: string }>;
+  // Optional document list for the "Single object" target picker. When
+  // provided, the picker switches from a free-text S3 key input to a
+  // dropdown of {bucket} — {filename} entries that auto-fill the s3Key.
+  readonly documents?: ReadonlyArray<{
+    id: string;
+    filename: string;
+    s3Key: string;
+    bucketName: string;
+  }>;
   readonly mode: "create" | "edit";
   // Gates the "Never expires" TTL option. Server also 403s if a non-
   // superadmin sends linkTtlSeconds=null.
@@ -49,6 +59,7 @@ const nativeSelectClass =
 export function PolicyForm({
   initial,
   buckets,
+  documents,
   mode,
   canNeverExpire = false,
 }: PolicyFormProps) {
@@ -75,6 +86,8 @@ export function PolicyForm({
   });
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  // Replaces native window.confirm — see ConfirmDialog at end of form.
+  const [confirmNeverExpires, setConfirmNeverExpires] = useState(false);
 
   const validation = useMemo(
     () => policyInputSchema.safeParse(policy),
@@ -134,6 +147,7 @@ export function PolicyForm({
           targetType={policy.targetType}
           targetValue={policy.targetValue}
           buckets={buckets}
+          documents={documents}
           disabled={submitting}
           onChange={({ targetType, targetValue }) =>
             setPolicy({
@@ -189,11 +203,11 @@ export function PolicyForm({
               if (raw === "never") {
                 // HIPAA footgun guard: a policy with linkTtlSeconds=null
                 // issues perpetual bearer tokens for every link it
-                // governs. Explicit confirm required; cancel reverts.
-                const ok = window.confirm(
-                  "Links governed by this policy will not expire unless revoked or the download cap is hit. Are you sure?",
-                );
-                if (ok) setPolicy({ ...policy, linkTtlSeconds: null });
+                // governs. Explicit confirm required; the <select> stays
+                // on the prior value because it is controlled by
+                // `policy.linkTtlSeconds` and we only setPolicy on
+                // confirm.
+                setConfirmNeverExpires(true);
                 return;
               }
               setPolicy({
@@ -280,6 +294,15 @@ export function PolicyForm({
       </div>
 
       <PolicyPreview policy={policy} />
+      <ConfirmDialog
+        open={confirmNeverExpires}
+        title="Use a non-expiring policy?"
+        description="Links governed by this policy will not expire unless revoked or the download cap is hit. Are you sure?"
+        destructive
+        confirmLabel="Use never expires"
+        onConfirm={() => setPolicy({ ...policy, linkTtlSeconds: null })}
+        onClose={() => setConfirmNeverExpires(false)}
+      />
     </form>
   );
 }

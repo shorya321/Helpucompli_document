@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -112,6 +113,16 @@ export function GenerateLinkForm({
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
+  // Replaces native window.confirm — see ConfirmDialog at the bottom of
+  // the form. null = no dialog open. onConfirm fires the original "yes"
+  // branch (e.g. setTtl("never"), setAllowPublicEmbed(true)).
+  const [confirmDialog, setConfirmDialog] = useState<null | {
+    title: string;
+    description: string;
+    destructive?: boolean;
+    confirmLabel?: string;
+    onConfirm: () => void;
+  }>(null);
 
   const embedCode = useMemo(
     () => (result ? buildEmbedCode(result.shareableUrl) : ""),
@@ -327,11 +338,17 @@ export function GenerateLinkForm({
                 if (raw === "never") {
                   // HIPAA footgun guard: picking "Never expires" produces
                   // a perpetual bearer token. Require explicit confirm;
-                  // revert to prior preset on cancel.
-                  const ok = window.confirm(
-                    "A non-expiring share link remains valid until it is revoked or the download cap is hit. Are you sure?",
-                  );
-                  if (ok) setTtl("never");
+                  // value reverts to prior preset on cancel because the
+                  // <select> is controlled by `ttl` state and `setTtl`
+                  // only fires inside onConfirm.
+                  setConfirmDialog({
+                    title: "Use a non-expiring link?",
+                    description:
+                      "A non-expiring share link remains valid until it is revoked or the download cap is hit. Are you sure?",
+                    destructive: true,
+                    confirmLabel: "Use never expires",
+                    onConfirm: () => setTtl("never"),
+                  });
                   return;
                 }
                 setTtl(Number.parseInt(raw, 10));
@@ -392,12 +409,17 @@ export function GenerateLinkForm({
                   if (e.target.checked) {
                     // HIPAA footgun guard: turning embedding on lets ANY
                     // HTTPS site iframe this link. Require explicit
-                    // confirm; revert on cancel. Mirrors the "Never
-                    // expires" pattern above.
-                    const ok = window.confirm(
-                      "Public embedding lets any HTTPS site iframe this link (WordPress, Circle, Notion). Do not enable for documents containing PHI. Continue?",
-                    );
-                    if (ok) setAllowPublicEmbed(true);
+                    // confirm; checkbox reverts on cancel because it is
+                    // controlled by `allowPublicEmbed` state and the
+                    // setter only fires inside onConfirm.
+                    setConfirmDialog({
+                      title: "Allow embedding?",
+                      description:
+                        "Embedding lets any HTTPS site iframe this link (WordPress, Circle, Notion). Do not enable for documents containing PHI. Continue?",
+                      destructive: true,
+                      confirmLabel: "Allow embedding",
+                      onConfirm: () => setAllowPublicEmbed(true),
+                    });
                     return;
                   }
                   setAllowPublicEmbed(false);
@@ -530,6 +552,15 @@ export function GenerateLinkForm({
           </p>
         </form>
       </CardContent>
+      <ConfirmDialog
+        open={confirmDialog !== null}
+        title={confirmDialog?.title ?? ""}
+        description={confirmDialog?.description}
+        destructive={confirmDialog?.destructive}
+        confirmLabel={confirmDialog?.confirmLabel}
+        onConfirm={confirmDialog?.onConfirm}
+        onClose={() => setConfirmDialog(null)}
+      />
     </Card>
   );
 }

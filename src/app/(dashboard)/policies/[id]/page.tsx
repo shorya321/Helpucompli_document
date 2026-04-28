@@ -34,14 +34,38 @@ export default async function EditPolicyPage({
   if (!policy) notFound();
 
   let buckets: Array<{ id: string; name: string }> = [];
+  let documents: Array<{
+    id: string;
+    filename: string;
+    s3Key: string;
+    bucketName: string;
+  }> = [];
   try {
-    buckets = await prisma.bucket.findMany({
-      where: { isActive: true },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    });
+    [buckets, documents] = await Promise.all([
+      prisma.bucket.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      }),
+      prisma.document
+        .findMany({
+          where: { isDeleted: false },
+          include: { bucket: { select: { name: true } } },
+          orderBy: { uploadedAt: "desc" },
+          take: 200,
+        })
+        .then((rows) =>
+          rows.map((d) => ({
+            id: d.id,
+            filename: d.filename,
+            s3Key: d.s3Key,
+            bucketName: d.bucket.name,
+          })),
+        ),
+    ]);
   } catch {
     buckets = [];
+    documents = [];
   }
 
   return (
@@ -56,6 +80,7 @@ export default async function EditPolicyPage({
       </header>
       <PolicyForm
         buckets={buckets}
+        documents={documents}
         mode="edit"
         canNeverExpire={isSuperadmin}
         initial={{

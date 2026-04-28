@@ -165,6 +165,31 @@ export async function POST(req: NextRequest) {
     return json({ data: created, error: null }, 201);
   } catch (err) {
     if (err instanceof DuplicateBucketNameError) {
+      // Distinguish active conflict vs decommissioned-name reuse.
+      // Decommissioned bucket rows survive with isActive=false (audit
+      // history preservation) and the @unique constraint on name still
+      // blocks reuse. AWS S3 also enforces ~24h DNS propagation before a
+      // deleted bucket name can be re-claimed, so even dropping the row
+      // would not unblock reuse — surface the constraint clearly.
+      try {
+        const existing = await prisma.bucket.findUnique({
+          where: { name: parsed.data.name },
+          select: { isActive: true },
+        });
+        if (existing && !existing.isActive) {
+          return json(
+            {
+              data: null,
+              error:
+                "This name was used by a previously decommissioned bucket and cannot be reused. Pick a different name.",
+            },
+            409,
+          );
+        }
+      } catch {
+        // Fall through to generic duplicate message — never leak engine
+        // errors (could embed DATABASE_URL).
+      }
       return json(
         { data: null, error: "Bucket with that name already exists" },
         409,

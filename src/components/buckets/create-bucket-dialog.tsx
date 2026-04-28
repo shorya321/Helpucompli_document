@@ -43,15 +43,17 @@ export function CreateBucketDialog({
 }: CreateBucketDialogProps) {
   const closeHref = safeHref(rawCloseHref);
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
+  const [submitting, setSubmitting] = useState(false);
   const [name, setName] = useState(HIPAA_BUCKET_NAME_PREFIX);
-  const [awsRegion, setAwsRegion] = useState<string>(AWS_REGIONS[0]);
+  const [awsRegion, setAwsRegion] = useState<string>("us-west-2");
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const onSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
+    setSubmitting(true);
     try {
       const res = await fetch("/api/s3/buckets", {
         method: "POST",
@@ -67,6 +69,7 @@ export function CreateBucketDialog({
           error?: string;
         } | null;
         setError(body?.error ?? `Request failed (${res.status})`);
+        setSubmitting(false);
         return;
       }
       startTransition(() => {
@@ -75,6 +78,7 @@ export function CreateBucketDialog({
       });
     } catch {
       setError("Network error. Try again.");
+      setSubmitting(false);
     }
   };
 
@@ -161,8 +165,8 @@ export function CreateBucketDialog({
             <Button type="button" variant="outline" asChild>
               <a href={closeHref}>Cancel</a>
             </Button>
-            <Button type="submit" disabled={pending}>
-              {pending ? "Creating…" : "Create bucket"}
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "Creating…" : "Create bucket"}
             </Button>
           </DialogFooter>
         </form>

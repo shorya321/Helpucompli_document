@@ -8,7 +8,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 function mount(user: { name: string | null; email: string | null }) {
   return render(
     <SidebarProvider>
-      <NavUser user={user} role="admin" />
+      <NavUser user={{ id: "u-test", ...user }} role="admin" />
     </SidebarProvider>,
   );
 }

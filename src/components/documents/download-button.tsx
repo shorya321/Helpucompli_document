@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Download } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -8,11 +9,27 @@ import { Button } from "@/components/ui/button";
 interface DownloadButtonProps {
   readonly bucketId: string;
   readonly s3Key: string;
+  // When true, the component triggers the download exactly once on mount
+  // (useEffect + ref guard) and replaces the URL with `closeHref` so a
+  // reload does not re-fire. Used by the documents page to handle the
+  // `?op=download` mount produced by the right-click context menu, which
+  // emits a navigation link rather than a button. Defaults to false so
+  // existing callers (e.g. document-search) keep their click-to-download
+  // behaviour.
+  readonly autoFire?: boolean;
+  readonly closeHref?: string;
 }
 
-export function DownloadButton({ bucketId, s3Key }: DownloadButtonProps) {
+export function DownloadButton({
+  bucketId,
+  s3Key,
+  autoFire,
+  closeHref,
+}: DownloadButtonProps) {
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const autoFired = useRef(false);
 
   const onClick = async () => {
     setErr(null);
@@ -41,6 +58,35 @@ export function DownloadButton({ bucketId, s3Key }: DownloadButtonProps) {
       setBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (!autoFire) return;
+    if (autoFired.current) return;
+    autoFired.current = true;
+    // Clear ?op=download from the URL via client routing first so a
+    // reload does not re-trigger. window.location.href inside onClick
+    // then kicks off the S3 fetch; S3 returns Content-Disposition:
+    // attachment so the browser stays on the current page while
+    // downloading.
+    if (closeHref) router.replace(closeHref);
+    void onClick();
+    // onClick is recreated each render but is a stable closure over the
+    // current props; running it once on mount is the intent. eslint
+    // disable line below documents the deliberate single-fire.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoFire, closeHref, router]);
+
+  if (autoFire) {
+    if (!err) return null;
+    return (
+      <div
+        role="alert"
+        className="border-destructive/40 bg-destructive/10 text-destructive fixed right-4 bottom-4 rounded-md border px-3 py-2 text-sm shadow-md"
+      >
+        {err}
+      </div>
+    );
+  }
 
   return (
     <span className="inline-flex items-baseline gap-2">

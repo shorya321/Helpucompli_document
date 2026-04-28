@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getSession: vi.fn(),
+  ensureUser: vi.fn(async () => ({ id: "u-test" })),
   redirect: vi.fn((path: string) => {
     throw new Error(`__redirect:${path}`);
   }),
@@ -9,6 +10,14 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/auth0", () => ({
   auth0: { getSession: mocks.getSession },
+}));
+
+vi.mock("@/lib/prisma", () => ({
+  prisma: {},
+}));
+
+vi.mock("@/lib/ensure-user", () => ({
+  ensureUser: mocks.ensureUser,
 }));
 
 vi.mock("next/navigation", () => ({

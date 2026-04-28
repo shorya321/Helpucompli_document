@@ -16,14 +16,38 @@ export default async function NewPolicyPage() {
   const isSuperadmin = await resolveHasRole(session, ["superadmin"]);
 
   let buckets: Array<{ id: string; name: string }> = [];
+  let documents: Array<{
+    id: string;
+    filename: string;
+    s3Key: string;
+    bucketName: string;
+  }> = [];
   try {
-    buckets = await prisma.bucket.findMany({
-      where: { isActive: true },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    });
+    [buckets, documents] = await Promise.all([
+      prisma.bucket.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      }),
+      prisma.document
+        .findMany({
+          where: { isDeleted: false },
+          include: { bucket: { select: { name: true } } },
+          orderBy: { uploadedAt: "desc" },
+          take: 200,
+        })
+        .then((rows) =>
+          rows.map((d) => ({
+            id: d.id,
+            filename: d.filename,
+            s3Key: d.s3Key,
+            bucketName: d.bucket.name,
+          })),
+        ),
+    ]);
   } catch {
     buckets = [];
+    documents = [];
   }
 
   return (
@@ -38,6 +62,7 @@ export default async function NewPolicyPage() {
       </header>
       <PolicyForm
         buckets={buckets}
+        documents={documents}
         mode="create"
         canNeverExpire={isSuperadmin}
       />

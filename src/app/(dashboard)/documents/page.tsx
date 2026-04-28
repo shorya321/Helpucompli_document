@@ -22,6 +22,8 @@ import { UploadZone } from "@/components/documents/upload-zone";
 import { CreateFolderDialog } from "@/components/documents/create-folder-dialog";
 import { MoveCopyDialog } from "@/components/documents/move-copy-dialog";
 import { DeleteDialog } from "@/components/documents/delete-dialog";
+import { DownloadButton } from "@/components/documents/download-button";
+import { DeleteFolderDialog } from "@/components/documents/delete-folder-dialog";
 import { DocumentPreviewDialog } from "@/components/documents/document-preview-dialog";
 import { DocumentSearch } from "@/components/documents/document-search";
 
@@ -142,6 +144,22 @@ export default async function DocumentsPage({ searchParams }: PageProps) {
     }
   }
 
+  // Resolve the canonical Document.filename for the delete dialog. The
+  // S3 key tail is NOT the filename — uploads prefix it with a UUID and
+  // sanitize the original name (see src/lib/document-upload.ts), while
+  // Document.filename stores the raw upload name. The hard-delete route
+  // compares confirmName against doc.filename, so the dialog must show
+  // and validate that same value, not the S3 key tail.
+  const deleteDoc =
+    (params.op === "delete" || params.op === "hard-delete") &&
+    typeof params.bucketId === "string" &&
+    typeof params.s3Key === "string"
+      ? await prisma.document.findFirst({
+          where: { bucketId: params.bucketId, s3Key: params.s3Key },
+          select: { filename: true },
+        })
+      : null;
+
   return (
     <section className="text-foreground grid items-start gap-6 [grid-template-columns:minmax(14rem,18rem)_1fr]">
       <FileTree buckets={buckets} activeBucket={inScope?.name} />
@@ -214,6 +232,7 @@ export default async function DocumentsPage({ searchParams }: PageProps) {
               bucketId={inScope.id}
               canHardDelete={role === "superadmin"}
               canGenerateLink={role === "superadmin" || role === "admin"}
+              canDeleteFolder={role === "superadmin" || role === "admin"}
               prefix={q.prefix}
               entries={entries}
               view={q.view}
@@ -271,6 +290,32 @@ export default async function DocumentsPage({ searchParams }: PageProps) {
         the bucketId must belong to a bucket in their UserBucketAccess
         set for the preview to mount, otherwise it silently no-ops.
       */}
+      {/*
+        Download flow — the right-click context menu emits a navigation
+        link to ?op=download&bucketId=...&s3Key=..., so we mount the
+        existing DownloadButton in autoFire mode here. The button POSTs
+        /api/s3/download-url and redirects to the presigned URL, exactly
+        the same flow used in document-search. closeHref clears the op
+        param afterwards so reload does not re-trigger.
+      */}
+      {params.op === "download" &&
+      typeof params.bucketId === "string" &&
+      typeof params.s3Key === "string" &&
+      buckets.some((b) => b.id === params.bucketId) ? (
+        <DownloadButton
+          bucketId={params.bucketId}
+          s3Key={params.s3Key}
+          autoFire
+          closeHref={
+            inScope
+              ? `/documents?bucket=${encodeURIComponent(inScope.name)}${
+                  q.prefix ? `&prefix=${encodeURIComponent(q.prefix)}` : ""
+                }`
+              : "/documents"
+          }
+        />
+      ) : null}
+
       {params.op === "preview" &&
       typeof params.bucketId === "string" &&
       typeof params.s3Key === "string" &&
@@ -294,7 +339,7 @@ export default async function DocumentsPage({ searchParams }: PageProps) {
         opens with hard pre-selected and is gated to superadmin only,
         matching the backend route's role check at /api/s3/delete.
       */}
-      {(params.op === "delete" || params.op === "hard-delete") &&
+      {deleteDoc &&
       typeof params.bucketId === "string" &&
       typeof params.s3Key === "string" &&
       (role === "superadmin" ||
@@ -302,12 +347,40 @@ export default async function DocumentsPage({ searchParams }: PageProps) {
         <DeleteDialog
           bucketId={params.bucketId}
           s3Key={params.s3Key}
-          filename={
-            params.s3Key.split("/").filter((s) => s !== "").pop() ??
-            params.s3Key
-          }
+          filename={deleteDoc.filename}
           canHardDelete={role === "superadmin"}
           initialMode={params.op === "hard-delete" ? "hard" : "soft"}
+          closeHref={
+            inScope
+              ? `/documents?bucket=${encodeURIComponent(inScope.name)}${
+                  q.prefix ? `&prefix=${encodeURIComponent(q.prefix)}` : ""
+                }`
+              : "/documents"
+          }
+        />
+      ) : null}
+
+      {/*
+        Folder delete dialog. op=delete-folder opens with soft pre-selected
+        (admin + superadmin). op=hard-delete-folder opens with hard
+        pre-selected and is gated to superadmin only — same shape as the
+        per-document delete flow. folderPrefix is the URL param produced
+        by buildFolderMenu().
+      */}
+      {(params.op === "delete-folder" || params.op === "hard-delete-folder") &&
+      typeof params.bucketId === "string" &&
+      typeof params.folderPrefix === "string" &&
+      (role === "superadmin" ||
+        (role === "admin" && params.op === "delete-folder")) ? (
+        <DeleteFolderDialog
+          bucketId={params.bucketId}
+          folderPrefix={params.folderPrefix}
+          folderName={
+            params.folderPrefix.split("/").filter((s) => s !== "").pop() ??
+            params.folderPrefix
+          }
+          canHardDelete={role === "superadmin"}
+          initialMode={params.op === "hard-delete-folder" ? "hard" : "soft"}
           closeHref={
             inScope
               ? `/documents?bucket=${encodeURIComponent(inScope.name)}${

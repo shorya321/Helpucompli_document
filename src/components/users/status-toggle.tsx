@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Role } from "@/types";
 
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 interface StatusToggleProps {
   readonly userId: string;
@@ -24,6 +25,8 @@ export function StatusToggle({
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [confirmDisable, setConfirmDisable] = useState(false);
+  const [driftAlert, setDriftAlert] = useState(false);
 
   const allowed =
     !isSelf &&
@@ -36,14 +39,8 @@ export function StatusToggle({
   const label = nextStatus === "disabled" ? "Disable" : "Enable";
   const variant = nextStatus === "disabled" ? "destructive" : "secondary";
 
-  function onClick() {
+  function performToggle() {
     setError(null);
-    if (
-      nextStatus === "disabled" &&
-      !confirm("Disable this user? They will be signed out of Auth0.")
-    ) {
-      return;
-    }
     start(() => {
       void (async () => {
         const res = await fetch(`/api/users/${userId}/status`, {
@@ -66,15 +63,22 @@ export function StatusToggle({
           data?: { auth0Synced?: boolean };
         };
         if (body.data?.auth0Synced === false) {
-          // Local DB + audit succeeded; Auth0 user was already gone. Alert
-          // operator so they can clean up the orphan row or accept drift.
-          alert(
-            "Status updated locally, but the Auth0 user was not found (likely deleted from the Auth0 dashboard). The local DB is now out of sync.",
-          );
+          // Local DB + audit succeeded; Auth0 user was already gone.
+          // Show dialog so operator can clean up the orphan row or
+          // accept drift.
+          setDriftAlert(true);
         }
         router.refresh();
       })();
     });
+  }
+
+  function onClick() {
+    if (nextStatus === "disabled") {
+      setConfirmDisable(true);
+      return;
+    }
+    performToggle();
   }
 
   return (
@@ -94,6 +98,22 @@ export function StatusToggle({
           {error}
         </span>
       )}
+      <ConfirmDialog
+        open={confirmDisable}
+        title="Disable this user?"
+        description="They will be signed out of Auth0."
+        destructive
+        confirmLabel="Disable"
+        onConfirm={performToggle}
+        onClose={() => setConfirmDisable(false)}
+      />
+      <ConfirmDialog
+        open={driftAlert}
+        variant="alert"
+        title="Auth0 drift detected"
+        description="Status updated locally, but the Auth0 user was not found (likely deleted from the Auth0 dashboard). The local DB is now out of sync."
+        onClose={() => setDriftAlert(false)}
+      />
     </span>
   );
 }
