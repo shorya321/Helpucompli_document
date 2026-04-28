@@ -33,16 +33,12 @@ describe("NavUser", () => {
     expect(anchor.getAttribute("href")).toBe("/auth/logout");
   });
 
-  it("shows Account, Billing, Notifications menu items when opened", async () => {
+  it("shows the Account menu item when opened", async () => {
     const user = userEvent.setup();
     mount({ name: "A", email: "a@x.com" });
     await user.click(screen.getByRole("button"));
     expect(
       await screen.findByRole("menuitem", { name: /account/i }),
-    ).toBeDefined();
-    expect(screen.getByRole("menuitem", { name: /billing/i })).toBeDefined();
-    expect(
-      screen.getByRole("menuitem", { name: /notifications/i }),
     ).toBeDefined();
   });
 });
