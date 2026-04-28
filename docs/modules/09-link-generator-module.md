@@ -35,10 +35,9 @@ Generates policy-enforced presigned URLs for sharing documents with external use
 - Toast notification on copy
 - URL displayed in a read-only field
 
-### F9.4 — QR Code Generation
-- Optional QR code for generated link
-- Download QR as PNG
-- Useful for printed materials
+### F9.4 — QR Code Generation (REMOVED 2026-04-28)
+
+The QR code on the share-link result panel was removed. `src/components/links/qr-code.tsx`, `src/__tests__/links/qr-code.test.ts`, and the `qrcode` / `@types/qrcode` dependencies were dropped. The share dialog now exposes link copy + embed-snippet flows only.
 
 ### F9.5 — Link Usage Analytics
 - **Per link:** Download count, last accessed timestamp, accessing IPs
@@ -93,6 +92,25 @@ A per-link boolean column on `generated_links`. Default `false`. When `true`, th
 
 When `allowPublicEmbed=true` AND `policy.allowedDomains` is non-empty, the policy engine refines its bypass: it inspects the `Sec-Fetch-Dest` request header (W3C Fetch Metadata, sent by all modern browsers since Chrome 76 / Firefox 90 / Safari 16.4). Browser-originated requests (header present) MUST satisfy the Referer-vs-`allowedDomains` check; server-side oEmbed crawlers (header absent) keep bypassing so WordPress / Notion / Confluence discovery still succeeds. This stops a user from opening a domain-pinned public-embed link directly in a Chrome tab — they must reach it via an iframe on one of the listed parent sites. Pre-Sec-Fetch browsers (Safari < 16.4, Firefox < 90, Chrome < 76 — pre-2022 desktop) bypass server-side narrowing but the browser-layer CSP `frame-ancestors` still blocks any iframe attempt.
 
+### F9.9 — Sandboxed-iframe preview: ACAO + sub-fetch HMAC token
+
+Two failure modes surfaced once F9.8 went into production WordPress / Notion / Confluence pages, both because those platforms wrap the embed in `<iframe sandbox>` without `allow-same-origin` (the document then has `Origin: null`):
+
+1. **Null-origin CORS preflight on `/pdfjs/*` and `/l/<hash>/raw`.** ES-module imports (`<script type="module">` in `pdfjs/viewer.html`) and `fetch()` from a null-origin document are tagged as cross-origin by the browser even when the host matches. Without `Access-Control-Allow-Origin`, the browser blocks the request before it reaches our policy code.
+2. **Policy refinement denies every browser sub-fetch when `policy.allowedDomains` is set.** The outer `/l/<hash>` page sets `Referrer-Policy: no-referrer` and `pdfjs/viewer.html` carries the same `<meta>`, so each `<img>` / `<video>` / `<audio>` / `<iframe>` / pdfjs `getDocument` fetch arrives with `Referer: null`. The Sec-Fetch-Dest narrowing in F9.8 then fires `refererAllowed(null, allowedDomains)` → `false` → 403, even though the outer page itself just passed the same Referer check.
+
+**Fixes (commits `3b7b01f` and `2a8fa09`):**
+
+- **Wildcard ACAO.** `next.config.ts` emits `Access-Control-Allow-Origin: *` on `/pdfjs/:path*`, and `src/app/l/[hash]/raw/route.ts` emits the same on every 200 / 403 / 429 response. The wildcard is safe here — `/pdfjs/*` is static library code (identical to the bytes pdfjs-dist ships on jsDelivr / unpkg, no user data), and `/l/<hash>/raw` still runs `resolveAndAuthorizeLink` (auth + policy + audit + rate-limit) before any bytes stream. No `Access-Control-Allow-Credentials` is emitted (incompatible with `*`).
+- **Drop `withCredentials: true` from the pdfjs viewer.** Per CORS spec a credentialed request cannot accept ACAO `*`, and a sandboxed iframe cannot send cookies regardless. Same-origin fetches still send cookies by default for the non-embedded admin-preview path.
+- **HMAC sub-fetch token.** `src/lib/raw-fetch-token.ts` (mirrors `src/lib/upload-receipt.ts`) issues a base64url-encoded token bound to `<hash>` with a 120 s expiry. HMAC-SHA256, key derived from `AUTH0_SECRET` and scoped to `helpucompli/raw-fetch/v1`. Constant-time verify.
+- **Outer page mints + propagates.** After `resolveAndAuthorizeLink` succeeds, `/l/[hash]/route.ts` mints a token and rides `?t=<token>` on every sub-resource URL it emits — `<img>`, `<video>`, `<audio>`, `<iframe>` for raw types, and the pdfjs viewer URL (`/pdfjs/viewer.html?file=/l/<hash>/raw&t=<token>`).
+- **Viewer forwards.** `public/pdfjs/viewer.html` reads `&t=` from its own query, validates the shape against a strict regex, and appends it to the `/raw` fetch URL.
+- **`/raw` verifies + flips a flag.** `src/app/l/[hash]/raw/route.ts` reads `?t=`, calls `verifyRawFetchToken(t, hash)`, and on success passes `bypassRefererRefinement: true` into `resolveAndAuthorizeLink`. Tampered / expired / wrong-hash tokens are caught silently and the request continues through normal policy enforcement (no privilege escalation, no leaked error).
+- **Policy carve-out.** `src/lib/policy-engine.ts` adds `bypassRefererRefinement?: boolean` to `EnforcementContext`. The publicEmbedBypass refinement branch honors the flag — and ONLY that branch. `requireAuth`, `allowedIpRanges`, audit, and rate-limit are untouched, so a leaked token cannot bypass an auth-required policy.
+
+**Backward compatibility:** missing or invalid `?t=` falls through to the existing referer check, so links without `allowedDomains` and any pre-existing direct-embed flows keep working. Direct browser-tab navigation to `/l/<hash>/raw` (no token, `Sec-Fetch-Dest: document`, no Referer) still 403s. Direct hit to `/pdfjs/viewer.html?file=/l/<hash>/raw` without `&t=` produces a viewer fetch that lacks the token, so the refinement gate still denies it — `allowedDomains` remains a real boundary.
+
 ## Files to Create
 
 | File | Purpose |
@@ -101,7 +119,6 @@ When `allowPublicEmbed=true` AND `policy.allowedDomains` is non-empty, the polic
 | `src/components/links/generate-link-form.tsx` | Link generation form |
 | `src/components/links/link-table.tsx` | Generated links list |
 | `src/components/links/link-analytics.tsx` | Usage analytics |
-| `src/components/links/qr-code.tsx` | QR code generator |
 | `src/app/api/links/route.ts` | GET (list) + POST (generate) |
 | `src/app/api/links/[hash]/route.ts` | GET (access/redirect) + DELETE (revoke) |
 
@@ -152,13 +169,12 @@ PDF.js (Mozilla, MIT-licensed, packaged via `pdfjs-dist`) renders each page to `
 
 ## Dependencies
 
-- `qrcode` — QR code generation (optional)
+- `pdfjs-dist` — bundled PDF.js canvas viewer for cross-origin nested-iframe PDF preview (see "PDF preview routes through self-hosted PDF.js" above)
 
 ## Acceptance Criteria
 
 - [ ] Links generated with correct TTL and max downloads
 - [ ] Copy to clipboard works
-- [ ] QR code generates for link
 - [ ] Link access enforces policy (TTL, IP, domain, download count)
 - [ ] Download count increments on each access
 - [ ] Expired links return 403

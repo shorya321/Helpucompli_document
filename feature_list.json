@@ -830,14 +830,14 @@
         },
         {
           "id": "F9.6",
-          "description": "QR code generation for links",
+          "description": "QR code generation for links — REMOVED 2026-04-28 (component, test, and qrcode/@types/qrcode dependencies dropped from share-link dialog)",
           "steps": [
-            "Create src/components/links/qr-code.tsx",
-            "Generate QR code for generated link URL",
-            "Download QR as PNG image",
-            "Test QR code scans to correct URL"
+            "src/components/links/qr-code.tsx deleted",
+            "src/__tests__/links/qr-code.test.ts deleted",
+            "qrcode and @types/qrcode uninstalled from package.json",
+            "QrCode import + render removed from generate-link-form share-result panel"
           ],
-          "passes": true
+          "passes": false
         },
         {
           "id": "F9.7",
@@ -854,6 +854,22 @@
             "When allowPublicEmbed=false, F9.3 strict enforcement applies — Referer/IP/auth gates are NOT bypassed even if the policy has allowedDomains",
             "Test the four (allowPublicEmbed x allowedDomains) quadrants end-to-end",
             "When allowPublicEmbed=true AND policy.allowedDomains is non-empty, use Sec-Fetch-Dest header to distinguish browser requests from server-side oEmbed crawlers — browsers MUST match Referer to an allowed domain; crawlers (no Sec-Fetch-Dest) keep bypassing so discovery still works"
+          ],
+          "passes": true
+        },
+        {
+          "id": "F9.8",
+          "description": "Sandboxed-iframe embed preview unblocked under allowedDomains policy (CORS + sub-fetch HMAC token)",
+          "steps": [
+            "Emit Access-Control-Allow-Origin: * on /l/[hash]/raw success/403/429 so null-origin sandboxed iframes can fetch",
+            "Drop withCredentials:true from public/pdfjs/viewer.html getDocument call (incompatible with ACAO:* and unnecessary same-origin)",
+            "Mint short-lived (120s) HMAC sub-fetch token in /l/[hash] outer page after policy passes (src/lib/raw-fetch-token.ts, AUTH0_SECRET-derived, scoped helpucompli/raw-fetch/v1)",
+            "Ride token as ?t= on every img/video/audio/iframe-raw and pdfjs viewer URL emitted by /l/[hash]",
+            "Forward token through pdfjs/viewer.html to its /raw fetch (URL query, not cookie — sandbox iframe blocks cookies)",
+            "Verify token in /l/[hash]/raw and pass bypassRefererRefinement=true to enforcePolicy when valid",
+            "policy-engine.ts honors bypassRefererRefinement only inside the publicEmbedBypass refinement branch — requireAuth, allowedIpRanges, audit, and rate-limit untouched",
+            "Tampered/expired/wrong-hash tokens silently fall through to normal policy (no privilege escalation)",
+            "Tests cover token roundtrip + tamper + expiry + hash-mismatch, refinement carve-out, and bypass-flag forwarding through /raw"
           ],
           "passes": true
         }
