@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { ensureUser } from "@/lib/ensure-user";
 import { presignGetUrl } from "@/lib/s3-presign";
 import { createRateLimiter } from "@/lib/rate-limit";
+import { logAudit, asAuditPrisma } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -140,22 +141,20 @@ export async function POST(req: NextRequest) {
         : {}),
     });
 
-    await prisma.auditLog.create({
-      data: {
-        userId: dbUser.id,
-        action: "DOCUMENT_DOWNLOAD",
-        targetType: "document",
-        targetId: doc.id,
-        metadata: {
-          bucketId: bucket.id,
-          bucketName: bucket.name,
-          s3Key: input.s3Key,
-          filename: doc.filename,
-          contentType: doc.contentType ?? null,
-        },
-        ipAddress: extractIp(req),
-        userAgent: extractUserAgent(req).slice(0, 512),
+    await logAudit(asAuditPrisma(prisma), {
+      userId: dbUser.id,
+      action: "DOCUMENT_DOWNLOAD",
+      targetType: "document",
+      targetId: doc.id,
+      metadata: {
+        bucketId: bucket.id,
+        bucketName: bucket.name,
+        s3Key: input.s3Key,
+        filename: doc.filename,
+        contentType: doc.contentType ?? null,
       },
+      ipAddress: extractIp(req),
+      userAgent: extractUserAgent(req),
     });
 
     return json({ data: { url, expiresIn }, error: null }, 200);

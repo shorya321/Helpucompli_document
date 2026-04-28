@@ -12,6 +12,7 @@ import {
   softDeleteObject,
 } from "@/lib/s3-objects";
 import { createRateLimiter } from "@/lib/rate-limit";
+import { logAudit, asAuditPrisma } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -156,21 +157,19 @@ export async function POST(req: NextRequest) {
           },
           select: { id: true },
         });
-        await tx.auditLog.create({
-          data: {
-            userId: dbUser.id,
-            action: "DOCUMENT_SOFT_DELETE",
-            targetType: "document",
-            targetId: doc.id,
-            metadata: {
-              bucketId: bucket.id,
-              bucketName: bucket.name,
-              s3Key: input.s3Key,
-              filename: doc.filename,
-            },
-            ipAddress: extractIp(req),
-            userAgent: extractUserAgent(req).slice(0, 512),
+        await logAudit(asAuditPrisma(tx), {
+          userId: dbUser.id,
+          action: "DOCUMENT_SOFT_DELETE",
+          targetType: "document",
+          targetId: doc.id,
+          metadata: {
+            bucketId: bucket.id,
+            bucketName: bucket.name,
+            s3Key: input.s3Key,
+            filename: doc.filename,
           },
+          ipAddress: extractIp(req),
+          userAgent: extractUserAgent(req),
         });
       });
       return json({ data: { ok: true }, error: null }, 200);
@@ -257,22 +256,20 @@ export async function POST(req: NextRequest) {
         where: { id: doc.id },
         select: { id: true },
       });
-      await tx.auditLog.create({
-        data: {
-          userId: dbUser.id,
-          action: "DOCUMENT_HARD_DELETE",
-          targetType: "document",
-          targetId: doc.id,
-          metadata: {
-            bucketId: bucket.id,
-            bucketName: bucket.name,
-            s3Key: input.s3Key,
-            filename: doc.filename,
-            versionsRemoved,
-          },
-          ipAddress: extractIp(req),
-          userAgent: extractUserAgent(req).slice(0, 512),
+      await logAudit(asAuditPrisma(tx), {
+        userId: dbUser.id,
+        action: "DOCUMENT_HARD_DELETE",
+        targetType: "document",
+        targetId: doc.id,
+        metadata: {
+          bucketId: bucket.id,
+          bucketName: bucket.name,
+          s3Key: input.s3Key,
+          filename: doc.filename,
+          versionsRemoved,
         },
+        ipAddress: extractIp(req),
+        userAgent: extractUserAgent(req),
       });
     });
     return json({ data: { ok: true, versionsRemoved }, error: null }, 200);

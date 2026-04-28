@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { ensureUser } from "@/lib/ensure-user";
 import { copyObject, moveObject } from "@/lib/s3-objects";
 import { createRateLimiter } from "@/lib/rate-limit";
+import { logAudit, asAuditPrisma } from "@/lib/audit";
 import {
   assertFolderPrefix,
   sanitizeFilename,
@@ -201,24 +202,22 @@ export async function POST(req: NextRequest) {
           data: { bucketId: destBucket.id, s3Key: destS3Key },
           select: { id: true, bucketId: true, s3Key: true },
         });
-        await tx.auditLog.create({
-          data: {
-            userId: dbUser.id,
-            action: "DOCUMENT_MOVE",
-            targetType: "document",
-            targetId: updated.id,
-            metadata: {
-              fromBucketId: sourceBucket.id,
-              fromBucketName: sourceBucket.name,
-              fromS3Key: doc.s3Key,
-              toBucketId: destBucket.id,
-              toBucketName: destBucket.name,
-              toS3Key: destS3Key,
-              filename: doc.filename,
-            },
-            ipAddress: extractIp(req),
-            userAgent: extractUserAgent(req).slice(0, 512),
+        await logAudit(asAuditPrisma(tx), {
+          userId: dbUser.id,
+          action: "DOCUMENT_MOVE",
+          targetType: "document",
+          targetId: updated.id,
+          metadata: {
+            fromBucketId: sourceBucket.id,
+            fromBucketName: sourceBucket.name,
+            fromS3Key: doc.s3Key,
+            toBucketId: destBucket.id,
+            toBucketName: destBucket.name,
+            toS3Key: destS3Key,
+            filename: doc.filename,
           },
+          ipAddress: extractIp(req),
+          userAgent: extractUserAgent(req),
         });
         return updated;
       }
@@ -235,25 +234,23 @@ export async function POST(req: NextRequest) {
         },
         select: { id: true, bucketId: true, s3Key: true },
       });
-      await tx.auditLog.create({
-        data: {
-          userId: dbUser.id,
-          action: "DOCUMENT_COPY",
-          targetType: "document",
-          targetId: created.id,
-          metadata: {
-            fromDocumentId: doc.id,
-            fromBucketId: sourceBucket.id,
-            fromBucketName: sourceBucket.name,
-            fromS3Key: doc.s3Key,
-            toBucketId: destBucket.id,
-            toBucketName: destBucket.name,
-            toS3Key: destS3Key,
-            filename: doc.filename,
-          },
-          ipAddress: extractIp(req),
-          userAgent: extractUserAgent(req).slice(0, 512),
+      await logAudit(asAuditPrisma(tx), {
+        userId: dbUser.id,
+        action: "DOCUMENT_COPY",
+        targetType: "document",
+        targetId: created.id,
+        metadata: {
+          fromDocumentId: doc.id,
+          fromBucketId: sourceBucket.id,
+          fromBucketName: sourceBucket.name,
+          fromS3Key: doc.s3Key,
+          toBucketId: destBucket.id,
+          toBucketName: destBucket.name,
+          toS3Key: destS3Key,
+          filename: doc.filename,
         },
+        ipAddress: extractIp(req),
+        userAgent: extractUserAgent(req),
       });
       return created;
     });

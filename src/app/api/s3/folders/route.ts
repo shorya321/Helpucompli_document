@@ -6,6 +6,7 @@ import { auth0 } from "@/lib/auth0";
 import { resolveRole } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
 import { ensureUser } from "@/lib/ensure-user";
+import { logAudit, asAuditPrisma } from "@/lib/audit";
 import {
   assertFolderName,
   createFolderMarker,
@@ -124,23 +125,21 @@ export async function POST(req: NextRequest) {
     // distinguish folder markers from real document uploads. A
     // dedicated FOLDER_CREATE enum value is carry-forward for Module 11
     // (audit UI will filter on metadata.mode until the migration lands).
-    await prisma.auditLog.create({
-      data: {
-        userId: dbUser.id,
-        action: "DOCUMENT_UPLOAD",
-        targetType: "folder",
-        targetId: result.key,
-        metadata: {
-          mode: "folder_marker",
-          bucketId: bucket.id,
-          bucketName: bucket.name,
-          parentPrefix: input.parentPrefix,
-          name: input.name,
-          s3Key: result.key,
-        },
-        ipAddress: extractIp(req),
-        userAgent: extractUserAgent(req).slice(0, 512),
+    await logAudit(asAuditPrisma(prisma), {
+      userId: dbUser.id,
+      action: "DOCUMENT_UPLOAD",
+      targetType: "folder",
+      targetId: result.key,
+      metadata: {
+        mode: "folder_marker",
+        bucketId: bucket.id,
+        bucketName: bucket.name,
+        parentPrefix: input.parentPrefix,
+        name: input.name,
+        s3Key: result.key,
       },
+      ipAddress: extractIp(req),
+      userAgent: extractUserAgent(req),
     });
 
     return json({ data: { key: result.key }, error: null }, 201);

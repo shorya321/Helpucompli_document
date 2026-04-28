@@ -5,6 +5,7 @@ import { resolveHasRole, resolveRole } from "@/lib/auth-guard";
 import { ensureUser } from "@/lib/ensure-user";
 import { prisma } from "@/lib/prisma";
 import { createRateLimiter } from "@/lib/rate-limit";
+import { logAudit, asAuditPrisma } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -98,20 +99,18 @@ export async function DELETE(req: NextRequest, ctx: RouteCtx) {
   // idempotent path. Tag with reason so compliance can distinguish a
   // first revoke from a redundant one.
   try {
-    await prisma.auditLog.create({
-      data: {
-        userId: dbUser.id,
-        action: "LINK_REVOKE",
-        targetType: "link",
-        targetId: link.id,
-        metadata: {
-          documentId: link.documentId,
-          policyId: link.policyId,
-          ...(wasAlreadyRevoked ? { reason: "already-revoked" } : {}),
-        },
-        ipAddress,
-        userAgent,
+    await logAudit(asAuditPrisma(prisma), {
+      userId: dbUser.id,
+      action: "LINK_REVOKE",
+      targetType: "link",
+      targetId: link.id,
+      metadata: {
+        documentId: link.documentId,
+        policyId: link.policyId,
+        ...(wasAlreadyRevoked ? { reason: "already-revoked" } : {}),
       },
+      ipAddress,
+      userAgent,
     });
   } catch {
     // Audit failure is non-fatal — revoke already committed.

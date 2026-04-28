@@ -9,6 +9,7 @@ import { uploadCompleteRequestSchema } from "@/lib/document-upload";
 import { completeMultipartUpload } from "@/lib/s3-multipart";
 import { headObject } from "@/lib/s3-objects";
 import { createRateLimiter } from "@/lib/rate-limit";
+import { logAudit, asAuditPrisma } from "@/lib/audit";
 import {
   InvalidUploadReceiptError,
   verifyUploadReceipt,
@@ -175,24 +176,22 @@ export async function POST(req: NextRequest) {
         },
         select: { id: true },
       });
-      await tx.auditLog.create({
-        data: {
-          userId: dbUser.id,
-          action: "DOCUMENT_UPLOAD",
-          targetType: "document",
-          targetId: doc.id,
-          metadata: {
-            bucketId: bucket.id,
-            bucketName: bucket.name,
-            s3Key: input.s3Key,
-            filename: input.filename,
-            contentType: input.contentType,
-            sizeBytes: input.sizeBytes,
-            mode: input.multipart ? "multipart" : "simple",
-          },
-          ipAddress: extractIp(req),
-          userAgent: extractUserAgent(req).slice(0, 512),
+      await logAudit(asAuditPrisma(tx), {
+        userId: dbUser.id,
+        action: "DOCUMENT_UPLOAD",
+        targetType: "document",
+        targetId: doc.id,
+        metadata: {
+          bucketId: bucket.id,
+          bucketName: bucket.name,
+          s3Key: input.s3Key,
+          filename: input.filename,
+          contentType: input.contentType,
+          sizeBytes: input.sizeBytes,
+          mode: input.multipart ? "multipart" : "simple",
         },
+        ipAddress: extractIp(req),
+        userAgent: extractUserAgent(req),
       });
       return doc;
     });
