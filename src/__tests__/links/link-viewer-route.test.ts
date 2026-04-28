@@ -11,6 +11,12 @@ vi.mock("@/lib/link-access", () => ({
   resolveAndAuthorizeLink: mocks.resolveAndAuthorizeLink,
 }));
 
+// Pin the raw-fetch token to a deterministic value so URL assertions
+// stay stable across test runs.
+vi.mock("@/lib/raw-fetch-token", () => ({
+  issueRawFetchToken: () => "FIXED.TOKEN",
+}));
+
 vi.mock("@/lib/config", () => ({
   getConfig: () => ({
     APP_BASE_URL: "http://localhost:3000",
@@ -19,6 +25,8 @@ vi.mock("@/lib/config", () => ({
     AUTH0_DOMAIN: "auth.helpucompli.com",
   }),
 }));
+
+const TOK_QUERY = "t=FIXED.TOKEN";
 
 import { GET } from "@/app/l/[hash]/route";
 import { NextRequest } from "next/server";
@@ -146,7 +154,8 @@ describe("GET /l/[hash] — embeddable link viewer", () => {
     expect(body).not.toContain("<img");
     // PDFs use the canvas-rendering PDF.js viewer to bypass Chrome's
     // built-in PDF-in-cross-origin-iframe block.
-    const expectedSrc = `/pdfjs/viewer.html?file=${encodeURIComponent(`/l/${TOKEN}/raw`)}`;
+    // `&` is HTML-escaped to `&amp;` in the attribute value.
+    const expectedSrc = `/pdfjs/viewer.html?file=${encodeURIComponent(`/l/${TOKEN}/raw`)}&amp;${TOK_QUERY}`;
     expect(body).toContain(`src="${expectedSrc}"`);
     // Negative guard: PDF must NOT iframe /raw directly anymore — that
     // hits Chrome's nested-iframe PDF block.
@@ -166,7 +175,7 @@ describe("GET /l/[hash] — embeddable link viewer", () => {
       }),
     );
     const body = await (await GET(req(), { params: params(TOKEN) })).text();
-    expect(body).toContain(`<iframe src="/l/${TOKEN}/raw"`);
+    expect(body).toContain(`<iframe src="/l/${TOKEN}/raw?${TOK_QUERY}"`);
     expect(body).not.toContain("/pdfjs/");
   });
 
@@ -183,7 +192,7 @@ describe("GET /l/[hash] — embeddable link viewer", () => {
       }),
     );
     const body = await (await GET(req(), { params: params(TOKEN) })).text();
-    expect(body).toContain(`<iframe src="/l/${TOKEN}/raw"`);
+    expect(body).toContain(`<iframe src="/l/${TOKEN}/raw?${TOK_QUERY}"`);
     expect(body).not.toContain("/pdfjs/");
   });
 
@@ -202,7 +211,7 @@ describe("GET /l/[hash] — embeddable link viewer", () => {
     const body = await (await GET(req(), { params: params(TOKEN) })).text();
     expect(body).toContain("<img");
     expect(body).not.toContain("<iframe");
-    expect(body).toContain(`src="/l/${TOKEN}/raw"`);
+    expect(body).toContain(`src="/l/${TOKEN}/raw?${TOK_QUERY}"`);
   });
 
   it("video/* content-type → <video> embed pointing at same-origin /l/<hash>/raw", async () => {
@@ -219,7 +228,7 @@ describe("GET /l/[hash] — embeddable link viewer", () => {
     );
     const body = await (await GET(req(), { params: params(TOKEN) })).text();
     expect(body).toContain("<video");
-    expect(body).toContain(`src="/l/${TOKEN}/raw"`);
+    expect(body).toContain(`src="/l/${TOKEN}/raw?${TOK_QUERY}"`);
   });
 
   it("audio/* content-type → <audio> embed pointing at same-origin /l/<hash>/raw", async () => {
@@ -236,7 +245,7 @@ describe("GET /l/[hash] — embeddable link viewer", () => {
     );
     const body = await (await GET(req(), { params: params(TOKEN) })).text();
     expect(body).toContain("<audio");
-    expect(body).toContain(`src="/l/${TOKEN}/raw"`);
+    expect(body).toContain(`src="/l/${TOKEN}/raw?${TOK_QUERY}"`);
   });
 
   it("never leaks the presigned S3 URL into the rendered HTML body (proxy keeps it server-side)", async () => {

@@ -5,13 +5,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // live in link-access-route.test.ts + link-access.test.ts.
 const mocks = vi.hoisted(() => ({
   resolveAndAuthorizeLink: vi.fn(),
+  verifyRawFetchToken: vi.fn(),
 }));
 
 vi.mock("@/lib/link-access", () => ({
   resolveAndAuthorizeLink: mocks.resolveAndAuthorizeLink,
 }));
 
+vi.mock("@/lib/raw-fetch-token", async () => {
+  const actual =
+    await vi.importActual<typeof import("@/lib/raw-fetch-token")>(
+      "@/lib/raw-fetch-token",
+    );
+  return {
+    ...actual,
+    verifyRawFetchToken: mocks.verifyRawFetchToken,
+  };
+});
+
 import { GET } from "@/app/l/[hash]/raw/route";
+import { InvalidRawFetchTokenError } from "@/lib/raw-fetch-token";
 import { NextRequest } from "next/server";
 
 const TOKEN = "tok_abc_with_long_enough_token_value_xyz";
@@ -22,6 +35,7 @@ let fetchSpy: ReturnType<typeof vi.spyOn> | null = null;
 
 afterEach(() => {
   mocks.resolveAndAuthorizeLink.mockReset();
+  mocks.verifyRawFetchToken.mockReset();
   if (fetchSpy) {
     fetchSpy.mockRestore();
     fetchSpy = null;
@@ -30,11 +44,16 @@ afterEach(() => {
 
 beforeEach(() => {
   mocks.resolveAndAuthorizeLink.mockReset();
+  mocks.verifyRawFetchToken.mockReset();
 });
 
-function req(init?: { headers?: Record<string, string> }): NextRequest {
+function req(init?: {
+  headers?: Record<string, string>;
+  query?: string;
+}): NextRequest {
   const headers = new Headers(init?.headers);
-  return new NextRequest(`http://x/l/${TOKEN}/raw`, { headers });
+  const url = `http://x/l/${TOKEN}/raw${init?.query ? `?${init.query}` : ""}`;
+  return new NextRequest(url, { headers });
 }
 
 function params(hash: string): Promise<{ hash: string }> {
@@ -265,5 +284,55 @@ describe("GET /l/[hash]/raw — same-origin streaming proxy", () => {
     const callArgs = fetchSpy.mock.calls[0]?.[1] as RequestInit | undefined;
     const headers = (callArgs?.headers ?? {}) as Record<string, string>;
     expect(headers["Range"]).toBeUndefined();
+  });
+
+  // ---- sub-fetch token (raw-fetch-token.ts) ----
+
+  it("forwards bypassRefererRefinement=true to authorize helper when ?t= is valid", async () => {
+    mocks.verifyRawFetchToken.mockReturnValueOnce(true);
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
+    fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(fakeS3Response({ status: 200, body: "x" }));
+    const res = await GET(req({ query: "t=valid.token" }), {
+      params: params(TOKEN),
+    });
+    expect(res.status).toBe(200);
+    expect(mocks.verifyRawFetchToken).toHaveBeenCalledWith("valid.token", TOKEN);
+    expect(mocks.resolveAndAuthorizeLink).toHaveBeenCalledWith(
+      expect.anything(),
+      TOKEN,
+      { bypassRefererRefinement: true },
+    );
+  });
+
+  it("forwards bypassRefererRefinement=false when ?t= is malformed/expired/wrong-hash (silent fall-through)", async () => {
+    mocks.verifyRawFetchToken.mockImplementationOnce(() => {
+      throw new InvalidRawFetchTokenError("expired");
+    });
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce({ kind: "forbidden" });
+    const res = await GET(req({ query: "t=tampered.bad" }), {
+      params: params(TOKEN),
+    });
+    expect(res.status).toBe(403);
+    expect(mocks.resolveAndAuthorizeLink).toHaveBeenCalledWith(
+      expect.anything(),
+      TOKEN,
+      { bypassRefererRefinement: false },
+    );
+  });
+
+  it("forwards bypassRefererRefinement=false when ?t= is omitted entirely", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
+    fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(fakeS3Response({ status: 200, body: "x" }));
+    await GET(req(), { params: params(TOKEN) });
+    expect(mocks.verifyRawFetchToken).not.toHaveBeenCalled();
+    expect(mocks.resolveAndAuthorizeLink).toHaveBeenCalledWith(
+      expect.anything(),
+      TOKEN,
+      { bypassRefererRefinement: false },
+    );
   });
 });

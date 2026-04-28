@@ -342,6 +342,54 @@ describe("enforcePolicy", () => {
     // Undefined (existing call sites that haven't been updated):
     expect(enforcePolicy(policy, baseCtx)).toEqual({ allow: false });
   });
+
+  // ---- bypassRefererRefinement — sub-fetch token carve-out ----
+  // /l/[hash]/raw flips this on when the request carries a valid
+  // raw-fetch HMAC token (minted by the outer /l/[hash] page after
+  // it already passed the Referer check). The flag must skip the
+  // publicEmbedBypass referer-refinement gate without touching
+  // requireAuth or allowedIpRanges.
+
+  it("bypassRefererRefinement=true allows publicEmbed + allowedDomains + Sec-Fetch-Dest set + null Referer (sub-fetch path)", () => {
+    const policy = { ...openPolicy, allowedDomains: ["embed.test.com"] };
+    expect(
+      enforcePolicy(policy, {
+        ...baseCtx,
+        publicEmbedBypass: true,
+        secFetchDest: "empty",
+        secFetchSite: "same-origin",
+        bypassRefererRefinement: true,
+      }),
+    ).toMatchObject({ allow: true });
+  });
+
+  it("bypassRefererRefinement=true does NOT bypass requireAuth (auth still wins)", () => {
+    const policy = {
+      ...openPolicy,
+      allowedDomains: ["embed.test.com"],
+      requireAuth: true,
+    };
+    expect(
+      enforcePolicy(policy, {
+        ...baseCtx,
+        publicEmbedBypass: true,
+        secFetchDest: "empty",
+        secFetchSite: "same-origin",
+        bypassRefererRefinement: true,
+      }),
+    ).toEqual({ allow: false });
+  });
+
+  it("bypassRefererRefinement=true ignored when publicEmbedBypass=false (non-embeddable link still gated by allowedDomains)", () => {
+    const policy = { ...openPolicy, allowedDomains: ["embed.test.com"] };
+    expect(
+      enforcePolicy(policy, {
+        ...baseCtx,
+        publicEmbedBypass: false,
+        bypassRefererRefinement: true,
+      }),
+    ).toEqual({ allow: false });
+  });
 });
 
 // ---------------------------------------------------------------------------

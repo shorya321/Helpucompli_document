@@ -39,6 +39,15 @@ export interface EnforcementContext {
   readonly publicEmbedBypass?: boolean;
   readonly secFetchDest?: string | null;
   readonly secFetchSite?: string | null;
+  // Set true by /l/[hash]/raw when the request carries a valid HMAC
+  // raw-fetch token (see src/lib/raw-fetch-token.ts). The token is
+  // minted by the outer /l/[hash] viewer page only AFTER the parent-
+  // referer / allowedDomains check on that page already passed, so
+  // its presence proves the sub-fetch is happening inside an already-
+  // authorized embed view. We then skip ONLY the publicEmbedBypass
+  // referer-refinement gate below — `requireAuth`, `allowedIpRanges`,
+  // and the non-bypass `allowedDomains` gate are NOT skipped.
+  readonly bypassRefererRefinement?: boolean;
 }
 
 export type EnforcementDecision =
@@ -201,7 +210,8 @@ export function enforcePolicy(
     }
   } else if (
     policy.allowedDomains.length > 0 &&
-    ctx.secFetchDest != null
+    ctx.secFetchDest != null &&
+    !ctx.bypassRefererRefinement
   ) {
     // Public-embed link with admin-narrowed `allowedDomains`. The
     // request carries `Sec-Fetch-Dest`, which means it originated in
@@ -215,6 +225,13 @@ export function enforcePolicy(
     // (`Sec-Fetch-Site: none`), so `refererAllowed(null, …)` returns
     // false and the request is denied — exactly the user-facing
     // outcome admins expect when they pin a link to a domain.
+    //
+    // `bypassRefererRefinement` carves out one narrow case: a sub-
+    // resource fetch (img / video / audio / iframe / pdfjs viewer)
+    // arriving at /l/[hash]/raw with a valid raw-fetch token. The
+    // outer /l/[hash] page minted that token only after passing this
+    // very same referer check, so the sub-fetch's stripped Referer
+    // is not a security signal — it's a referrer-policy artifact.
     if (!refererAllowed(ctx.referer, policy.allowedDomains)) {
       return { allow: false };
     }

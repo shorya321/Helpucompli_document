@@ -132,9 +132,18 @@ async function writeAudit(
   }
 }
 
+export interface ResolveAndAuthorizeOptions {
+  // Set true by /l/[hash]/raw when the request carries a valid HMAC
+  // raw-fetch token. Forwarded into enforcePolicy so the publicEmbed
+  // referer-refinement branch trusts an already-authorized sub-fetch.
+  // See src/lib/raw-fetch-token.ts and policy-engine.ts for details.
+  readonly bypassRefererRefinement?: boolean;
+}
+
 export async function resolveAndAuthorizeLink(
   req: NextRequest,
   hash: string,
+  options: ResolveAndAuthorizeOptions = {},
 ): Promise<LinkAccessResult> {
   const ipAddress = extractIp(req);
   const userAgent = extractUserAgent(req);
@@ -294,6 +303,7 @@ export async function resolveAndAuthorizeLink(
     publicEmbedBypass: isPublicEmbed,
     secFetchDest,
     secFetchSite,
+    bypassRefererRefinement: options.bypassRefererRefinement === true,
   });
 
   if (!decision.allow) {

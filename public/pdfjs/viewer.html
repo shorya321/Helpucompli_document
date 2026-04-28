@@ -55,12 +55,26 @@
   // Strict whitelist for the file URL: must be a same-origin link
   // viewer raw asset path. Token shape mirrors LINK_TOKEN_RE.
   const FILE_RE = /^\/l\/[A-Za-z0-9_-]{20,128}\/raw$/;
+  // Strict shape for the optional sub-fetch token (raw-fetch-token.ts
+  // base64url payload + "." + base64url signature). Validated before
+  // appending to the fetch URL so a hostile parent cannot inject path
+  // characters via the `t=` param.
+  const TOKEN_RE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
   const params = new URLSearchParams(location.search);
   const file = params.get("file") ?? "";
+  const subFetchToken = params.get("t");
   if (!FILE_RE.test(file)) {
     showError("Invalid file reference.");
     throw new Error("invalid file param");
   }
+  // Build the actual /raw URL. When the outer /l/[hash] viewer minted
+  // a sub-fetch token, ride it through to /raw so the policy engine
+  // can skip its publicEmbed referer-refinement gate (Referer is
+  // stripped on every sub-fetch from this iframe by both the outer
+  // page's Referrer-Policy header and this file's `<meta>` tag).
+  const fetchUrl = subFetchToken !== null && TOKEN_RE.test(subFetchToken)
+    ? `${file}?t=${encodeURIComponent(subFetchToken)}`
+    : file;
 
   let scale = 1.4;
   let doc = null;
@@ -119,7 +133,7 @@
     // auth-required links are still gated by `resolveAndAuthorizeLink`
     // and only succeed in the non-sandboxed (same-origin, cookie-bearing)
     // path.
-    const loadingTask = pdfjsLib.getDocument({ url: file });
+    const loadingTask = pdfjsLib.getDocument({ url: fetchUrl });
     doc = await loadingTask.promise;
     zoomIn.disabled = false;
     zoomOut.disabled = false;

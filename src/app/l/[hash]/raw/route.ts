@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveAndAuthorizeLink } from "@/lib/link-access";
+import {
+  InvalidRawFetchTokenError,
+  verifyRawFetchToken,
+} from "@/lib/raw-fetch-token";
 
 export const dynamic = "force-dynamic";
 
@@ -92,7 +96,32 @@ export async function GET(
   ctx: RouteCtx,
 ): Promise<NextResponse> {
   const { hash } = await ctx.params;
-  const result = await resolveAndAuthorizeLink(req, hash);
+
+  // Optional sub-fetch token. The outer /l/[hash] viewer page mints
+  // this token (after passing the publicEmbed referer-refinement
+  // check) and rides it on every sub-resource URL. A valid token
+  // tells the policy engine to skip ONLY the referer-refinement
+  // gate — `requireAuth`, `allowedIpRanges`, audit, rate-limit are
+  // all unaffected. Missing or invalid token: fall through to the
+  // existing policy decision unchanged. See raw-fetch-token.ts.
+  const rawFetchToken = req.nextUrl.searchParams.get("t");
+  let bypassRefererRefinement = false;
+  if (rawFetchToken !== null) {
+    try {
+      verifyRawFetchToken(rawFetchToken, hash);
+      bypassRefererRefinement = true;
+    } catch (err) {
+      if (!(err instanceof InvalidRawFetchTokenError)) {
+        throw err;
+      }
+      // Tampered / expired / wrong-hash tokens are silently ignored —
+      // the request still goes through normal policy enforcement.
+    }
+  }
+
+  const result = await resolveAndAuthorizeLink(req, hash, {
+    bypassRefererRefinement,
+  });
 
   if (result.kind === "forbidden") return forbidden();
   if (result.kind === "rateLimited") {
