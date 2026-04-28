@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { json } from "@/lib/api-response";
 import { z } from "zod";
 import { auth0 } from "@/lib/auth0";
 import { resolveHasRole } from "@/lib/auth-guard";
@@ -8,7 +9,6 @@ import {
   defaultComplianceRunner,
 } from "@/lib/bucket-compliance";
 import { createRateLimiter } from "@/lib/rate-limit";
-import type { ApiResponse } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -22,16 +22,6 @@ const limiter = createRateLimiter({
 
 const idSchema = z.string().min(1).max(64);
 
-function json(
-  body: ApiResponse<unknown>,
-  status: number,
-  extra?: Record<string, string>,
-) {
-  return NextResponse.json(body, {
-    status,
-    headers: { "Cache-Control": "no-store, private", ...extra },
-  });
-}
 
 export async function GET(
   _req: NextRequest,

@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { json } from "@/lib/api-response";
 import { extractIp, extractUserAgent } from "@/lib/request-headers";
 import { auth0 } from "@/lib/auth0";
 import { resolveHasRole, resolveRole } from "@/lib/auth-guard";
@@ -7,13 +8,11 @@ import {
   asUserListPrisma,
   listUsers,
   parseUserListQuery,
-  type UserListResult,
 } from "@/lib/user-list";
 import {
   canInviteWithRole,
   inviteUser,
   inviteUserInputSchema,
-  type InviteUserResult,
 } from "@/lib/user-invite";
 import {
   Auth0ConflictError,
@@ -21,7 +20,6 @@ import {
 } from "@/lib/auth0-management";
 import { ensureUser } from "@/lib/ensure-user";
 import { createRateLimiter } from "@/lib/rate-limit";
-import type { ApiResponse } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -39,20 +37,6 @@ const inviteLimiter = createRateLimiter({
   windowMs: 60_000,
   prefix: "@helpucompli/users-invite",
 });
-
-type GetResp = ApiResponse<UserListResult> & { readonly total?: number };
-type PostResp = ApiResponse<InviteUserResult>;
-
-function json(
-  body: GetResp | PostResp,
-  status: number,
-  extra?: Record<string, string>,
-) {
-  return NextResponse.json(body, {
-    status,
-    headers: { "Cache-Control": "no-store, private", ...extra },
-  });
-}
 
 export async function GET(req: NextRequest) {
   const session = await auth0.getSession();

@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { json } from "@/lib/api-response";
 import { extractIp, extractUserAgent } from "@/lib/request-headers";
 import { auth0 } from "@/lib/auth0";
 import { resolveRole } from "@/lib/auth-guard";
@@ -8,7 +9,6 @@ import {
   getBucketList,
   parseBucketListQuery,
   type BucketListScope,
-  type BucketSummary,
 } from "@/lib/bucket-list";
 import {
   asBucketCreatePrisma,
@@ -18,9 +18,8 @@ import {
   DuplicateBucketNameError,
 } from "@/lib/bucket-create";
 import { createRateLimiter } from "@/lib/rate-limit";
-import { toJsonSafe, type JsonValue } from "@/lib/bigint";
+import { toJsonSafe } from "@/lib/bigint";
 import { ensureUser } from "@/lib/ensure-user";
-import type { ApiResponse } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -41,21 +40,6 @@ const createLimiter = createRateLimiter({
   windowMs: 60_000,
   prefix: "@helpucompli/s3-buckets-create",
 });
-
-type RouteResponse = ApiResponse<
-  readonly BucketSummary[] | JsonValue | { id: string; name: string; region: string }
->;
-
-function json(
-  body: RouteResponse,
-  status: number,
-  extra?: Record<string, string>,
-) {
-  return NextResponse.json(body, {
-    status,
-    headers: { "Cache-Control": "no-store, private", ...extra },
-  });
-}
 
 export async function GET(req: NextRequest) {
   const session = await auth0.getSession();

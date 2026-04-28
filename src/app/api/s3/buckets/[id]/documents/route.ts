@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { json } from "@/lib/api-response";
 import { z } from "zod";
 import { auth0 } from "@/lib/auth0";
 import { resolveRole } from "@/lib/auth-guard";
@@ -12,9 +13,8 @@ import {
   getBucketDocumentsPage,
   type BucketDetailsScope,
 } from "@/lib/bucket-details";
-import { toJsonSafe, type JsonValue } from "@/lib/bigint";
+import { toJsonSafe } from "@/lib/bigint";
 import { createRateLimiter } from "@/lib/rate-limit";
-import type { ApiResponse } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -44,16 +44,6 @@ const querySchema = z.object({
     .optional(),
 });
 
-function json(
-  body: ApiResponse<JsonValue>,
-  status: number,
-  extra?: Record<string, string>,
-) {
-  return NextResponse.json(body, {
-    status,
-    headers: { "Cache-Control": "no-store, private", ...extra },
-  });
-}
 
 export async function GET(
   req: NextRequest,

@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { json } from "@/lib/api-response";
 import { extractIp, extractUserAgent } from "@/lib/request-headers";
 import { z } from "zod";
 import { auth0 } from "@/lib/auth0";
@@ -11,7 +12,6 @@ import {
   softDeleteObject,
 } from "@/lib/s3-objects";
 import { createRateLimiter } from "@/lib/rate-limit";
-import type { ApiResponse } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -48,19 +48,6 @@ const hardSchema = z.object({
 });
 
 const bodySchema = z.discriminatedUnion("mode", [softSchema, hardSchema]);
-
-type DeleteResponse = { readonly ok: true; readonly versionsRemoved?: number };
-
-function json(
-  body: ApiResponse<DeleteResponse | null>,
-  status: number,
-  extra?: Record<string, string>,
-) {
-  return NextResponse.json(body, {
-    status,
-    headers: { "Cache-Control": "no-store, private", ...extra },
-  });
-}
 
 // Regulatory-hold check — placeholder until Module 08 wires the
 // AccessPolicy engine. Today every document is treated as NOT under
@@ -233,7 +220,7 @@ export async function POST(req: NextRequest) {
   try {
     let keyMarker: string | undefined;
     let versionIdMarker: string | undefined;
-    /* eslint-disable no-constant-condition */
+     
     while (true) {
       const page = await listObjectVersions({
         bucket: bucket.name,
@@ -259,7 +246,7 @@ export async function POST(req: NextRequest) {
       versionIdMarker = page.nextVersionIdMarker;
       if (!keyMarker && !versionIdMarker) break;
     }
-    /* eslint-enable no-constant-condition */
+     
   } catch {
     return json({ data: null, error: "Failed to purge object versions" }, 500);
   }

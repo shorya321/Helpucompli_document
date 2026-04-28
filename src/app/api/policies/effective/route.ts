@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { json } from "@/lib/api-response";
 import { auth0 } from "@/lib/auth0";
 import { resolveHasRole } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
@@ -37,12 +38,6 @@ export interface EffectivePolicyPreview {
 
 type Resp = ApiResponse<EffectivePolicyPreview>;
 
-function json(body: Resp, status: number, extra?: Record<string, string>) {
-  return NextResponse.json(body, {
-    status,
-    headers: { "Cache-Control": "no-store, private", ...extra },
-  });
-}
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

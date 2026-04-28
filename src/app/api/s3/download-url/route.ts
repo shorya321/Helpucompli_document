@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { json } from "@/lib/api-response";
 import { extractIp, extractUserAgent } from "@/lib/request-headers";
 import { z } from "zod";
 import { auth0 } from "@/lib/auth0";
@@ -7,7 +8,6 @@ import { prisma } from "@/lib/prisma";
 import { ensureUser } from "@/lib/ensure-user";
 import { presignGetUrl } from "@/lib/s3-presign";
 import { createRateLimiter } from "@/lib/rate-limit";
-import type { ApiResponse } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -33,19 +33,6 @@ const schema = z.object({
   // flow. Audit row is identical for both — bytes transmit either way.
   disposition: z.enum(["attachment", "inline"]).default("attachment"),
 });
-
-type DownloadResponse = { readonly url: string; readonly expiresIn: number };
-
-function json(
-  body: ApiResponse<DownloadResponse | null>,
-  status: number,
-  extra?: Record<string, string>,
-) {
-  return NextResponse.json(body, {
-    status,
-    headers: { "Cache-Control": "no-store, private", ...extra },
-  });
-}
 
 // Content-Disposition filename: quote-safe subset matching the
 // assertContentDisposition validator in s3-presign.ts (allows unicode

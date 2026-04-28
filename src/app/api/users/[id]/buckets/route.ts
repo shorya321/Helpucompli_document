@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { json } from "@/lib/api-response";
 import { z } from "zod";
 import { auth0 } from "@/lib/auth0";
 import { resolveHasRole, resolveRole } from "@/lib/auth-guard";
@@ -8,11 +9,8 @@ import {
   bucketAccessUpdateSchema,
   getUserBuckets,
   setUserBuckets,
-  type BucketAccessDiff,
-  type UserBucketAccessRow,
 } from "@/lib/user-bucket-access";
 import { createRateLimiter } from "@/lib/rate-limit";
-import type { ApiResponse } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -29,20 +27,6 @@ const writeLimiter = createRateLimiter({
 });
 
 const idSchema = z.string().uuid();
-
-type GetResp = ApiResponse<readonly UserBucketAccessRow[]>;
-type PutResp = ApiResponse<BucketAccessDiff>;
-
-function json(
-  body: GetResp | PutResp,
-  status: number,
-  extra?: Record<string, string>,
-) {
-  return NextResponse.json(body, {
-    status,
-    headers: { "Cache-Control": "no-store, private", ...extra },
-  });
-}
 
 async function ensureTargetExists(userId: string): Promise<boolean> {
   const row = await prisma.user.findUnique({

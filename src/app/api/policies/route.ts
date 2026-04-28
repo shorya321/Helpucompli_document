@@ -1,22 +1,14 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { json } from "@/lib/api-response";
 import { extractIp, extractUserAgent } from "@/lib/request-headers";
 import { auth0 } from "@/lib/auth0";
 import { resolveHasRole, resolveRole } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
-import {
-  asPolicyListPrisma,
-  getPolicyList,
-  type PolicyListRow,
-} from "@/lib/policy-list";
-import {
-  asPolicyCrudPrisma,
-  createPolicy,
-  type PolicyRow,
-} from "@/lib/policy-crud";
+import { asPolicyListPrisma, getPolicyList } from "@/lib/policy-list";
+import { asPolicyCrudPrisma, createPolicy } from "@/lib/policy-crud";
 import { policyInputSchema } from "@/lib/policy-schema";
 import { ensureUser } from "@/lib/ensure-user";
 import { createRateLimiter } from "@/lib/rate-limit";
-import type { ApiResponse } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -31,15 +23,6 @@ const createLimiter = createRateLimiter({
   windowMs: 60_000,
   prefix: "@helpucompli/policies-create",
 });
-
-type Resp = ApiResponse<readonly PolicyListRow[] | PolicyRow>;
-
-function json(body: Resp, status: number, extra?: Record<string, string>) {
-  return NextResponse.json(body, {
-    status,
-    headers: { "Cache-Control": "no-store, private", ...extra },
-  });
-}
 
 // Sec-review C2: x-real-ip / x-forwarded-for are user-supplied unless
 // the load balancer strips them at the edge before re-injecting the

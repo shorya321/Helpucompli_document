@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { json } from "@/lib/api-response";
 import { extractIp, extractUserAgent } from "@/lib/request-headers";
 import { z } from "zod";
 import { auth0 } from "@/lib/auth0";
@@ -9,10 +10,8 @@ import {
   changeUserStatus,
   ForbiddenStatusChangeError,
   userStatusUpdateSchema,
-  type StatusChangeResult,
 } from "@/lib/user-status";
 import { createRateLimiter } from "@/lib/rate-limit";
-import type { ApiResponse } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -23,15 +22,6 @@ const writeLimiter = createRateLimiter({
 });
 
 const idSchema = z.string().uuid();
-
-type Resp = ApiResponse<StatusChangeResult>;
-
-function json(body: Resp, status: number, extra?: Record<string, string>) {
-  return NextResponse.json(body, {
-    status,
-    headers: { "Cache-Control": "no-store, private", ...extra },
-  });
-}
 
 export async function PATCH(
   req: NextRequest,

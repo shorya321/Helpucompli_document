@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { json } from "@/lib/api-response";
 import { extractIp, extractUserAgent } from "@/lib/request-headers";
 import { auth0 } from "@/lib/auth0";
 import { resolveHasRole, resolveRole } from "@/lib/auth-guard";
@@ -9,12 +10,10 @@ import {
   getPolicy,
   PolicyNotFoundError,
   updatePolicy,
-  type PolicyRow,
 } from "@/lib/policy-crud";
 import { policyUpdateSchema } from "@/lib/policy-schema";
 import { ensureUser } from "@/lib/ensure-user";
 import { createRateLimiter } from "@/lib/rate-limit";
-import type { ApiResponse } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -27,16 +26,6 @@ const limiter = createRateLimiter({
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function json(
-  body: ApiResponse<PolicyRow | null>,
-  status: number,
-  extra?: Record<string, string>,
-) {
-  return NextResponse.json(body, {
-    status,
-    headers: { "Cache-Control": "no-store, private", ...extra },
-  });
-}
 
 function noContent() {
   return new NextResponse(null, {

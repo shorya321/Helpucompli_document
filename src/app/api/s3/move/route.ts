@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { json } from "@/lib/api-response";
 import { extractIp, extractUserAgent } from "@/lib/request-headers";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -12,7 +13,6 @@ import {
   assertFolderPrefix,
   sanitizeFilename,
 } from "@/lib/document-upload";
-import type { ApiResponse } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -53,23 +53,6 @@ const schema = z
     (d) => !(d.mode === "move" && d.sourceBucketId === d.destBucketId && d.destFolderPrefix === ""),
     "source and destination are identical",
   );
-
-type MoveResponse = {
-  readonly id: string;
-  readonly bucketId: string;
-  readonly s3Key: string;
-};
-
-function json(
-  body: ApiResponse<MoveResponse | null>,
-  status: number,
-  extra?: Record<string, string>,
-) {
-  return NextResponse.json(body, {
-    status,
-    headers: { "Cache-Control": "no-store, private", ...extra },
-  });
-}
 
 export async function POST(req: NextRequest) {
   const session = await auth0.getSession();

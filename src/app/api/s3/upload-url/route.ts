@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { json } from "@/lib/api-response";
 import { randomUUID } from "node:crypto";
 import { auth0 } from "@/lib/auth0";
 import { resolveRole } from "@/lib/auth-guard";
@@ -18,7 +19,6 @@ import {
 import { createRateLimiter } from "@/lib/rate-limit";
 import { issueUploadReceipt } from "@/lib/upload-receipt";
 import { ensureUser } from "@/lib/ensure-user";
-import type { ApiResponse } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -31,23 +31,6 @@ const limiter = createRateLimiter({
   windowMs: 60_000,
   prefix: "@helpucompli/s3-upload-url",
 });
-
-type UploadUrlResponse =
-  | {
-      readonly mode: "simple";
-      readonly s3Key: string;
-      readonly url: string;
-      readonly receipt: string;
-      readonly expiresIn: number;
-    }
-  | {
-      readonly mode: "multipart";
-      readonly s3Key: string;
-      readonly uploadId: string;
-      readonly parts: ReadonlyArray<{ readonly partNumber: number; readonly url: string }>;
-      readonly receipt: string;
-      readonly expiresIn: number;
-    };
 
 // Access check for non-superadmin roles. Admins are scoped per-bucket via
 // UserBucketAccess — an admin without an access row for bucketId MUST
@@ -65,12 +48,6 @@ async function canWriteBucket(
   return access !== null;
 }
 
-function json(body: ApiResponse<UploadUrlResponse | null>, status: number, extra?: Record<string, string>) {
-  return NextResponse.json(body, {
-    status,
-    headers: { "Cache-Control": "no-store, private", ...extra },
-  });
-}
 
 export async function POST(req: NextRequest) {
   const session = await auth0.getSession();

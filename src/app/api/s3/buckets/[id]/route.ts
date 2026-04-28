@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { json } from "@/lib/api-response";
 import { extractIp, extractUserAgent } from "@/lib/request-headers";
 import { z } from "zod";
 import { auth0 } from "@/lib/auth0";
@@ -20,8 +21,7 @@ import {
   deleteBucketForTenant,
 } from "@/lib/bucket-delete";
 import { createRateLimiter } from "@/lib/rate-limit";
-import { toJsonSafe, type JsonValue } from "@/lib/bigint";
-import type { ApiResponse } from "@/types";
+import { toJsonSafe } from "@/lib/bigint";
 
 export const dynamic = "force-dynamic";
 
@@ -45,19 +45,6 @@ const deleteBodySchema = z
 // Path-param guard. UUIDs are 36 chars — 64 is headroom for any
 // legacy id format. Reject payload-style abuse at the boundary.
 const idSchema = z.string().min(1).max(64);
-
-type DeleteResultShape = { id: string; name: string; isActive: boolean };
-
-function json(
-  body: ApiResponse<JsonValue | DeleteResultShape>,
-  status: number,
-  extra?: Record<string, string>,
-) {
-  return NextResponse.json(body, {
-    status,
-    headers: { "Cache-Control": "no-store, private", ...extra },
-  });
-}
 
 export async function GET(
   _req: NextRequest,
