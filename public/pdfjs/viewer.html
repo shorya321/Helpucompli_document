@@ -108,10 +108,18 @@
   });
 
   try {
-    // `file` is same-origin; cookies are needed because /l/<hash>/raw
-    // runs through resolveAndAuthorizeLink which may rely on the
-    // session cookie when the policy requires auth.
-    const loadingTask = pdfjsLib.getDocument({ url: file, withCredentials: true });
+    // `file` is same-origin in normal embeds (cookies ride the fetch
+    // by default for same-origin requests). Inside a third-party
+    // `<iframe sandbox>` the document has `Origin: null` and cannot
+    // send credentials regardless of this flag. We deliberately do NOT
+    // set `withCredentials: true`: a credentialed CORS request is
+    // incompatible with the wildcard `Access-Control-Allow-Origin: *`
+    // that `/l/<hash>/raw` emits to support null-origin sandboxed
+    // embeds. Public-embed links bypass auth via `publicEmbedBypass`;
+    // auth-required links are still gated by `resolveAndAuthorizeLink`
+    // and only succeed in the non-sandboxed (same-origin, cookie-bearing)
+    // path.
+    const loadingTask = pdfjsLib.getDocument({ url: file });
     doc = await loadingTask.promise;
     zoomIn.disabled = false;
     zoomOut.disabled = false;

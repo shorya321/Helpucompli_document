@@ -90,6 +90,7 @@ describe("GET /l/[hash]/raw — same-origin streaming proxy", () => {
     expect(res.status).toBe(403);
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(res.headers.get("cache-control")).toBe("no-store, private");
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
   });
 
   it("429 + Retry-After when authorize helper returns rateLimited", async () => {
@@ -100,6 +101,7 @@ describe("GET /l/[hash]/raw — same-origin streaming proxy", () => {
     const res = await GET(req(), { params: params(TOKEN) });
     expect(res.status).toBe(429);
     expect(res.headers.get("retry-after")).toBe("17");
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
   });
 
   it("200 streams S3 body with Content-Type from the document and inline Content-Disposition", async () => {
@@ -123,6 +125,7 @@ describe("GET /l/[hash]/raw — same-origin streaming proxy", () => {
     expect(res.headers.get("cache-control")).toBe("private, no-store");
     expect(res.headers.get("referrer-policy")).toBe("no-referrer");
     expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
     expect(res.headers.get("content-length")).toBe("8");
     const text = await res.text();
     expect(text).toBe("PDFBYTES");

@@ -54,12 +54,23 @@ function buildContentDisposition(filename: string): string {
   return `inline; filename="${ascii}"; filename*=UTF-8''${encoded}`;
 }
 
+// `Access-Control-Allow-Origin: *` lets the bundled PDF.js viewer fetch
+// the PDF stream when it runs inside a third-party `<iframe sandbox>`
+// (WordPress / Notion / Confluence). Sandboxed iframes have
+// `Origin: null`, so even a same-host fetch is treated as cross-origin
+// by the browser and requires an ACAO header. Wildcard is safe here:
+// `resolveAndAuthorizeLink` runs full auth + policy + publicEmbedBypass
+// + Sec-Fetch-Dest + audit + rate-limit before any bytes stream, and
+// the unguessable hash in the URL is the bearer token. We must NOT
+// emit `Access-Control-Allow-Credentials: true` (incompatible with `*`),
+// and the viewer is updated to fetch without `withCredentials`.
 function forbidden(): NextResponse {
   return new NextResponse(null, {
     status: 403,
     headers: {
       "Cache-Control": "no-store, private",
       "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+      "Access-Control-Allow-Origin": "*",
     },
   });
 }
@@ -71,6 +82,7 @@ function tooManyRequests(retryAfterSec: number): NextResponse {
       "Cache-Control": "no-store, private",
       "Retry-After": String(retryAfterSec),
       "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+      "Access-Control-Allow-Origin": "*",
     },
   });
 }
@@ -122,6 +134,7 @@ export async function GET(
   headers.set("Cache-Control", "private, no-store");
   headers.set("Referrer-Policy", "no-referrer");
   headers.set("X-Content-Type-Options", "nosniff");
+  headers.set("Access-Control-Allow-Origin", "*");
 
   for (const name of PASSTHROUGH_HEADERS) {
     const value = upstream.headers.get(name);
