@@ -15,7 +15,6 @@ import {
 import { formatDateTime } from "@/lib/format-datetime";
 import { buildEmbedCode } from "@/lib/link-embed";
 import type { ApiResponse } from "@/types";
-import { QrCode } from "@/components/links/qr-code";
 
 // Native <select> styled to match shadcn Input. The policy/TTL/document
 // pickers are driven by local state but stay on native DOM elements so
@@ -522,9 +521,6 @@ export function GenerateLinkForm({
                   above before generating to get an embed snippet.
                 </p>
               )}
-              <div className="mt-3">
-                <QrCode url={result.shareableUrl} />
-              </div>
             </div>
           )}
 
