@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { extractIp, extractUserAgent } from "@/lib/request-headers";
 import { auth0 } from "@/lib/auth0";
 import { resolveHasRole, resolveRole } from "@/lib/auth-guard";
 import { ensureUser } from "@/lib/ensure-user";
@@ -28,22 +29,6 @@ function jsonError(status: number, msg: string) {
       headers: { "Cache-Control": "no-store, private" },
     },
   );
-}
-
-function extractIp(req: NextRequest): string {
-  const realIp = req.headers.get("x-real-ip");
-  if (realIp && realIp.trim().length > 0) return realIp.trim();
-  const xff = req.headers.get("x-forwarded-for");
-  if (xff) {
-    const first = xff.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  return "unknown";
-}
-
-function extractUserAgent(req: NextRequest): string {
-  const ua = req.headers.get("user-agent");
-  return ua && ua.length > 0 ? ua : "unknown";
 }
 
 // Sec-review C1: revoke is keyed on link.id (UUID), NEVER the bearer

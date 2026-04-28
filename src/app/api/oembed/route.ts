@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { extractIp, extractUserAgent } from "@/lib/request-headers";
 import { getConfig } from "@/lib/config";
 import { prisma } from "@/lib/prisma";
 import { LINK_TOKEN_RE } from "@/lib/link-access";
@@ -149,22 +150,6 @@ function pickType(mime: string | null): "rich" | "video" {
   // from a path that runs policy + audit. Returning `link` would
   // strip the inline preview (consumer renders a plain card).
   return "rich";
-}
-
-function extractIp(req: NextRequest): string {
-  const realIp = req.headers.get("x-real-ip");
-  if (realIp && realIp.trim().length > 0) return realIp.trim();
-  const xff = req.headers.get("x-forwarded-for");
-  if (xff) {
-    const first = xff.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  return "unknown";
-}
-
-function extractUserAgent(req: NextRequest): string {
-  const ua = req.headers.get("user-agent");
-  return ua && ua.length > 0 ? ua : "unknown";
 }
 
 export async function GET(req: NextRequest): Promise<NextResponse> {

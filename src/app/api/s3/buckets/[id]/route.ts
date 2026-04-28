@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { extractIp, extractUserAgent } from "@/lib/request-headers";
 import { z } from "zod";
 import { auth0 } from "@/lib/auth0";
 import { resolveRole } from "@/lib/auth-guard";
@@ -40,22 +41,6 @@ const deleteLimiter = createRateLimiter({
 const deleteBodySchema = z
   .object({ confirmName: z.string().min(1).max(63) })
   .strict();
-
-function extractIp(req: NextRequest): string {
-  const realIp = req.headers.get("x-real-ip");
-  if (realIp && realIp.trim().length > 0) return realIp.trim();
-  const xff = req.headers.get("x-forwarded-for");
-  if (xff) {
-    const first = xff.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  return "unknown";
-}
-
-function extractUserAgent(req: NextRequest): string {
-  const ua = req.headers.get("user-agent");
-  return ua && ua.length > 0 ? ua : "unknown";
-}
 
 // Path-param guard. UUIDs are 36 chars — 64 is headroom for any
 // legacy id format. Reject payload-style abuse at the boundary.

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { extractIp, extractUserAgent } from "@/lib/request-headers";
 import { auth0 } from "@/lib/auth0";
 import { resolveHasRole, resolveRole } from "@/lib/auth-guard";
 import { getConfig } from "@/lib/config";
@@ -41,22 +42,6 @@ function json<T>(
     status,
     headers: { "Cache-Control": "no-store, private", ...extra },
   });
-}
-
-function extractIp(req: NextRequest): string {
-  const realIp = req.headers.get("x-real-ip");
-  if (realIp && realIp.trim().length > 0) return realIp.trim();
-  const xff = req.headers.get("x-forwarded-for");
-  if (xff) {
-    const first = xff.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  return "unknown";
-}
-
-function extractUserAgent(req: NextRequest): string {
-  const ua = req.headers.get("user-agent");
-  return ua && ua.length > 0 ? ua : "unknown";
 }
 
 // Sec-review: returns the raw bearer token for an existing link so an

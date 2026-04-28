@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { extractIp, extractUserAgent } from "@/lib/request-headers";
 import { auth0 } from "@/lib/auth0";
 import { ensureUser } from "@/lib/ensure-user";
 import { resolveRole } from "@/lib/auth-guard";
@@ -62,22 +63,6 @@ export type LinkAccessResult =
   | { readonly kind: "forbidden" }
   | { readonly kind: "rateLimited"; readonly retryAfterSec: number }
   | LinkAccessOk;
-
-function extractIp(req: NextRequest): string {
-  const realIp = req.headers.get("x-real-ip");
-  if (realIp && realIp.trim().length > 0) return realIp.trim();
-  const xff = req.headers.get("x-forwarded-for");
-  if (xff) {
-    const first = xff.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  return "unknown";
-}
-
-function extractUserAgent(req: NextRequest): string {
-  const ua = req.headers.get("user-agent");
-  return ua && ua.length > 0 ? ua : "unknown";
-}
 
 function effectiveFromStored(
   policy: {

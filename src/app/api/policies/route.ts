@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { extractIp, extractUserAgent } from "@/lib/request-headers";
 import { auth0 } from "@/lib/auth0";
 import { resolveHasRole, resolveRole } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
@@ -48,22 +49,6 @@ function json(body: Resp, status: number, extra?: Record<string, string>) {
 // audit trail (HIPAA 164.312(b)) but DO NOT trust it for IP-range
 // enforcement — that decision lives in policy-engine.ts and uses the
 // same value, so the LB strip is the single point of trust.
-function extractIp(req: NextRequest): string {
-  const realIp = req.headers.get("x-real-ip");
-  if (realIp && realIp.trim().length > 0) return realIp.trim();
-  const xff = req.headers.get("x-forwarded-for");
-  if (xff) {
-    const first = xff.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  return "unknown";
-}
-
-function extractUserAgent(req: NextRequest): string {
-  const ua = req.headers.get("user-agent");
-  return ua && ua.length > 0 ? ua : "unknown";
-}
-
 export async function GET(_req: NextRequest) {
   const session = await auth0.getSession();
   if (!session) return json({ data: null, error: "Unauthorized" }, 401);

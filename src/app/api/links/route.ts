@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { extractIp, extractUserAgent } from "@/lib/request-headers";
 import { auth0 } from "@/lib/auth0";
 import { resolveHasRole, resolveRole } from "@/lib/auth-guard";
 import { getConfig } from "@/lib/config";
@@ -104,22 +105,6 @@ export async function GET(req: NextRequest) {
 // Sec-review C2 (Module 08): x-real-ip / x-forwarded-for trust requires
 // LB strip at the edge. Otherwise client-controlled. Same pattern as
 // buckets and policies routes; runbook captures the LB requirement.
-function extractIp(req: NextRequest): string {
-  const realIp = req.headers.get("x-real-ip");
-  if (realIp && realIp.trim().length > 0) return realIp.trim();
-  const xff = req.headers.get("x-forwarded-for");
-  if (xff) {
-    const first = xff.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  return "unknown";
-}
-
-function extractUserAgent(req: NextRequest): string {
-  const ua = req.headers.get("user-agent");
-  return ua && ua.length > 0 ? ua : "unknown";
-}
-
 export async function POST(req: NextRequest) {
   const session = await auth0.getSession();
   if (!session) return json({ data: null, error: "Unauthorized" }, 401);
