@@ -27,6 +27,10 @@ vi.mock("@/lib/config", () => ({
     NODE_ENV: "production",
     AWS_REGION: "us-east-1",
     AUTH0_DOMAIN: "auth.helpucompli.com",
+    // raw-fetch-token derives its HMAC key from this secret. Required
+    // for the type:photo branch which issues a token for /raw fetches.
+    AUTH0_SECRET:
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   }),
 }));
 
@@ -197,12 +201,15 @@ describe("GET /api/oembed", () => {
     expect(body.cache_age).toBe(300);
   });
 
-  it("200 rich response (iframe) for image/png — viewer keeps the presigned URL fresh", async () => {
-    // oEmbed photo.url MUST be raw image bytes per spec; our viewer
-    // returns text/html, so WP rendered a broken-image icon when this
-    // returned `photo`. Iframe path delegates rendering to the viewer
-    // page, which emits <img src=presigned> with rotation handled per
-    // request. Regression guard against future "type: photo" changes.
+  it("200 photo response for image/png — url points to /raw with a long-lived raw-fetch token (raw bytes per oEmbed spec)", async () => {
+    // Iframely-backed embed surfaces (Circle.so, Notion's image-embed
+    // slot) reject `type: rich`+iframe for an image slot with "embed
+    // a different image" — they need oEmbed `type: photo` whose `url`
+    // resolves to raw image bytes. /l/<hash>/raw streams bytes with
+    // the correct Content-Type AND runs the same auth/policy/audit
+    // as the viewer, so HIPAA invariants hold. The token rides the
+    // URL so the policy engine treats it as an already-authorized
+    // sub-fetch (mirroring the viewer page's existing 120s token).
     mocks.findLink.mockResolvedValueOnce(
       linkRow({
         document: {
@@ -214,10 +221,66 @@ describe("GET /api/oembed", () => {
       }),
     );
     const res = await GET(req(oembedUrl(SHARE_URL)));
+    expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
-    expect(body.type).toBe("rich");
-    expect(body.html).toMatch(/<iframe /);
-    expect(body.html).toContain(`src="${SHARE_URL}"`);
+    expect(body.type).toBe("photo");
+    expect(body.version).toBe("1.0");
+    expect(body.title).toBe("photo.png");
+    expect(body.html).toBeUndefined();
+    const photoUrl = body.url as string;
+    expect(photoUrl).toMatch(
+      new RegExp(
+        `^https://docs\\.helpucompli\\.com/l/${TOKEN}/raw\\?t=[A-Za-z0-9_%.-]+$`,
+      ),
+    );
+    expect(body.width).toBe(800);
+    expect(body.height).toBe(600);
+    expect(body.cache_age).toBe(300);
+  });
+
+  it("photo url's raw-fetch token is verifiable + bound to the link hash", async () => {
+    // Defense-in-depth — the token MUST be a valid HMAC raw-fetch
+    // token for the link's hash, otherwise the /raw route would fall
+    // through to normal policy enforcement and reject server-side
+    // oEmbed thumbnail fetches that lack a Referer.
+    const { verifyRawFetchToken } = await import("@/lib/raw-fetch-token");
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({
+        document: {
+          id: "d-1",
+          filename: "photo.jpg",
+          contentType: "image/jpeg",
+          isDeleted: false,
+        },
+      }),
+    );
+    const body = (await (await GET(req(oembedUrl(SHARE_URL)))).json()) as Record<
+      string,
+      unknown
+    >;
+    const photoUrl = new URL(body.url as string);
+    const t = photoUrl.searchParams.get("t");
+    expect(t).toBeTruthy();
+    expect(verifyRawFetchToken(t!, TOKEN)).toBe(true);
+  });
+
+  it("photo response for image/jpeg uses jpeg content (still type:photo)", async () => {
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({
+        document: {
+          id: "d-1",
+          filename: "scan.jpeg",
+          contentType: "image/jpeg",
+          isDeleted: false,
+        },
+      }),
+    );
+    const body = (await (await GET(req(oembedUrl(SHARE_URL)))).json()) as Record<
+      string,
+      unknown
+    >;
+    expect(body.type).toBe("photo");
+    expect(body.url).toMatch(/\/raw\?t=/);
   });
 
   it("200 video response for video/mp4 returns iframe HTML", async () => {
