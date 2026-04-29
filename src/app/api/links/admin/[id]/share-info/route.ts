@@ -167,6 +167,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
           issueRawFetchToken(
             link.presignedUrlHash,
             chooseEmbedImageTokenTtlSec(link.expiresAt ?? null),
+            "external-embed",
           ),
         )}`
       : null;

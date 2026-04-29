@@ -286,10 +286,15 @@ describe("GET /l/[hash]/raw — same-origin streaming proxy", () => {
     expect(headers["Range"]).toBeUndefined();
   });
 
-  // ---- sub-fetch token (raw-fetch-token.ts) ----
+  // ---- raw-fetch-token: kind discriminator (raw-fetch-token.ts) ----
+  //
+  // sub-fetch  → bypassRefererRefinement=true  (inline 120s token from /l/<hash> outer page)
+  // external-embed → bypassRefererRefinement=false (long-lived og:image / oEmbed photo / share-info image URL)
+  //                  external embed tokens MUST run normal refinement so a copied image URL
+  //                  from an `allowedDomains`-pinned link is denied on unlisted browser hosts.
 
-  it("forwards bypassRefererRefinement=true to authorize helper when ?t= is valid", async () => {
-    mocks.verifyRawFetchToken.mockReturnValueOnce(true);
+  it("forwards bypassRefererRefinement=true to authorize helper when ?t= is a sub-fetch kind", async () => {
+    mocks.verifyRawFetchToken.mockReturnValueOnce({ kind: "sub-fetch" });
     mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
     fetchSpy = vi
       .spyOn(globalThis, "fetch")
@@ -302,11 +307,55 @@ describe("GET /l/[hash]/raw — same-origin streaming proxy", () => {
     expect(mocks.resolveAndAuthorizeLink).toHaveBeenCalledWith(
       expect.anything(),
       TOKEN,
-      { bypassRefererRefinement: true },
+      { bypassRefererRefinement: true, tokenKind: "sub-fetch" },
     );
   });
 
-  it("forwards bypassRefererRefinement=false when ?t= is malformed/expired/wrong-hash (silent fall-through)", async () => {
+  it("forwards bypassRefererRefinement=FALSE when ?t= is an external-embed kind (refinement still enforced)", async () => {
+    // Bug fix: og:image / oEmbed photo / share-info image URL tokens
+    // are 7-day externally-pasted URLs whose browser referer was never
+    // validated. They must NOT downgrade refinement.
+    mocks.verifyRawFetchToken.mockReturnValueOnce({ kind: "external-embed" });
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
+    fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(fakeS3Response({ status: 200, body: "x" }));
+    const res = await GET(req({ query: "t=valid.embed.token" }), {
+      params: params(TOKEN),
+    });
+    expect(res.status).toBe(200);
+    expect(mocks.resolveAndAuthorizeLink).toHaveBeenCalledWith(
+      expect.anything(),
+      TOKEN,
+      { bypassRefererRefinement: false, tokenKind: "external-embed" },
+    );
+  });
+
+  it("returns 403 when authorize denies an external-embed token (e.g. browser on unlisted referer)", async () => {
+    // Drives home the user-visible bug-fix outcome: same image URL,
+    // pasted on `circle.so` page (NOT in policy.allowedDomains), gets
+    // 403 because refinement is still enforced for external-embed kind.
+    mocks.verifyRawFetchToken.mockReturnValueOnce({ kind: "external-embed" });
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce({ kind: "forbidden" });
+    const res = await GET(
+      req({
+        query: "t=valid.embed.token",
+        headers: {
+          referer: "https://circle.so/some/page",
+          "sec-fetch-dest": "image",
+        },
+      }),
+      { params: params(TOKEN) },
+    );
+    expect(res.status).toBe(403);
+    expect(mocks.resolveAndAuthorizeLink).toHaveBeenCalledWith(
+      expect.anything(),
+      TOKEN,
+      { bypassRefererRefinement: false, tokenKind: "external-embed" },
+    );
+  });
+
+  it("forwards bypassRefererRefinement=false + tokenKind=null when ?t= is malformed/expired/wrong-hash (silent fall-through)", async () => {
     mocks.verifyRawFetchToken.mockImplementationOnce(() => {
       throw new InvalidRawFetchTokenError("expired");
     });
@@ -318,11 +367,11 @@ describe("GET /l/[hash]/raw — same-origin streaming proxy", () => {
     expect(mocks.resolveAndAuthorizeLink).toHaveBeenCalledWith(
       expect.anything(),
       TOKEN,
-      { bypassRefererRefinement: false },
+      { bypassRefererRefinement: false, tokenKind: null },
     );
   });
 
-  it("forwards bypassRefererRefinement=false when ?t= is omitted entirely", async () => {
+  it("forwards bypassRefererRefinement=false + tokenKind=null when ?t= is omitted entirely", async () => {
     mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
     fetchSpy = vi
       .spyOn(globalThis, "fetch")
@@ -332,7 +381,7 @@ describe("GET /l/[hash]/raw — same-origin streaming proxy", () => {
     expect(mocks.resolveAndAuthorizeLink).toHaveBeenCalledWith(
       expect.anything(),
       TOKEN,
-      { bypassRefererRefinement: false },
+      { bypassRefererRefinement: false, tokenKind: null },
     );
   });
 });

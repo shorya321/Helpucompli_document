@@ -291,7 +291,9 @@ describe("GET /api/links/admin/[id]/share-info", () => {
       ),
     );
     const t = new URL(u as string).searchParams.get("t");
-    expect(verifyRawFetchToken(t!, TOKEN)).toBe(true);
+    // External-embed kind — refinement still enforced on /raw so the
+    // copied URL only renders inside iframes on policy.allowedDomains.
+    expect(verifyRawFetchToken(t!, TOKEN)).toEqual({ kind: "external-embed" });
   });
 
   it("embedImageUrl token TTL is clamped to link's remaining lifetime (cannot outlive the link)", async () => {

@@ -94,6 +94,7 @@ async function writeAudit(
     userAgent: string;
     userId: string | null;
     reason?: string;
+    tokenKind?: "sub-fetch" | "external-embed" | null;
   },
 ): Promise<void> {
   try {
@@ -107,6 +108,7 @@ async function writeAudit(
           documentId: link.documentId,
           policyId: link.policyId,
           ...(ctx.reason ? { reason: ctx.reason } : {}),
+          ...(ctx.tokenKind ? { tokenKind: ctx.tokenKind } : {}),
         },
         ipAddress: ctx.ipAddress,
         userAgent: ctx.userAgent,
@@ -119,10 +121,17 @@ async function writeAudit(
 
 export interface ResolveAndAuthorizeOptions {
   // Set true by /l/[hash]/raw when the request carries a valid HMAC
-  // raw-fetch token. Forwarded into enforcePolicy so the publicEmbed
-  // referer-refinement branch trusts an already-authorized sub-fetch.
-  // See src/lib/raw-fetch-token.ts and policy-engine.ts for details.
+  // sub-fetch raw-fetch token. Forwarded into enforcePolicy so the
+  // publicEmbed referer-refinement branch trusts an already-authorized
+  // sub-fetch. external-embed tokens MUST NOT set this flag — they
+  // come from externally-pasted URLs whose browser referer was never
+  // validated. See src/lib/raw-fetch-token.ts and policy-engine.ts.
   readonly bypassRefererRefinement?: boolean;
+  // The kind claim from the verified raw-fetch token, if any. Plumbed
+  // into LINK_ACCESS / LINK_DENIED audit metadata so admins can tell
+  // inline viewer sub-fetches apart from external Iframely / og:image
+  // / share-info image-URL traffic.
+  readonly tokenKind?: "sub-fetch" | "external-embed" | null;
 }
 
 export async function resolveAndAuthorizeLink(
@@ -299,7 +308,13 @@ export async function resolveAndAuthorizeLink(
         documentId: link.documentId,
         policyId: link.policyId,
       },
-      { ipAddress, userAgent, userId: dbUserId, reason: "policy-deny" },
+      {
+        ipAddress,
+        userAgent,
+        userId: dbUserId,
+        reason: "policy-deny",
+        tokenKind: options.tokenKind ?? null,
+      },
     );
     return { kind: "forbidden" };
   }
@@ -405,7 +420,12 @@ export async function resolveAndAuthorizeLink(
   await writeAudit(
     "LINK_ACCESS",
     { id: link.id, documentId: link.documentId, policyId: link.policyId },
-    { ipAddress, userAgent, userId: dbUserId },
+    {
+      ipAddress,
+      userAgent,
+      userId: dbUserId,
+      tokenKind: options.tokenKind ?? null,
+    },
   );
 
   return {

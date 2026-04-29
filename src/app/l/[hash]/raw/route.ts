@@ -97,30 +97,45 @@ export async function GET(
 ): Promise<NextResponse> {
   const { hash } = await ctx.params;
 
-  // Optional sub-fetch token. The outer /l/[hash] viewer page mints
-  // this token (after passing the publicEmbed referer-refinement
-  // check) and rides it on every sub-resource URL. A valid token
-  // tells the policy engine to skip ONLY the referer-refinement
-  // gate — `requireAuth`, `allowedIpRanges`, audit, rate-limit are
-  // all unaffected. Missing or invalid token: fall through to the
-  // existing policy decision unchanged. See raw-fetch-token.ts.
+  // Optional raw-fetch token. Two kinds:
+  //
+  //   - "sub-fetch" — minted by the outer /l/[hash] viewer page AFTER
+  //     it passed the publicEmbed referer-refinement check. Browser
+  //     sub-resource fetches from the viewer ride this; we treat them
+  //     as already-authorized and skip ONLY the refinement gate
+  //     (`requireAuth`, `allowedIpRanges`, audit, rate-limit
+  //     unaffected).
+  //
+  //   - "external-embed" — minted by surfaces that emit a long-lived
+  //     externally-pasted image URL (og:image, oEmbed `type:photo`,
+  //     dashboard "Image URL" copy). No prior browser referer was
+  //     validated, so we MUST NOT skip refinement: browser fetches
+  //     from unlisted domains return 403 like the viewer does, while
+  //     server-side oEmbed crawlers (no Sec-Fetch-*) keep bypassing
+  //     per the publicEmbedBypass branch in policy-engine.
+  //
+  // Missing or invalid token: fall through to normal policy
+  // enforcement unchanged. See raw-fetch-token.ts.
   const rawFetchToken = req.nextUrl.searchParams.get("t");
   let bypassRefererRefinement = false;
+  let tokenKind: "sub-fetch" | "external-embed" | null = null;
   if (rawFetchToken !== null) {
     try {
-      verifyRawFetchToken(rawFetchToken, hash);
-      bypassRefererRefinement = true;
+      const verified = verifyRawFetchToken(rawFetchToken, hash);
+      tokenKind = verified.kind;
+      bypassRefererRefinement = verified.kind === "sub-fetch";
     } catch (err) {
       if (!(err instanceof InvalidRawFetchTokenError)) {
         throw err;
       }
-      // Tampered / expired / wrong-hash tokens are silently ignored —
-      // the request still goes through normal policy enforcement.
+      // Tampered / expired / wrong-hash / unknown-kind tokens are
+      // silently ignored — the request still goes through normal
+      // policy enforcement.
     }
   }
-
   const result = await resolveAndAuthorizeLink(req, hash, {
     bypassRefererRefinement,
+    tokenKind,
   });
 
   if (result.kind === "forbidden") return forbidden();

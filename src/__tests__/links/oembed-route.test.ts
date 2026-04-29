@@ -261,7 +261,11 @@ describe("GET /api/oembed", () => {
     const photoUrl = new URL(body.url as string);
     const t = photoUrl.searchParams.get("t");
     expect(t).toBeTruthy();
-    expect(verifyRawFetchToken(t!, TOKEN)).toBe(true);
+    // External-embed kind: token is a long-lived externally-pasted
+    // image URL. /raw must NOT skip refinement when this kind hits it
+    // (otherwise an Iframely-discovered image URL would render on
+    // unlisted browser hosts despite policy.allowedDomains).
+    expect(verifyRawFetchToken(t!, TOKEN)).toEqual({ kind: "external-embed" });
   });
 
   it("photo response for image/jpeg uses jpeg content (still type:photo)", async () => {

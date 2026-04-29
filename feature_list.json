@@ -872,6 +872,22 @@
             "Tests cover token roundtrip + tamper + expiry + hash-mismatch, refinement carve-out, and bypass-flag forwarding through /raw"
           ],
           "passes": true
+        },
+        {
+          "id": "F9.10",
+          "description": "Image-direct embed (og:image / oEmbed photo / share-info Image URL) under share-link policy",
+          "steps": [
+            "Add `kind` claim to raw-fetch-token: `sub-fetch` (inline 120s, viewer-minted, refinement bypass) vs `external-embed` (long-lived externally-pasted URL, NO refinement bypass)",
+            "kind is part of the signed payload — flipping the claim breaks the HMAC signature, blocking downgrade attacks",
+            "verifyRawFetchToken returns the verified kind; tokens missing or carrying an unknown kind are rejected as malformed",
+            "/l/[hash]/raw maps token kind to bypassRefererRefinement: only `sub-fetch` sets it true; `external-embed` falls through to the F9.7 Sec-Fetch-Dest refinement gate",
+            "/l/[hash] viewer mints `sub-fetch` for inline img/video/audio/iframe/pdfjs URLs, `external-embed` for og:image meta",
+            "/api/oembed type:photo URL and /api/links/admin/[id]/share-info embedImageUrl mint `external-embed`",
+            "tokenKind is plumbed into resolveAndAuthorizeLink and emitted as LINK_ACCESS / LINK_DENIED audit metadata so admins can tell inline viewer traffic apart from external Iframely / Notion / Slack image-URL traffic",
+            "Four-quadrant matrix preserved (allowPublicEmbed × allowedDomains): Q1/Q2 image URL not emitted; Q3 all 200; Q4 (allowPublicEmbed=true + allowedDomains non-empty): Iframely server crawler still 200, browser on listed parent 200, browser on unlisted parent / direct tab now 403 — matches /l/[hash] viewer behavior",
+            "Tests cover both kinds round-tripping, kind-tampering breaks signature, /raw maps kind→bypass correctly, oEmbed photo + share-info embedImageUrl + viewer og:image all mint external-embed, viewer inline sub-resources mint sub-fetch"
+          ],
+          "passes": true
         }
       ]
     },

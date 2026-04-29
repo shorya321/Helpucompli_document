@@ -12,9 +12,20 @@ vi.mock("@/lib/link-access", () => ({
 }));
 
 // Pin the raw-fetch token to a deterministic value so URL assertions
-// stay stable across test runs.
+// stay stable across test runs. The mock intentionally returns the
+// SAME literal for both kinds so existing URL assertions keep working;
+// kind-discrimination tests use `issueRawFetchTokenSpy` below.
+const issueRawFetchTokenSpy =
+  vi.fn<
+    (hash: string, ttl: number, kind: "sub-fetch" | "external-embed") => string
+  >();
+issueRawFetchTokenSpy.mockReturnValue("FIXED.TOKEN");
 vi.mock("@/lib/raw-fetch-token", () => ({
-  issueRawFetchToken: () => "FIXED.TOKEN",
+  issueRawFetchToken: (
+    hash: string,
+    ttl: number,
+    kind: "sub-fetch" | "external-embed",
+  ) => issueRawFetchTokenSpy(hash, ttl, kind),
 }));
 
 vi.mock("@/lib/config", () => ({
@@ -35,10 +46,12 @@ const TOKEN = "tok_abc_with_long_enough_token_value_xyz";
 
 afterEach(() => {
   mocks.resolveAndAuthorizeLink.mockReset();
+  issueRawFetchTokenSpy.mockClear();
 });
 
 beforeEach(() => {
   mocks.resolveAndAuthorizeLink.mockReset();
+  issueRawFetchTokenSpy.mockClear();
 });
 
 function req() {
@@ -475,6 +488,64 @@ describe("GET /l/[hash] — embeddable link viewer", () => {
     mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
     const body = await (await GET(req(), { params: params(TOKEN) })).text();
     expect(body).not.toContain('type="application/json+oembed"');
+  });
+
+  // ---- raw-fetch token kind plumbing ----
+  //
+  // Inline sub-resource URLs (img/video/audio/iframe/pdfjs) MUST mint
+  // sub-fetch tokens — the outer page already passed publicEmbed
+  // refinement, so /raw can safely skip refinement on the sub-fetch.
+  // og:image URLs MUST mint external-embed tokens — they leave the
+  // origin via Iframely / Notion / Slack, where browser referer was
+  // never validated, so /raw must keep refinement on.
+
+  it("inline sub-resource URLs use a sub-fetch kind raw-fetch token", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(
+      okResult({
+        document: {
+          id: "d-i",
+          filename: "photo.png",
+          contentType: "image/png",
+          bucketName: "alpha-bucket",
+          s3Key: "shared/photo.png",
+        },
+      }),
+    );
+    await GET(req(), { params: params(TOKEN) });
+    // Non-image, non-embeddable cases mint exactly one token (sub-fetch).
+    expect(issueRawFetchTokenSpy).toHaveBeenCalledWith(
+      TOKEN,
+      expect.any(Number),
+      "sub-fetch",
+    );
+    // No og:image emitted on a non-embeddable image link, so no
+    // external-embed token should be minted.
+    const kinds = issueRawFetchTokenSpy.mock.calls.map(([, , kind]) => kind);
+    expect(kinds).not.toContain("external-embed");
+  });
+
+  it("embeddable image link mints both kinds: sub-fetch (inline) + external-embed (og:image)", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(
+      okResult({
+        link: {
+          id: "link-1",
+          documentId: "d-2",
+          policyId: "p-1",
+          allowPublicEmbed: true,
+        },
+        document: {
+          id: "d-2",
+          filename: "photo.png",
+          contentType: "image/png",
+          bucketName: "alpha-bucket",
+          s3Key: "shared/photo.png",
+        },
+      }),
+    );
+    await GET(req(), { params: params(TOKEN) });
+    const kinds = issueRawFetchTokenSpy.mock.calls.map(([, , kind]) => kind);
+    expect(kinds).toContain("sub-fetch");
+    expect(kinds).toContain("external-embed");
   });
 
   it("allowPublicEmbed=false + policy.allowedDomains non-empty → does NOT emit oEmbed discovery tag (F9.3 regression — domain restriction gates access, embedding requires the explicit toggle)", async () => {

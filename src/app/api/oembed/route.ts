@@ -317,7 +317,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const tokenTtl = choosePhotoTokenTtlSec(
       (link.expiresAt as Date | null) ?? null,
     );
-    const rawFetchToken = issueRawFetchToken(token, tokenTtl);
+    const rawFetchToken = issueRawFetchToken(token, tokenTtl, "external-embed");
     const photoUrl = `${appBase}/l/${token}/raw?t=${encodeURIComponent(rawFetchToken)}`;
     body = {
       version: "1.0",
