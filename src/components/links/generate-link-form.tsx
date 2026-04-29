@@ -69,6 +69,29 @@ interface CreateResp {
   readonly allowPublicEmbed: boolean;
 }
 
+interface ShareInfo {
+  readonly embedImageUrl: string | null;
+}
+
+// Pulls the direct image URL via the audited share-info endpoint. Server
+// returns null for non-image docs OR when allowPublicEmbed=false, so a
+// null result is the normal "hide this field" signal — never an error.
+// Fetch failure is also swallowed → null so a flaky share-info call never
+// hides the URL/embed-code blocks the user already sees.
+async function fetchEmbedImageUrl(id: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `/api/links/admin/${encodeURIComponent(id)}/share-info`,
+      { cache: "no-store" },
+    );
+    if (!res.ok) return null;
+    const body = (await res.json()) as ApiResponse<ShareInfo>;
+    return body.data?.embedImageUrl ?? null;
+  } catch {
+    return null;
+  }
+}
+
 interface EffectivePolicyPreview {
   readonly source: "object" | "prefix" | "bucket" | "default" | "none";
   readonly policyId: string | null;
@@ -113,6 +136,12 @@ export function GenerateLinkForm({
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
+  // Fetched out-of-band from share-info after a successful create. null
+  // = either non-image doc, embed off, or fetch failed — all 3 cases hide
+  // the Image URL field so the result panel mirrors what the table row
+  // shows for this same link.
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageCopied, setImageCopied] = useState(false);
   // Replaces native window.confirm — see ConfirmDialog at the bottom of
   // the form. null = no dialog open. onConfirm fires the original "yes"
   // branch (e.g. setTtl("never"), setAllowPublicEmbed(true)).
@@ -186,6 +215,7 @@ export function GenerateLinkForm({
     setSubmitting(true);
     setError(null);
     setResult(null);
+    setImageUrl(null);
     try {
       const res = await fetch("/api/links", {
         method: "POST",
@@ -209,6 +239,10 @@ export function GenerateLinkForm({
         return;
       }
       setResult(body.data);
+      // Fire-and-forget: server returns null for non-image docs / embed
+      // off, so this only populates the Image URL field for image links
+      // with embedding enabled. Failure is silent — see fetchEmbedImageUrl.
+      void fetchEmbedImageUrl(body.data.id).then(setImageUrl);
       router.refresh();
     } catch {
       setError("Network error");
@@ -236,6 +270,17 @@ export function GenerateLinkForm({
       window.setTimeout(() => setEmbedCopied(false), 2000);
     } catch {
       setError("Clipboard write failed. Copy the embed code manually.");
+    }
+  };
+
+  const onCopyImage = async () => {
+    if (!imageUrl) return;
+    try {
+      await navigator.clipboard.writeText(imageUrl);
+      setImageCopied(true);
+      window.setTimeout(() => setImageCopied(false), 2000);
+    } catch {
+      setError("Clipboard write failed. Copy the image URL manually.");
     }
   };
 
@@ -534,6 +579,34 @@ export function GenerateLinkForm({
                     Domains is attached, browsers must still send a
                     matching Referer.
                   </p>
+                  {imageUrl && (
+                    <>
+                      <div className="mt-2 flex gap-2">
+                        <Input
+                          type="text"
+                          readOnly
+                          value={imageUrl}
+                          onFocus={(e) => e.currentTarget.select()}
+                          aria-label="Direct image URL"
+                          className="flex-1 text-xs"
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={onCopyImage}
+                          className="whitespace-nowrap"
+                        >
+                          {imageCopied ? "Copied!" : "Copy image URL"}
+                        </Button>
+                      </div>
+                      <p className="text-muted-foreground mt-1 mb-0 text-xs">
+                        Direct image URL for Circle.so image embeds and
+                        Iframely-backed platforms. Bound to the same policy
+                        (allowed domains, expiry, max downloads) as the
+                        share link above.
+                      </p>
+                    </>
+                  )}
                 </>
               ) : (
                 <p className="text-muted-foreground mt-2 mb-0 text-xs">
