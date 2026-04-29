@@ -44,6 +44,14 @@ export interface LinkListRow {
   readonly downloadCount: number;
   readonly maxDownloads: number | null;
   readonly status: LinkStatus;
+  // Image-embed eligibility signals — image MIME + allowPublicEmbed
+  // unlocks the "Copy image URL" action in the dashboard, which copies
+  // a /raw URL serving image bytes (the only shape Circle.so's image-
+  // embed slot accepts; /l/<token> returns text/html which it rejects).
+  // Tokens are NOT included here — the URL is minted server-side at
+  // share-info time so list responses stay token-free per sec-review C1.
+  readonly contentType: string | null;
+  readonly allowPublicEmbed: boolean;
 }
 
 export interface LinkListResult {
@@ -132,9 +140,11 @@ export async function queryLinks(
       downloadCount: true,
       maxDownloads: true,
       isRevoked: true,
+      allowPublicEmbed: true,
       document: {
         select: {
           filename: true,
+          contentType: true,
           bucket: { select: { name: true } },
         },
       },
@@ -152,7 +162,11 @@ export async function queryLinks(
 
   const rows: LinkListRow[] = slice.map((row) => {
     const doc = row.document as
-      | { filename?: string; bucket?: { name?: string } }
+      | {
+          filename?: string;
+          contentType?: string | null;
+          bucket?: { name?: string };
+        }
       | undefined;
     const gen = row.generatedBy as
       | { name?: string | null; email?: string | null }
@@ -181,6 +195,8 @@ export async function queryLinks(
         },
         now,
       ),
+      contentType: doc?.contentType ?? null,
+      allowPublicEmbed: row.allowPublicEmbed === true,
     };
   });
 

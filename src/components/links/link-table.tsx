@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Check, Code2, Link2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Code2, Image as ImageIcon, Link2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -134,6 +134,7 @@ interface ShareInfo {
   readonly shareableUrl: string;
   readonly embedCode: string;
   readonly expiresAt: string | null;
+  readonly embedImageUrl: string | null;
 }
 
 // Sec-review: token is fetched on-demand (click) and never cached past
@@ -150,7 +151,7 @@ async function fetchShareInfo(id: string): Promise<ShareInfo> {
   return body.data;
 }
 
-type CopyKind = "url" | "embed";
+type CopyKind = "url" | "embed" | "imageUrl";
 
 export function LinkTable({ initial }: LinkTableProps) {
   const queryClient = useQueryClient();
@@ -195,7 +196,26 @@ export function LinkTable({ initial }: LinkTableProps) {
     setCopying({ id, kind });
     try {
       const info = await fetchShareInfo(id);
-      const payload = kind === "url" ? info.shareableUrl : info.embedCode;
+      let payload: string;
+      if (kind === "url") {
+        payload = info.shareableUrl;
+      } else if (kind === "embed") {
+        payload = info.embedCode;
+      } else {
+        // imageUrl — only meaningful when the link is for an image
+        // document with public-embed enabled. Server returns null
+        // otherwise; surface a friendly error instead of pasting an
+        // empty string.
+        if (!info.embedImageUrl) {
+          setErrorAlert({
+            title: "Image URL not available",
+            description:
+              "This link's document is not an image OR public embedding is disabled. Generate a fresh link with the public-embed toggle enabled to use this option.",
+          });
+          return;
+        }
+        payload = info.embedImageUrl;
+      }
       await navigator.clipboard.writeText(payload);
       setCopied({ id, kind });
       window.setTimeout(() => {
@@ -417,6 +437,53 @@ export function LinkTable({ initial }: LinkTableProps) {
                                 : "Embed"}
                           </span>
                         </Button>
+                        {/* "Image URL" — direct image-bytes URL via /raw.
+                            Only image documents with public-embed enabled
+                            qualify; other rows omit the button entirely.
+                            Some destinations (Circle.so image-embed slot,
+                            Notion image embed) validate response Content-
+                            Type=image/* and reject /l/<token> (text/html);
+                            this URL serves image bytes directly so they
+                            accept the paste. */}
+                        {row.allowPublicEmbed &&
+                        (row.contentType ?? "")
+                          .toLowerCase()
+                          .startsWith("image/") ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            aria-label="Copy direct image URL"
+                            title="Copy direct image URL — for surfaces that need raw image bytes (Circle.so image embed, Notion image, etc.). Re-reveals the bearer token (audited)."
+                            onClick={() => onCopy(row.id, "imageUrl")}
+                            disabled={
+                              copying?.id === row.id &&
+                              copying.kind === "imageUrl"
+                            }
+                          >
+                            {copied?.id === row.id &&
+                            copied.kind === "imageUrl" ? (
+                              <Check
+                                aria-hidden="true"
+                                className="size-4"
+                              />
+                            ) : (
+                              <ImageIcon
+                                aria-hidden="true"
+                                className="size-4"
+                              />
+                            )}
+                            <span className="ml-1.5">
+                              {copied?.id === row.id &&
+                              copied.kind === "imageUrl"
+                                ? "Copied"
+                                : copying?.id === row.id &&
+                                    copying.kind === "imageUrl"
+                                  ? "…"
+                                  : "Image URL"}
+                            </span>
+                          </Button>
+                        ) : null}
                         <Button
                           type="button"
                           variant="destructive"

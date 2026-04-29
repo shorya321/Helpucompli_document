@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { createRateLimiter } from "@/lib/rate-limit";
 import { buildEmbedCode } from "@/lib/link-embed";
 import { logAudit, asAuditPrisma } from "@/lib/audit";
+import { issueRawFetchToken } from "@/lib/raw-fetch-token";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,32 @@ interface ShareInfoResponse {
   readonly shareableUrl: string;
   readonly embedCode: string;
   readonly expiresAt: string | null;
+  // Direct image URL for embedding into surfaces that validate
+  // Content-Type=image/* on the URL response (Circle.so image-embed
+  // slot, Notion image embeds, etc.). Populated only when:
+  //   - document MIME starts with `image/`
+  //   - link.allowPublicEmbed === true
+  // null otherwise. The URL points at /l/<hash>/raw with a longer-
+  // lived HMAC raw-fetch token bundled (clamped to link expiry,
+  // 7d ceiling for perpetual links). /raw still revalidates auth +
+  // policy + revoke + expiry on every fetch, so the longer token is
+  // harmless. Sec-review C1: token is minted on-demand (audited),
+  // never returned in list responses.
+  readonly embedImageUrl: string | null;
+}
+
+// TTL ceiling for the raw-fetch token bundled in `embedImageUrl`.
+// Matches the og:image token TTL on /l/<hash> so a single embed
+// resource has consistent lifetime across the meta-tag and the
+// dashboard-copy paths.
+const EMBED_IMAGE_TOKEN_DEFAULT_TTL_SEC = 7 * 24 * 60 * 60;
+const EMBED_IMAGE_TOKEN_FLOOR_TTL_SEC = 60;
+
+function chooseEmbedImageTokenTtlSec(expiresAt: Date | null): number {
+  if (expiresAt === null) return EMBED_IMAGE_TOKEN_DEFAULT_TTL_SEC;
+  const remainingSec = Math.floor((expiresAt.getTime() - Date.now()) / 1000);
+  if (remainingSec <= 0) return EMBED_IMAGE_TOKEN_FLOOR_TTL_SEC;
+  return Math.min(EMBED_IMAGE_TOKEN_DEFAULT_TTL_SEC, remainingSec);
 }
 
 function json<T>(
@@ -93,6 +120,12 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
       isRevoked: true,
       downloadCount: true,
       maxDownloads: true,
+      allowPublicEmbed: true,
+      document: {
+        select: {
+          contentType: true,
+        },
+      },
     },
   });
   if (!link) return json<ShareInfoResponse>({ data: null, error: "Not Found" }, 404);
@@ -115,6 +148,28 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
   // already-distributed links — kept unchanged for backward compat.
   const shareableUrl = `${origin}/l/${link.presignedUrlHash}`;
   const embedCode = buildEmbedCode(shareableUrl);
+
+  // embedImageUrl: optional secondary URL that resolves DIRECTLY to
+  // image bytes via /raw. Some surfaces (Circle.so image-embed slot)
+  // validate URL response Content-Type=image/* and reject the canonical
+  // /l/<token> page (text/html). Minted only when the document is an
+  // image AND the admin has opted into public embedding — same gate
+  // as the og:image meta tag on /l/<token>. /raw still runs full auth
+  // + policy + audit on every fetch, so the longer-lived token (clamped
+  // to link expiry) cannot outlive the link itself.
+  const docContentType =
+    (link as { document?: { contentType?: string | null } | null })
+      .document?.contentType ?? null;
+  const isImage = (docContentType ?? "").toLowerCase().startsWith("image/");
+  const embedImageUrl =
+    isImage && link.allowPublicEmbed === true
+      ? `${origin}/l/${link.presignedUrlHash}/raw?t=${encodeURIComponent(
+          issueRawFetchToken(
+            link.presignedUrlHash,
+            chooseEmbedImageTokenTtlSec(link.expiresAt ?? null),
+          ),
+        )}`
+      : null;
 
   try {
     await logAudit(asAuditPrisma(prisma), {
@@ -142,6 +197,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
         shareableUrl,
         embedCode,
         expiresAt: link.expiresAt === null ? null : link.expiresAt.toISOString(),
+        embedImageUrl,
       },
       error: null,
     },
