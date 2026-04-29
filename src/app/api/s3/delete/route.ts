@@ -190,20 +190,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Block hard-delete while ANY generated_links row references the
-  // document. Links are bearer tokens with their own lifetime; revoking
-  // them first is a deliberate op. Schema keeps generated_links FK on
-  // documents as RESTRICT — this check produces a clean 409 instead of
-  // a Prisma FK violation 500.
-  const linkCount = await prisma.generatedLink.count({
-    where: { documentId: doc.id },
-  });
-  if (linkCount > 0) {
-    return json(
-      { data: null, error: "Revoke all generated links before hard-delete" },
-      409,
-    );
-  }
+  // Hard-delete is already gated by superadmin role + typed-filename
+  // confirm. Generated links for this document — active or revoked —
+  // are dropped inside the delete transaction below. Active links
+  // become 404s after deletion, which is the correct semantic for
+  // hard-delete (the underlying object is gone). The audit trail of
+  // CREATE/REVOKE actions lives in audit_logs and is retained.
 
   if (await isUnderRegulatoryHold(doc)) {
     return json(
@@ -252,6 +244,13 @@ export async function POST(req: NextRequest) {
 
   try {
     await prisma.$transaction(async (tx) => {
+      // Drop every generated link row for this document — schema keeps
+      // the FK as RESTRICT, so this must run before document.delete or
+      // Prisma will throw P2003. CREATE/REVOKE audit rows live in
+      // audit_logs and are retained for the 6-year window.
+      await tx.generatedLink.deleteMany({
+        where: { documentId: doc.id },
+      });
       await tx.document.delete({
         where: { id: doc.id },
         select: { id: true },

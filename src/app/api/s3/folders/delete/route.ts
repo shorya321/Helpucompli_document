@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { json } from "@/lib/api-response";
 import { extractIp, extractUserAgent } from "@/lib/request-headers";
 import { auth0 } from "@/lib/auth0";
@@ -163,7 +164,40 @@ export async function POST(req: NextRequest) {
     if (err instanceof FolderHasActiveLinksError) {
       return json({ data: null, error: err.message }, 409);
     }
-    // Never leak engine messages — could embed DATABASE_URL or AWS ARNs.
+    // Map Prisma FK violations (P2003) to a clearer 409 — typically a
+    // race where a new generated_links row was created between the
+    // active-link guard and document.delete.
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === "P2003"
+    ) {
+      console.error("[folders-delete-route] FK constraint violation", {
+        code: err.code,
+        meta: err.meta,
+        bucketId: input.bucketId,
+        prefix: input.prefix,
+        userId: dbUser.id,
+      });
+      return json(
+        {
+          data: null,
+          error:
+            "Folder contents reference active records — revoke any new links and retry",
+        },
+        409,
+      );
+    }
+    // Log the full error server-side so operators can debug. Never
+    // leak engine messages to the client — could embed DATABASE_URL or
+    // AWS ARNs.
+    console.error("[folders-delete-route] unexpected error", {
+      message: err instanceof Error ? err.message : String(err),
+      name: err instanceof Error ? err.name : "Unknown",
+      bucketId: input.bucketId,
+      prefix: input.prefix,
+      mode: input.mode,
+      userId: dbUser.id,
+    });
     return json({ data: null, error: "Failed to delete folder" }, 500);
   }
 }

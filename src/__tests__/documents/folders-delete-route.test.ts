@@ -33,6 +33,10 @@ vi.mock("@/lib/folder-delete", async () => {
   };
 });
 
+// Stub out console.error so the new structured logging in the route's
+// catch block does not pollute test output.
+vi.spyOn(console, "error").mockImplementation(() => {});
+
 import { POST } from "@/app/api/s3/folders/delete/route";
 import { NextRequest } from "next/server";
 
@@ -139,6 +143,58 @@ describe("POST /api/s3/folders/delete", () => {
     const body = (await res.json()) as { data: { filesDeleted: number } };
     expect(body.data.filesDeleted).toBe(3);
     expect(mocks.softDeleteFolder).toHaveBeenCalledOnce();
+  });
+
+  it("409 maps Prisma P2003 FK violation to clearer message", async () => {
+    mocks.getSession.mockResolvedValueOnce(superadmin());
+    mocks.findUniqueBucket.mockResolvedValueOnce({
+      id: BUCKET_ID,
+      name: "helpucompli-docs-test",
+      isActive: true,
+    });
+    mocks.upsertUser.mockResolvedValueOnce({ id: "u-1" });
+    const { Prisma } = await import("@prisma/client");
+    const fkErr = new Prisma.PrismaClientKnownRequestError(
+      "Foreign key constraint failed",
+      { code: "P2003", clientVersion: "test" },
+    );
+    mocks.hardDeleteFolder.mockRejectedValueOnce(fkErr);
+    const res = await POST(
+      req({
+        mode: "hard",
+        bucketId: BUCKET_ID,
+        prefix: "invoices/",
+        confirmName: "invoices",
+      }),
+    );
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/active records/i);
+  });
+
+  it("500 generic on unexpected error without engine leak", async () => {
+    mocks.getSession.mockResolvedValueOnce(superadmin());
+    mocks.findUniqueBucket.mockResolvedValueOnce({
+      id: BUCKET_ID,
+      name: "helpucompli-docs-test",
+      isActive: true,
+    });
+    mocks.upsertUser.mockResolvedValueOnce({ id: "u-1" });
+    mocks.hardDeleteFolder.mockRejectedValueOnce(
+      new Error("arn:aws:kms DATABASE_URL=secret"),
+    );
+    const res = await POST(
+      req({
+        mode: "hard",
+        bucketId: BUCKET_ID,
+        prefix: "invoices/",
+        confirmName: "invoices",
+      }),
+    );
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(JSON.stringify(body)).not.toContain("DATABASE_URL");
+    expect(JSON.stringify(body)).not.toContain("arn:aws:kms");
   });
 
   it("400 hard delete with mismatched confirmName", async () => {

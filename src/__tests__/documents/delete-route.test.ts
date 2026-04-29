@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   documentUpdate: vi.fn(),
   documentDelete: vi.fn(),
+  generatedLinkDeleteMany: vi.fn(),
   auditLogCreate: vi.fn(),
 }));
 
@@ -120,6 +121,7 @@ function txStub() {
         update: mocks.documentUpdate,
         delete: mocks.documentDelete,
       },
+      generatedLink: { deleteMany: mocks.generatedLinkDeleteMany },
       auditLog: { create: mocks.auditLogCreate },
     });
   });
@@ -228,13 +230,30 @@ describe("POST /api/s3/delete — hard", () => {
     expect(res.status).toBe(400);
   });
 
-  it("409 when active generated links exist", async () => {
+  it("200 even when active links exist — links cascaded inside tx", async () => {
+    // Hard-delete is superadmin-only + typed-name confirmed; redundant
+    // "revoke first" gate has been removed. Guard regression test:
+    // route MUST drop links inside the same transaction (FK is
+    // RESTRICT, so order matters) and MUST NOT consult any link count.
     mocks.getSession.mockResolvedValue(superadmin());
     okBucket();
     mocks.findFirstDocument.mockResolvedValue(docRow);
-    mocks.countGeneratedLinks.mockResolvedValue(1);
+    mocks.upsertUser.mockResolvedValue({ id: "user-su" });
+    mocks.listObjectVersions.mockResolvedValue({ versions: [], isTruncated: false });
+    mocks.generatedLinkDeleteMany.mockResolvedValue({ count: 4 });
+    mocks.documentDelete.mockResolvedValue({ id: DOC_ID });
+    mocks.auditLogCreate.mockResolvedValue({});
+    txStub();
+
     const res = await POST(req(hardBody));
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(200);
+    expect(mocks.countGeneratedLinks).not.toHaveBeenCalled();
+    expect(mocks.generatedLinkDeleteMany).toHaveBeenCalledTimes(1);
+    const dmArg = mocks.generatedLinkDeleteMany.mock.calls[0]![0] as {
+      where: { documentId: string };
+    };
+    expect(dmArg.where.documentId).toBe(DOC_ID);
+    expect(mocks.documentDelete).toHaveBeenCalledTimes(1);
   });
 
   it("200 hard-deletes every version + DOCUMENT_HARD_DELETE audit", async () => {

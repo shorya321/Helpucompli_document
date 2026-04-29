@@ -227,14 +227,11 @@ export async function hardDeleteFolder(
     select: { id: true, s3Key: true, isDeleted: true, filename: true },
   });
 
-  if (docs.length > 0) {
-    const linkCount = await prisma.generatedLink.count({
-      where: { documentId: { in: docs.map((d) => d.id) } },
-    });
-    if (linkCount > 0) {
-      throw new FolderHasActiveLinksError(linkCount);
-    }
-  }
+  // Generated links for every document in the folder — active or
+  // revoked — are dropped inside each per-doc transaction below. Hard-
+  // delete is already gated by superadmin + typed folder-name confirm
+  // upstream; a separate "revoke first" gate adds friction without a
+  // matching UI affordance and produces the same end-state regardless.
 
   let filesDeleted = 0;
 
@@ -266,6 +263,11 @@ export async function hardDeleteFolder(
     }
 
     await prisma.$transaction(async (tx) => {
+      // Purge revoked link rows the active-link guard skipped — must
+      // run before document.delete because the FK is RESTRICT.
+      await tx.generatedLink.deleteMany({
+        where: { documentId: doc.id },
+      });
       await tx.document.delete({
         where: { id: doc.id },
         select: { id: true },
@@ -306,11 +308,16 @@ export async function hardDeleteFolder(
       for (const ver of v.versions) {
         if (ver.key !== markerKey) continue;
         if (!ver.versionId) continue;
-        await hardDeleteObjectVersion({
-          bucket: ctx.bucketName,
-          key: markerKey,
-          versionId: ver.versionId,
-        });
+        // Folder marker keys end with "/" which assertKey() rejects.
+        // Use raw SDK call to bypass — mirrors the soft-delete folder
+        // path that does the same for marker objects.
+        await getS3Client().send(
+          new DeleteObjectCommand({
+            Bucket: ctx.bucketName,
+            Key: markerKey,
+            VersionId: ver.versionId,
+          }),
+        );
       }
       if (!v.isTruncated) break;
       keyMarker = v.nextKeyMarker;
