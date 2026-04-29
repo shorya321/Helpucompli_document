@@ -147,6 +147,116 @@ describe("GET /l/[hash] — embeddable link viewer", () => {
     expect(body).toContain('<meta name="robots" content="noindex, nofollow">');
   });
 
+  it("non-embeddable PDF link does NOT emit og:image (head byte-identical to prior behavior)", async () => {
+    // Regression guard: og:image must be additive and gated on
+    // image MIME + allowPublicEmbed=true. Non-image docs and non-
+    // embeddable links must emit the same <head> as before.
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
+    const body = await (await GET(req(), { params: params(TOKEN) })).text();
+    expect(body).not.toContain("og:image");
+    expect(body).not.toContain("twitter:image");
+  });
+
+  it("non-embeddable image link does NOT emit og:image (allowPublicEmbed=false wins)", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(
+      okResult({
+        link: {
+          id: "link-1",
+          documentId: "d-2",
+          policyId: "p-1",
+          allowPublicEmbed: false,
+        },
+        document: {
+          id: "d-2",
+          filename: "photo.png",
+          contentType: "image/png",
+          bucketName: "alpha-bucket",
+          s3Key: "shared/photo.png",
+        },
+      }),
+    );
+    const body = await (await GET(req(), { params: params(TOKEN) })).text();
+    expect(body).not.toContain("og:image");
+    expect(body).not.toContain("twitter:image");
+  });
+
+  it("embeddable image link emits og:image + og:image:type + twitter:image pointing at /raw with HMAC token", async () => {
+    // Iframely-backed surfaces (Circle.so, Notion image-embed) read
+    // og:image first for unknown domains; without it they reject the
+    // URL with "embed a different image" even when oEmbed type:photo
+    // is correct. The URL must serve raw image bytes, which /l/<hash>
+    // /raw does (Content-Type from document MIME). The HMAC token
+    // lets the policy engine accept server-side crawler fetches.
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(
+      okResult({
+        link: {
+          id: "link-1",
+          documentId: "d-2",
+          policyId: "p-1",
+          allowPublicEmbed: true,
+        },
+        document: {
+          id: "d-2",
+          filename: "photo.png",
+          contentType: "image/png",
+          bucketName: "alpha-bucket",
+          s3Key: "shared/photo.png",
+        },
+      }),
+    );
+    const body = await (await GET(req(), { params: params(TOKEN) })).text();
+    const expectedOgImage = `http://localhost:3000/l/${TOKEN}/raw?t=FIXED.TOKEN`;
+    expect(body).toContain(
+      `<meta property="og:image" content="${expectedOgImage}">`,
+    );
+    expect(body).toContain(
+      '<meta property="og:image:type" content="image/png">',
+    );
+    expect(body).toContain(
+      `<meta name="twitter:image" content="${expectedOgImage}">`,
+    );
+  });
+
+  it("embeddable image link emits og:image:type=image/jpeg for JPEG documents", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(
+      okResult({
+        link: {
+          id: "link-1",
+          documentId: "d-3",
+          policyId: "p-1",
+          allowPublicEmbed: true,
+        },
+        document: {
+          id: "d-3",
+          filename: "scan.jpg",
+          contentType: "image/jpeg",
+          bucketName: "alpha-bucket",
+          s3Key: "shared/scan.jpg",
+        },
+      }),
+    );
+    const body = await (await GET(req(), { params: params(TOKEN) })).text();
+    expect(body).toContain(
+      '<meta property="og:image:type" content="image/jpeg">',
+    );
+  });
+
+  it("embeddable PDF link does NOT emit og:image (image-only gate)", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(
+      okResult({
+        link: {
+          id: "link-1",
+          documentId: "d-1",
+          policyId: "p-1",
+          allowPublicEmbed: true,
+        },
+      }),
+    );
+    const body = await (await GET(req(), { params: params(TOKEN) })).text();
+    expect(body).not.toContain("og:image");
+    expect(body).not.toContain("twitter:image");
+  });
+
   it("PDF content-type → <iframe> pointing at same-origin /pdfjs/viewer.html with file=/l/<hash>/raw", async () => {
     mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
     const body = await (await GET(req(), { params: params(TOKEN) })).text();
