@@ -888,6 +888,19 @@
             "Tests cover both kinds round-tripping, kind-tampering breaks signature, /raw maps kind→bypass correctly, oEmbed photo + share-info embedImageUrl + viewer og:image all mint external-embed, viewer inline sub-resources mint sub-fetch"
           ],
           "passes": true
+        },
+        {
+          "id": "F9.11",
+          "description": "Video-direct embed (og:video / twitter:player / share-info Video URL) for Circle.so / Compass parity with image-embed",
+          "steps": [
+            "/l/[hash] emits og:type=video.other, og:video / og:video:url / og:video:secure_url / og:video:type / og:video:width / og:video:height + twitter:card=player / twitter:player:stream / twitter:player:stream:content_type / twitter:player:width / twitter:player:height for video/* docs with allowPublicEmbed=true (mirrors og:image branch — Iframely-backed surfaces resolve these before falling back to oEmbed)",
+            "og:type=article / twitter:card=summary kept as the fallback for non-image, non-video docs so existing PDF / TXT unfurl behavior is byte-identical",
+            "/api/links/admin/[id]/share-info returns embedVideoUrl: string | null alongside embedImageUrl; populated only when MIME starts with video/ AND allowPublicEmbed=true; mints external-embed token via the renamed chooseEmbedTokenTtlSec helper (same TTL clamp logic)",
+            "generate-link-form.tsx fetches both URLs via a single share-info call (renamed fetchEmbedMediaUrls) and renders a Copy-video-URL button alongside Copy-image-URL when the matching field is non-null",
+            "All existing policy gates apply unchanged: external-embed token does NOT bypass Referer / allowedDomains refinement, /raw still revalidates auth + policy + revoke + expiry + audit on every fetch, OG_MEDIA_TOKEN_TTL_SECONDS clamped to 7d ceiling",
+            "Tests: share-info embedVideoUrl null for non-video / null for video without embed / populated + external-embed kind for video + embed; viewer non-embeddable video has no og:video; viewer embeddable video emits all og:video + twitter:player tags pointing at /raw with FIXED.TOKEN; viewer embeddable video mints both sub-fetch (inline) + external-embed (og:video) tokens"
+          ],
+          "passes": true
         }
       ]
     },

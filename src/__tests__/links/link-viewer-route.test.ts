@@ -270,6 +270,82 @@ describe("GET /l/[hash] — embeddable link viewer", () => {
     expect(body).not.toContain("twitter:image");
   });
 
+  it("non-embeddable video link does NOT emit og:video (allowPublicEmbed=false wins)", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(
+      okResult({
+        link: {
+          id: "link-1",
+          documentId: "d-4",
+          policyId: "p-1",
+          allowPublicEmbed: false,
+        },
+        document: {
+          id: "d-4",
+          filename: "demo.mp4",
+          contentType: "video/mp4",
+          bucketName: "alpha-bucket",
+          s3Key: "shared/demo.mp4",
+        },
+      }),
+    );
+    const body = await (await GET(req(), { params: params(TOKEN) })).text();
+    expect(body).not.toContain("og:video");
+    expect(body).not.toContain("twitter:player");
+    expect(body).toContain('<meta property="og:type" content="article">');
+    expect(body).toContain('<meta name="twitter:card" content="summary">');
+  });
+
+  it("embeddable video link emits og:video + twitter:player pointing at /raw with HMAC token", async () => {
+    // Iframely-backed surfaces (Circle.so / Compass) need og:video or
+    // twitter:player:stream to render the canonical /l/<hash> URL as
+    // an inline video. Without these, the unfurl falls back to a
+    // generic article preview (the original Circle.so video bug).
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(
+      okResult({
+        link: {
+          id: "link-1",
+          documentId: "d-4",
+          policyId: "p-1",
+          allowPublicEmbed: true,
+        },
+        document: {
+          id: "d-4",
+          filename: "demo.mp4",
+          contentType: "video/mp4",
+          bucketName: "alpha-bucket",
+          s3Key: "shared/demo.mp4",
+        },
+      }),
+    );
+    const body = await (await GET(req(), { params: params(TOKEN) })).text();
+    const expectedOgVideo = `http://localhost:3000/l/${TOKEN}/raw?t=FIXED.TOKEN`;
+    expect(body).toContain('<meta property="og:type" content="video.other">');
+    expect(body).toContain(
+      `<meta property="og:video" content="${expectedOgVideo}">`,
+    );
+    expect(body).toContain(
+      `<meta property="og:video:url" content="${expectedOgVideo}">`,
+    );
+    expect(body).toContain(
+      `<meta property="og:video:secure_url" content="${expectedOgVideo}">`,
+    );
+    expect(body).toContain(
+      '<meta property="og:video:type" content="video/mp4">',
+    );
+    expect(body).toContain('<meta name="twitter:card" content="player">');
+    expect(body).toContain(
+      `<meta name="twitter:player:stream" content="${expectedOgVideo}">`,
+    );
+    expect(body).toContain(
+      '<meta name="twitter:player:stream:content_type" content="video/mp4">',
+    );
+    // Article default must NOT leak through when video branch wins.
+    expect(body).not.toContain('<meta property="og:type" content="article">');
+    expect(body).not.toContain('<meta name="twitter:card" content="summary">');
+    // Image meta must stay absent on a video doc.
+    expect(body).not.toContain("og:image");
+  });
+
   it("PDF content-type → <iframe> pointing at same-origin /pdfjs/viewer.html with file=/l/<hash>/raw", async () => {
     mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
     const body = await (await GET(req(), { params: params(TOKEN) })).text();
@@ -522,6 +598,30 @@ describe("GET /l/[hash] — embeddable link viewer", () => {
     // external-embed token should be minted.
     const kinds = issueRawFetchTokenSpy.mock.calls.map(([, , kind]) => kind);
     expect(kinds).not.toContain("external-embed");
+  });
+
+  it("embeddable video link mints both kinds: sub-fetch (inline) + external-embed (og:video)", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(
+      okResult({
+        link: {
+          id: "link-1",
+          documentId: "d-4",
+          policyId: "p-1",
+          allowPublicEmbed: true,
+        },
+        document: {
+          id: "d-4",
+          filename: "demo.mp4",
+          contentType: "video/mp4",
+          bucketName: "alpha-bucket",
+          s3Key: "shared/demo.mp4",
+        },
+      }),
+    );
+    await GET(req(), { params: params(TOKEN) });
+    const kinds = issueRawFetchTokenSpy.mock.calls.map(([, , kind]) => kind);
+    expect(kinds).toContain("sub-fetch");
+    expect(kinds).toContain("external-embed");
   });
 
   it("embeddable image link mints both kinds: sub-fetch (inline) + external-embed (og:image)", async () => {

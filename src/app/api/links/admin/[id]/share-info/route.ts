@@ -45,20 +45,25 @@ interface ShareInfoResponse {
   // harmless. Sec-review C1: token is minted on-demand (audited),
   // never returned in list responses.
   readonly embedImageUrl: string | null;
+  // Direct video URL for embedding into surfaces backed by Iframely
+  // (Circle.so / Compass) which prefer a URL whose response
+  // Content-Type=video/* over a self-pointing iframe. Same minting
+  // rules + token kind as `embedImageUrl`.
+  readonly embedVideoUrl: string | null;
 }
 
-// TTL ceiling for the raw-fetch token bundled in `embedImageUrl`.
-// Matches the og:image token TTL on /l/<hash> so a single embed
-// resource has consistent lifetime across the meta-tag and the
-// dashboard-copy paths.
-const EMBED_IMAGE_TOKEN_DEFAULT_TTL_SEC = 7 * 24 * 60 * 60;
-const EMBED_IMAGE_TOKEN_FLOOR_TTL_SEC = 60;
+// TTL ceiling for the raw-fetch token bundled in `embedImageUrl` /
+// `embedVideoUrl`. Matches the og:image / og:video token TTL on
+// /l/<hash> so a single embed resource has consistent lifetime
+// across the meta-tag and the dashboard-copy paths.
+const EMBED_TOKEN_DEFAULT_TTL_SEC = 7 * 24 * 60 * 60;
+const EMBED_TOKEN_FLOOR_TTL_SEC = 60;
 
-function chooseEmbedImageTokenTtlSec(expiresAt: Date | null): number {
-  if (expiresAt === null) return EMBED_IMAGE_TOKEN_DEFAULT_TTL_SEC;
+function chooseEmbedTokenTtlSec(expiresAt: Date | null): number {
+  if (expiresAt === null) return EMBED_TOKEN_DEFAULT_TTL_SEC;
   const remainingSec = Math.floor((expiresAt.getTime() - Date.now()) / 1000);
-  if (remainingSec <= 0) return EMBED_IMAGE_TOKEN_FLOOR_TTL_SEC;
-  return Math.min(EMBED_IMAGE_TOKEN_DEFAULT_TTL_SEC, remainingSec);
+  if (remainingSec <= 0) return EMBED_TOKEN_FLOOR_TTL_SEC;
+  return Math.min(EMBED_TOKEN_DEFAULT_TTL_SEC, remainingSec);
 }
 
 function json<T>(
@@ -160,13 +165,30 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
   const docContentType =
     (link as { document?: { contentType?: string | null } | null })
       .document?.contentType ?? null;
-  const isImage = (docContentType ?? "").toLowerCase().startsWith("image/");
+  const docMime = (docContentType ?? "").toLowerCase();
+  const isImage = docMime.startsWith("image/");
+  const isVideo = docMime.startsWith("video/");
   const embedImageUrl =
     isImage && link.allowPublicEmbed === true
       ? `${origin}/l/${link.presignedUrlHash}/raw?t=${encodeURIComponent(
           issueRawFetchToken(
             link.presignedUrlHash,
-            chooseEmbedImageTokenTtlSec(link.expiresAt ?? null),
+            chooseEmbedTokenTtlSec(link.expiresAt ?? null),
+            "external-embed",
+          ),
+        )}`
+      : null;
+  // embedVideoUrl: same rationale as embedImageUrl but for video/*
+  // MIME. Iframely (Circle.so / Compass) renders a direct .mp4 URL
+  // as an HTML5 <video> element when the URL response Content-Type
+  // is video/*. /raw passes through document.contentType verbatim
+  // and supports Range requests, so this works for native scrubbing.
+  const embedVideoUrl =
+    isVideo && link.allowPublicEmbed === true
+      ? `${origin}/l/${link.presignedUrlHash}/raw?t=${encodeURIComponent(
+          issueRawFetchToken(
+            link.presignedUrlHash,
+            chooseEmbedTokenTtlSec(link.expiresAt ?? null),
             "external-embed",
           ),
         )}`
@@ -199,6 +221,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
         embedCode,
         expiresAt: link.expiresAt === null ? null : link.expiresAt.toISOString(),
         embedImageUrl,
+        embedVideoUrl,
       },
       error: null,
     },

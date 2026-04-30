@@ -71,24 +71,33 @@ interface CreateResp {
 
 interface ShareInfo {
   readonly embedImageUrl: string | null;
+  readonly embedVideoUrl: string | null;
 }
 
-// Pulls the direct image URL via the audited share-info endpoint. Server
-// returns null for non-image docs OR when allowPublicEmbed=false, so a
-// null result is the normal "hide this field" signal — never an error.
-// Fetch failure is also swallowed → null so a flaky share-info call never
-// hides the URL/embed-code blocks the user already sees.
-async function fetchEmbedImageUrl(id: string): Promise<string | null> {
+interface EmbedMediaUrls {
+  readonly embedImageUrl: string | null;
+  readonly embedVideoUrl: string | null;
+}
+
+// Pulls the direct image / video URL via the audited share-info endpoint.
+// Server returns nulls for non-matching MIME OR when allowPublicEmbed=false,
+// so a null field is the normal "hide this field" signal — never an error.
+// Fetch failure is also swallowed → both nulls so a flaky share-info call
+// never hides the URL/embed-code blocks the user already sees.
+async function fetchEmbedMediaUrls(id: string): Promise<EmbedMediaUrls> {
   try {
     const res = await fetch(
       `/api/links/admin/${encodeURIComponent(id)}/share-info`,
       { cache: "no-store" },
     );
-    if (!res.ok) return null;
+    if (!res.ok) return { embedImageUrl: null, embedVideoUrl: null };
     const body = (await res.json()) as ApiResponse<ShareInfo>;
-    return body.data?.embedImageUrl ?? null;
+    return {
+      embedImageUrl: body.data?.embedImageUrl ?? null,
+      embedVideoUrl: body.data?.embedVideoUrl ?? null,
+    };
   } catch {
-    return null;
+    return { embedImageUrl: null, embedVideoUrl: null };
   }
 }
 
@@ -142,6 +151,11 @@ export function GenerateLinkForm({
   // shows for this same link.
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageCopied, setImageCopied] = useState(false);
+  // Same gate logic as imageUrl, but for video/* docs. Iframely-backed
+  // surfaces (Circle.so / Compass) embed a direct .mp4 URL as an HTML5
+  // <video> element when the response Content-Type is video/*.
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoCopied, setVideoCopied] = useState(false);
   // Replaces native window.confirm — see ConfirmDialog at the bottom of
   // the form. null = no dialog open. onConfirm fires the original "yes"
   // branch (e.g. setTtl("never"), setAllowPublicEmbed(true)).
@@ -216,6 +230,7 @@ export function GenerateLinkForm({
     setError(null);
     setResult(null);
     setImageUrl(null);
+    setVideoUrl(null);
     try {
       const res = await fetch("/api/links", {
         method: "POST",
@@ -239,10 +254,14 @@ export function GenerateLinkForm({
         return;
       }
       setResult(body.data);
-      // Fire-and-forget: server returns null for non-image docs / embed
-      // off, so this only populates the Image URL field for image links
-      // with embedding enabled. Failure is silent — see fetchEmbedImageUrl.
-      void fetchEmbedImageUrl(body.data.id).then(setImageUrl);
+      // Fire-and-forget: server returns null for non-matching MIME / embed
+      // off, so this only populates the Image / Video URL field for the
+      // matching MIME with embedding enabled. Failure is silent — see
+      // fetchEmbedMediaUrls.
+      void fetchEmbedMediaUrls(body.data.id).then(({ embedImageUrl, embedVideoUrl }) => {
+        setImageUrl(embedImageUrl);
+        setVideoUrl(embedVideoUrl);
+      });
       router.refresh();
     } catch {
       setError("Network error");
@@ -281,6 +300,17 @@ export function GenerateLinkForm({
       window.setTimeout(() => setImageCopied(false), 2000);
     } catch {
       setError("Clipboard write failed. Copy the image URL manually.");
+    }
+  };
+
+  const onCopyVideo = async () => {
+    if (!videoUrl) return;
+    try {
+      await navigator.clipboard.writeText(videoUrl);
+      setVideoCopied(true);
+      window.setTimeout(() => setVideoCopied(false), 2000);
+    } catch {
+      setError("Clipboard write failed. Copy the video URL manually.");
     }
   };
 
@@ -604,6 +634,34 @@ export function GenerateLinkForm({
                         Iframely-backed platforms. Bound to the same policy
                         (allowed domains, expiry, max downloads) as the
                         share link above.
+                      </p>
+                    </>
+                  )}
+                  {videoUrl && (
+                    <>
+                      <div className="mt-2 flex gap-2">
+                        <Input
+                          type="text"
+                          readOnly
+                          value={videoUrl}
+                          onFocus={(e) => e.currentTarget.select()}
+                          aria-label="Direct video URL"
+                          className="flex-1 text-xs"
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={onCopyVideo}
+                          className="whitespace-nowrap"
+                        >
+                          {videoCopied ? "Copied!" : "Copy video URL"}
+                        </Button>
+                      </div>
+                      <p className="text-muted-foreground mt-1 mb-0 text-xs">
+                        Direct video URL for Circle.so / Compass video
+                        embeds and other Iframely-backed platforms. Bound
+                        to the same policy (allowed domains, expiry, max
+                        downloads) as the share link above.
                       </p>
                     </>
                   )}

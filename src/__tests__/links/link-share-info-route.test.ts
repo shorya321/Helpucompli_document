@@ -340,6 +340,91 @@ describe("GET /api/links/admin/[id]/share-info", () => {
     expect(claims.hash).toBe(TOKEN);
   });
 
+  it("embedVideoUrl is null for non-video documents (image/PDF/etc)", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(true);
+    mocks.resolveRole.mockResolvedValueOnce("admin");
+    mocks.ensureUser.mockResolvedValueOnce({ id: "u-1" });
+    mocks.findLink.mockResolvedValueOnce({
+      id: ID,
+      documentId: "d-1",
+      policyId: null,
+      presignedUrlHash: TOKEN,
+      expiresAt: new Date(Date.now() + 60_000),
+      isRevoked: false,
+      downloadCount: 0,
+      maxDownloads: null,
+      allowPublicEmbed: true,
+      document: { contentType: "image/png" },
+    });
+    const res = await GET(req(), { params: params(ID) });
+    const body = (await res.json()) as {
+      data: { embedVideoUrl: string | null } | null;
+    };
+    expect(body.data?.embedVideoUrl).toBeNull();
+  });
+
+  it("embedVideoUrl is null for video docs WITHOUT allowPublicEmbed (gate must hold)", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(true);
+    mocks.resolveRole.mockResolvedValueOnce("admin");
+    mocks.ensureUser.mockResolvedValueOnce({ id: "u-1" });
+    mocks.findLink.mockResolvedValueOnce({
+      id: ID,
+      documentId: "d-1",
+      policyId: null,
+      presignedUrlHash: TOKEN,
+      expiresAt: new Date(Date.now() + 60_000),
+      isRevoked: false,
+      downloadCount: 0,
+      maxDownloads: null,
+      allowPublicEmbed: false,
+      document: { contentType: "video/mp4" },
+    });
+    const res = await GET(req(), { params: params(ID) });
+    const body = (await res.json()) as {
+      data: { embedVideoUrl: string | null } | null;
+    };
+    expect(body.data?.embedVideoUrl).toBeNull();
+  });
+
+  it("embedVideoUrl is populated for video docs WITH allowPublicEmbed (Circle.so / Compass video-embed compatible)", async () => {
+    // Direct video-bytes URL — Iframely renders this as HTML5 <video>
+    // because /raw responds with Content-Type: video/mp4 (rel:"file").
+    const { verifyRawFetchToken } = await import("@/lib/raw-fetch-token");
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveHasRole.mockResolvedValueOnce(true);
+    mocks.resolveRole.mockResolvedValueOnce("admin");
+    mocks.ensureUser.mockResolvedValueOnce({ id: "u-1" });
+    mocks.findLink.mockResolvedValueOnce({
+      id: ID,
+      documentId: "d-1",
+      policyId: null,
+      presignedUrlHash: TOKEN,
+      expiresAt: new Date(Date.now() + 3_600_000),
+      isRevoked: false,
+      downloadCount: 0,
+      maxDownloads: null,
+      allowPublicEmbed: true,
+      document: { contentType: "video/mp4" },
+    });
+    const res = await GET(req(), { params: params(ID) });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      data: { embedVideoUrl: string | null; embedImageUrl: string | null } | null;
+    };
+    const u = body.data?.embedVideoUrl;
+    expect(u).toMatch(
+      new RegExp(
+        `^${APP_BASE.replace(/\//g, "\\/").replace(/:/g, "\\:")}/l/${TOKEN}/raw\\?t=[A-Za-z0-9_%.-]+$`,
+      ),
+    );
+    // Image URL stays null for a video doc (mutually exclusive MIME gate).
+    expect(body.data?.embedImageUrl).toBeNull();
+    const t = new URL(u as string).searchParams.get("t");
+    expect(verifyRawFetchToken(t!, TOKEN)).toEqual({ kind: "external-embed" });
+  });
+
   it("writes LINK_SHARE_INFO_VIEW audit on success", async () => {
     mocks.getSession.mockResolvedValueOnce(adminSession());
     mocks.resolveHasRole.mockResolvedValueOnce(true);
