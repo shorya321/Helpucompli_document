@@ -107,12 +107,27 @@ export async function GET(
   //     unaffected).
   //
   //   - "external-embed" — minted by surfaces that emit a long-lived
-  //     externally-pasted image URL (og:image, oEmbed `type:photo`,
-  //     dashboard "Image URL" copy). No prior browser referer was
-  //     validated, so we MUST NOT skip refinement: browser fetches
-  //     from unlisted domains return 403 like the viewer does, while
-  //     server-side oEmbed crawlers (no Sec-Fetch-*) keep bypassing
-  //     per the publicEmbedBypass branch in policy-engine.
+  //     externally-pasted media URL (og:image, og:video, oEmbed
+  //     `type:photo`, dashboard "Image URL" copy). No prior browser
+  //     referer was validated.
+  //
+  //     Sec-Fetch-Dest carve-out: cross-platform embed proxies
+  //     (Iframely, Embedly, Compass video player) inline a bare
+  //     <video> / <audio> element pointing at our og:video / og:audio
+  //     URL. The browser fetches /raw with `Sec-Fetch-Dest=video|audio`,
+  //     but the immediate Referer is the proxy host (cdn.iframe.ly),
+  //     not the user-facing parent admins listed in
+  //     `policy.allowedDomains` — refinement therefore denies even
+  //     legitimate plays. The HMAC raw-fetch token is hash-bound,
+  //     7-day TTL, and revocable via link revoke + expiresAt; combined
+  //     with audit it is the authoritative gate for these media sub-
+  //     resources. So when the token is `external-embed` AND
+  //     `Sec-Fetch-Dest` is `video` or `audio`, we skip the refinement
+  //     gate just like a `sub-fetch` token would. `Sec-Fetch-Dest=image`
+  //     still hits strict refinement (F9.10 / 7e84fb7 invariant) — bare
+  //     <img> embeds preserve Referer end-to-end so the F9.10 strict
+  //     check is reliable; image-only widening is unnecessary and would
+  //     reduce defense in depth.
   //
   // Missing or invalid token: fall through to normal policy
   // enforcement unchanged. See raw-fetch-token.ts.
@@ -123,7 +138,14 @@ export async function GET(
     try {
       const verified = verifyRawFetchToken(rawFetchToken, hash);
       tokenKind = verified.kind;
-      bypassRefererRefinement = verified.kind === "sub-fetch";
+      if (verified.kind === "sub-fetch") {
+        bypassRefererRefinement = true;
+      } else if (verified.kind === "external-embed") {
+        const dest = req.headers.get("sec-fetch-dest");
+        if (dest === "video" || dest === "audio") {
+          bypassRefererRefinement = true;
+        }
+      }
     } catch (err) {
       if (!(err instanceof InvalidRawFetchTokenError)) {
         throw err;

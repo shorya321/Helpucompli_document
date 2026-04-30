@@ -355,6 +355,98 @@ describe("GET /l/[hash]/raw — same-origin streaming proxy", () => {
     );
   });
 
+  // ---- raw-fetch-token: external-embed media-sub-resource carve-out ----
+  //
+  // Cross-platform embed proxies (Iframely / Embedly / Compass video
+  // player) inline a bare <video> / <audio> at our og:video / og:audio
+  // URL. The browser fetches /raw with `Sec-Fetch-Dest=video|audio` and
+  // a Referer that points at the proxy host (cdn.iframe.ly), not the
+  // user-facing parent admins listed in policy.allowedDomains — so the
+  // policy engine refinement gate would deny the play. The HMAC token
+  // is hash-bound + 7-day TTL + revocable via link revoke / expiresAt
+  // so we treat it as the authoritative gate for these media sub-
+  // resources and skip refinement just like a sub-fetch token would.
+  // Sec-Fetch-Dest=image keeps strict refinement (F9.10 / 7e84fb7) —
+  // bare <img> embeds preserve Referer, so the F9.10 strict check is
+  // reliable.
+
+  it("forwards bypassRefererRefinement=true when external-embed + Sec-Fetch-Dest=video (Compass/Iframely video carve-out)", async () => {
+    mocks.verifyRawFetchToken.mockReturnValueOnce({ kind: "external-embed" });
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
+    fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(fakeS3Response({ status: 200, body: "x" }));
+    const res = await GET(
+      req({
+        query: "t=valid.embed.token",
+        headers: {
+          referer: "https://cdn.iframe.ly/api/iframe?u=...",
+          "sec-fetch-dest": "video",
+          "sec-fetch-site": "cross-site",
+        },
+      }),
+      { params: params(TOKEN) },
+    );
+    expect(res.status).toBe(200);
+    expect(mocks.resolveAndAuthorizeLink).toHaveBeenCalledWith(
+      expect.anything(),
+      TOKEN,
+      { bypassRefererRefinement: true, tokenKind: "external-embed" },
+    );
+  });
+
+  it("forwards bypassRefererRefinement=true when external-embed + Sec-Fetch-Dest=audio", async () => {
+    mocks.verifyRawFetchToken.mockReturnValueOnce({ kind: "external-embed" });
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
+    fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(fakeS3Response({ status: 200, body: "x" }));
+    const res = await GET(
+      req({
+        query: "t=valid.embed.token",
+        headers: {
+          referer: "https://cdn.iframe.ly/api/iframe?u=...",
+          "sec-fetch-dest": "audio",
+          "sec-fetch-site": "cross-site",
+        },
+      }),
+      { params: params(TOKEN) },
+    );
+    expect(res.status).toBe(200);
+    expect(mocks.resolveAndAuthorizeLink).toHaveBeenCalledWith(
+      expect.anything(),
+      TOKEN,
+      { bypassRefererRefinement: true, tokenKind: "external-embed" },
+    );
+  });
+
+  it("keeps bypassRefererRefinement=FALSE when external-embed + Sec-Fetch-Dest=image (image refinement preserved per F9.10 / 7e84fb7)", async () => {
+    // Bare <img> embeds (oEmbed type:photo URL inlined on the platform
+    // page) preserve Referer end-to-end, so strict refinement remains
+    // the right gate for images. Regression guard.
+    mocks.verifyRawFetchToken.mockReturnValueOnce({ kind: "external-embed" });
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
+    fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(fakeS3Response({ status: 200, body: "x" }));
+    await GET(
+      req({
+        query: "t=valid.embed.token",
+        headers: {
+          referer: "https://app.circle.so/post",
+          "sec-fetch-dest": "image",
+          "sec-fetch-site": "cross-site",
+        },
+      }),
+      { params: params(TOKEN) },
+    );
+    expect(mocks.resolveAndAuthorizeLink).toHaveBeenCalledWith(
+      expect.anything(),
+      TOKEN,
+      { bypassRefererRefinement: false, tokenKind: "external-embed" },
+    );
+  });
+
   it("forwards bypassRefererRefinement=false + tokenKind=null when ?t= is malformed/expired/wrong-hash (silent fall-through)", async () => {
     mocks.verifyRawFetchToken.mockImplementationOnce(() => {
       throw new InvalidRawFetchTokenError("expired");
