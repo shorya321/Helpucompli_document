@@ -7,6 +7,7 @@ import { computeLinkStatus } from "@/lib/link-list";
 import { logAudit, asAuditPrisma } from "@/lib/audit";
 import { createRateLimiter } from "@/lib/rate-limit";
 import { issueRawFetchToken } from "@/lib/raw-fetch-token";
+import { chooseEmbedTokenTtlSec } from "@/lib/embed-token-ttl";
 
 export const dynamic = "force-dynamic";
 
@@ -88,17 +89,6 @@ const MAX_DIM = 4096;
 // 60s cache TTL on the response so a busy WordPress site does not hit
 // us 100 times for the same URL. Per oEmbed spec recommendation.
 const CACHE_AGE_SEC = 300;
-
-// TTL for the HMAC raw-fetch token embedded in `photo.url`. Iframely +
-// WordPress media caches retain image URLs well beyond `cache_age`, so
-// the token must outlive the consumer-side cache. We clamp to the
-// link's remaining lifetime when set; perpetual links use the SigV4 7d
-// ceiling. The /raw route still revalidates auth + policy + revoke +
-// expiry on every fetch — the token only bypasses the publicEmbed
-// referer-refinement gate, identical to the viewer's existing 120 s
-// sub-fetch token. So a leaked token cannot outlive the link itself.
-const PHOTO_TOKEN_DEFAULT_TTL_SEC = 7 * 24 * 60 * 60; // 7 days
-const PHOTO_TOKEN_FLOOR_TTL_SEC = 60; // align with raw-fetch-token min sanity
 
 const PROVIDER_NAME = "HelpUcompli Documents";
 
@@ -197,18 +187,6 @@ function pickType(mime: string | null): "rich" | "video" | "photo" {
   // load using a freshly presigned S3 URL. Returning `link` would
   // strip the inline preview (consumer renders a plain card).
   return "rich";
-}
-
-// Choose the raw-fetch token TTL bundled into `photo.url`. Clamps to
-// the link's remaining lifetime so a token cannot survive past link
-// expiry. Perpetual links (`expiresAt === null`) use the configured
-// default (7d). Floor enforces the underlying issuer's positive-ttl
-// invariant for edge cases (already-near-expiry links).
-function choosePhotoTokenTtlSec(expiresAt: Date | null): number {
-  if (expiresAt === null) return PHOTO_TOKEN_DEFAULT_TTL_SEC;
-  const remainingSec = Math.floor((expiresAt.getTime() - Date.now()) / 1000);
-  if (remainingSec <= 0) return PHOTO_TOKEN_FLOOR_TTL_SEC;
-  return Math.min(PHOTO_TOKEN_DEFAULT_TTL_SEC, remainingSec);
 }
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -314,7 +292,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   //   - `rich`/`video`: iframe back at the viewer. Unchanged shape.
   let body: OembedResponse;
   if (oembedType === "photo") {
-    const tokenTtl = choosePhotoTokenTtlSec(
+    const tokenTtl = chooseEmbedTokenTtlSec(
       (link.expiresAt as Date | null) ?? null,
     );
     const rawFetchToken = issueRawFetchToken(token, tokenTtl, "external-embed");

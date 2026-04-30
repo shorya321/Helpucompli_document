@@ -53,6 +53,10 @@ export interface LinkAccessOk {
     readonly documentId: string;
     readonly policyId: string | null;
     readonly allowPublicEmbed: boolean;
+    // null = perpetual link (no DB-side expiry). Surfaces that mint
+    // long-lived embed tokens (og:image / og:video / oEmbed photo /
+    // dashboard Image URL) clamp the token TTL to the link's lifetime.
+    readonly expiresAt: Date | null;
   };
   readonly document: LinkAccessDoc;
   readonly effective: EffectivePolicy;
@@ -435,6 +439,7 @@ export async function resolveAndAuthorizeLink(
       documentId: link.documentId,
       policyId: link.policyId,
       allowPublicEmbed: link.allowPublicEmbed === true,
+      expiresAt: (link.expiresAt as Date | null) ?? null,
     },
     document: {
       id: link.document.id,

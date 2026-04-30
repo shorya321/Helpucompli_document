@@ -9,6 +9,7 @@ import { createRateLimiter } from "@/lib/rate-limit";
 import { buildEmbedCode } from "@/lib/link-embed";
 import { logAudit, asAuditPrisma } from "@/lib/audit";
 import { issueRawFetchToken } from "@/lib/raw-fetch-token";
+import { chooseEmbedTokenTtlSec } from "@/lib/embed-token-ttl";
 
 export const dynamic = "force-dynamic";
 
@@ -45,20 +46,6 @@ interface ShareInfoResponse {
   // harmless. Sec-review C1: token is minted on-demand (audited),
   // never returned in list responses.
   readonly embedImageUrl: string | null;
-}
-
-// TTL ceiling for the raw-fetch token bundled in `embedImageUrl`.
-// Matches the og:image token TTL on /l/<hash> so a single embed
-// resource has consistent lifetime across the meta-tag and the
-// dashboard-copy paths.
-const EMBED_IMAGE_TOKEN_DEFAULT_TTL_SEC = 7 * 24 * 60 * 60;
-const EMBED_IMAGE_TOKEN_FLOOR_TTL_SEC = 60;
-
-function chooseEmbedImageTokenTtlSec(expiresAt: Date | null): number {
-  if (expiresAt === null) return EMBED_IMAGE_TOKEN_DEFAULT_TTL_SEC;
-  const remainingSec = Math.floor((expiresAt.getTime() - Date.now()) / 1000);
-  if (remainingSec <= 0) return EMBED_IMAGE_TOKEN_FLOOR_TTL_SEC;
-  return Math.min(EMBED_IMAGE_TOKEN_DEFAULT_TTL_SEC, remainingSec);
 }
 
 function json<T>(
@@ -166,7 +153,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
       ? `${origin}/l/${link.presignedUrlHash}/raw?t=${encodeURIComponent(
           issueRawFetchToken(
             link.presignedUrlHash,
-            chooseEmbedImageTokenTtlSec(link.expiresAt ?? null),
+            chooseEmbedTokenTtlSec(link.expiresAt ?? null),
             "external-embed",
           ),
         )}`
