@@ -64,8 +64,8 @@ prisma/migrations/*.sql.bak
 .vscode/
 .idea/
 
-# claude
-.claude/settings.local.json
+# claude — settings.local.json + any .bak variants
+.claude/settings.local.json*
 
 # local agent scratch + resolved skill cache (rehydrated from skills-lock.json)
 .agents/
@@ -81,6 +81,9 @@ design-mockups/
 docs/superpowers/
 docs/design.md
 docs/POST-LAUNCH-OBSERVATIONS.md
+
+# generated PDFs — rebuild from markdown via scripts/build-overview-pdf.sh
+docs/*.pdf
 
 # pdfjs runtime — copied from node_modules by scripts/copy-pdfjs.mjs at
 # postinstall time. Hand-written viewer.html stays in git; the .mjs

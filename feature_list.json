@@ -1012,7 +1012,7 @@
             "Update src/__tests__/users/user-details-page.test.ts — replace 'skips bucket fetches for non-viewer targets' with admin-renders-card + superadmin-skips-fetches tests",
             "Manual verify: superadmin grants bucket to admin → admin uploads to that bucket → 200; admin uploads to non-granted bucket → 403"
           ],
-          "passes": false
+          "passes": true
         }
       ]
     },
