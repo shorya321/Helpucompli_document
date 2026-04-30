@@ -72,9 +72,14 @@ export default async function UserDetailsPage({
 
   if (!target) notFound();
 
+  // Admin AND viewer roles are per-bucket scoped via UserBucketAccess.
+  // Superadmin is tenant-wide so no grant UI is rendered for that role.
+  // Without this branch, admins are structurally locked out of upload
+  // because the canWriteBucket() gate in /api/s3/* requires a row.
+  const showBucketAccess = target.role === "viewer" || target.role === "admin";
   const [assignedBuckets, allBuckets, audit] = await Promise.all([
-    target.role === "viewer" ? getUserBuckets(prisma, target.id) : Promise.resolve([]),
-    target.role === "viewer"
+    showBucketAccess ? getUserBuckets(prisma, target.id) : Promise.resolve([]),
+    showBucketAccess
       ? getBucketList(asBucketListPrisma(prisma), { role: "superadmin" })
       : Promise.resolve<ReadonlyArray<BucketSummary>>([]),
     queryAuditLogs(asAuditQueryPrisma(prisma), {
@@ -129,14 +134,14 @@ export default async function UserDetailsPage({
         </CardContent>
       </Card>
 
-      {target.role === "viewer" && (
+      {showBucketAccess && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Bucket access</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground mb-3 text-xs">
-              Only the buckets selected below are visible to this viewer.
+              Only the buckets selected below are accessible to this user.
             </p>
             <BucketAccess
               userId={target.id}

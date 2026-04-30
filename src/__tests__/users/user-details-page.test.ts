@@ -123,7 +123,7 @@ describe("UserDetailsPage", () => {
     expect(mocks.getBucketList).toHaveBeenCalled();
   });
 
-  it("skips bucket fetches for non-viewer targets", async () => {
+  it("renders admin target with BucketAccess (F10.8 — admins are per-bucket scoped)", async () => {
     mocks.getSession.mockResolvedValueOnce(adminSession());
     mocks.resolveRole.mockResolvedValueOnce("superadmin");
     mocks.ensureUser.mockResolvedValueOnce({ id: "actor-1" });
@@ -133,6 +133,39 @@ describe("UserDetailsPage", () => {
       email: "admin@x.com",
       name: "Admin",
       role: "admin",
+      status: "active",
+      createdAt: new Date(),
+      lastLoginAt: null,
+    });
+    mocks.getUserBuckets.mockResolvedValueOnce([]);
+    mocks.getBucketList.mockResolvedValueOnce([
+      { id: "b-1", name: "finance" },
+    ]);
+    mocks.queryAuditLogs.mockResolvedValueOnce({ rows: [], nextCursor: null });
+    const el = await UserDetailsPage({
+      params: Promise.resolve({ id: UUID }),
+    });
+    expect(el).toBeTruthy();
+    // Admin targets MUST trigger the bucket fetches so superadmin can grant
+    // per-bucket access — without this an admin cannot upload (API gate
+    // requires UserBucketAccess row in canWriteBucket()).
+    expect(mocks.getUserBuckets).toHaveBeenCalledWith(
+      expect.anything(),
+      UUID,
+    );
+    expect(mocks.getBucketList).toHaveBeenCalled();
+  });
+
+  it("skips bucket fetches for superadmin targets (no self-grant UI)", async () => {
+    mocks.getSession.mockResolvedValueOnce(adminSession());
+    mocks.resolveRole.mockResolvedValueOnce("superadmin");
+    mocks.ensureUser.mockResolvedValueOnce({ id: "actor-1" });
+    mocks.findUnique.mockResolvedValueOnce({
+      id: UUID,
+      auth0Id: "auth0|s",
+      email: "super@x.com",
+      name: "Super",
+      role: "superadmin",
       status: "active",
       createdAt: new Date(),
       lastLoginAt: null,

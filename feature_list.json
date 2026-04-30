@@ -1001,6 +1001,18 @@
             "Test details page renders correctly"
           ],
           "passes": true
+        },
+        {
+          "id": "F10.8",
+          "description": "Bucket access control for admins (per-bucket scoped, mirrors viewer flow)",
+          "steps": [
+            "Extend src/app/(dashboard)/users/[id]/page.tsx — render BucketAccess card when target.role is 'admin' OR 'viewer'",
+            "Extend assigned-buckets + allBuckets fetch on same page with same predicate",
+            "Update card copy to neutral 'Only the buckets selected below are accessible to this user.'",
+            "Update src/__tests__/users/user-details-page.test.ts — replace 'skips bucket fetches for non-viewer targets' with admin-renders-card + superadmin-skips-fetches tests",
+            "Manual verify: superadmin grants bucket to admin → admin uploads to that bucket → 200; admin uploads to non-granted bucket → 403"
+          ],
+          "passes": false
         }
       ]
     },
