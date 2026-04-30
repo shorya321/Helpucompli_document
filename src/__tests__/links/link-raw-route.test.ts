@@ -307,7 +307,11 @@ describe("GET /l/[hash]/raw — same-origin streaming proxy", () => {
     expect(mocks.resolveAndAuthorizeLink).toHaveBeenCalledWith(
       expect.anything(),
       TOKEN,
-      { bypassRefererRefinement: true, tokenKind: "sub-fetch" },
+      {
+        bypassRefererRefinement: true,
+        tokenKind: "sub-fetch",
+        isSubResource: true,
+      },
     );
   });
 
@@ -327,7 +331,11 @@ describe("GET /l/[hash]/raw — same-origin streaming proxy", () => {
     expect(mocks.resolveAndAuthorizeLink).toHaveBeenCalledWith(
       expect.anything(),
       TOKEN,
-      { bypassRefererRefinement: false, tokenKind: "external-embed" },
+      {
+        bypassRefererRefinement: false,
+        tokenKind: "external-embed",
+        isSubResource: true,
+      },
     );
   });
 
@@ -351,7 +359,11 @@ describe("GET /l/[hash]/raw — same-origin streaming proxy", () => {
     expect(mocks.resolveAndAuthorizeLink).toHaveBeenCalledWith(
       expect.anything(),
       TOKEN,
-      { bypassRefererRefinement: false, tokenKind: "external-embed" },
+      {
+        bypassRefererRefinement: false,
+        tokenKind: "external-embed",
+        isSubResource: true,
+      },
     );
   });
 
@@ -391,7 +403,11 @@ describe("GET /l/[hash]/raw — same-origin streaming proxy", () => {
     expect(mocks.resolveAndAuthorizeLink).toHaveBeenCalledWith(
       expect.anything(),
       TOKEN,
-      { bypassRefererRefinement: true, tokenKind: "external-embed" },
+      {
+        bypassRefererRefinement: true,
+        tokenKind: "external-embed",
+        isSubResource: true,
+      },
     );
   });
 
@@ -416,7 +432,11 @@ describe("GET /l/[hash]/raw — same-origin streaming proxy", () => {
     expect(mocks.resolveAndAuthorizeLink).toHaveBeenCalledWith(
       expect.anything(),
       TOKEN,
-      { bypassRefererRefinement: true, tokenKind: "external-embed" },
+      {
+        bypassRefererRefinement: true,
+        tokenKind: "external-embed",
+        isSubResource: true,
+      },
     );
   });
 
@@ -443,7 +463,11 @@ describe("GET /l/[hash]/raw — same-origin streaming proxy", () => {
     expect(mocks.resolveAndAuthorizeLink).toHaveBeenCalledWith(
       expect.anything(),
       TOKEN,
-      { bypassRefererRefinement: false, tokenKind: "external-embed" },
+      {
+        bypassRefererRefinement: false,
+        tokenKind: "external-embed",
+        isSubResource: true,
+      },
     );
   });
 
@@ -459,7 +483,11 @@ describe("GET /l/[hash]/raw — same-origin streaming proxy", () => {
     expect(mocks.resolveAndAuthorizeLink).toHaveBeenCalledWith(
       expect.anything(),
       TOKEN,
-      { bypassRefererRefinement: false, tokenKind: null },
+      {
+        bypassRefererRefinement: false,
+        tokenKind: null,
+        isSubResource: true,
+      },
     );
   });
 
@@ -473,7 +501,11 @@ describe("GET /l/[hash]/raw — same-origin streaming proxy", () => {
     expect(mocks.resolveAndAuthorizeLink).toHaveBeenCalledWith(
       expect.anything(),
       TOKEN,
-      { bypassRefererRefinement: false, tokenKind: null },
+      {
+        bypassRefererRefinement: false,
+        tokenKind: null,
+        isSubResource: true,
+      },
     );
   });
 });

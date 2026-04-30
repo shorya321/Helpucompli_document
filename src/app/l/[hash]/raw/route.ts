@@ -158,6 +158,11 @@ export async function GET(
   const result = await resolveAndAuthorizeLink(req, hash, {
     bypassRefererRefinement,
     tokenKind,
+    // /raw serves bytes for an already-rendered parent (inline
+    // viewer image, Iframely media sub-resource, og:image fetch).
+    // Suppress counter increment here; the parent /l/<hash> hit is
+    // the canonical "view" event for the dashboard.
+    isSubResource: true,
   });
 
   if (result.kind === "forbidden") return forbidden();

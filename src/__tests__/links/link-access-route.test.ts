@@ -343,14 +343,13 @@ describe("GET /api/links/[hash]", () => {
     expect(presignArgs.ttlSeconds).toBe(1200);
   });
 
-  // ---- allowPublicEmbed=true: counter + maxDownloads must be skipped ----
-  // Each WordPress page render produces ≥2 viewer hits (server-side
-  // oEmbed discovery + browser iframe load). If we counted every hit,
-  // a finite `maxDownloads` would exhaust on a handful of legitimate
-  // page views. Public-embed links rely on `expiresAt` + admin revoke
-  // for lifecycle, not the counter.
+  // ---- allowPublicEmbed=true: maxDownloads cap stays advisory; counter
+  // now increments via prisma.update (not updateMany). The cap WHERE was
+  // dropped from the embed branch so a finite `maxDownloads` cannot
+  // exhaust on a WP/Notion render's multi-hit traffic. Counter rises so
+  // the dashboard reflects real activity (was previously stuck at 0).
 
-  it("public-embed link does NOT call updateMany (counter increment skipped)", async () => {
+  it("public-embed link calls update with { increment: 1 } (no cap WHERE)", async () => {
     mocks.findLink.mockResolvedValueOnce(
       linkRow({ allowPublicEmbed: true }),
     );
@@ -361,13 +360,21 @@ describe("GET /api/links/[hash]", () => {
       params: params("tok_abc_with_long_enough_token_value_xyz"),
     });
     expect(res.status).toBe(302);
+    // Embed path uses unconditional `update`, not cap-gated `updateMany`.
     expect(mocks.updateMany).not.toHaveBeenCalled();
+    expect(mocks.decrementCount).toHaveBeenCalledOnce();
+    const args = mocks.decrementCount.mock.calls[0]?.[0] as {
+      where: { id: string };
+      data: { downloadCount: { increment?: number; decrement?: number } };
+    };
+    expect(args.where.id).toBe("link-1");
+    expect(args.data.downloadCount).toEqual({ increment: 1 });
     expect(mocks.auditCreate.mock.calls[0]?.[0].data.action).toBe(
       "LINK_ACCESS",
     );
   });
 
-  it("public-embed link with downloadCount === maxDownloads still serves (counter is meaningless on public-embed path)", async () => {
+  it("public-embed link with downloadCount === maxDownloads STILL serves + increments (cap stays advisory)", async () => {
     mocks.findLink.mockResolvedValueOnce(
       linkRow({
         allowPublicEmbed: true,
@@ -382,6 +389,44 @@ describe("GET /api/links/[hash]", () => {
       params: params("tok_abc_with_long_enough_token_value_xyz"),
     });
     expect(res.status).toBe(302);
+    // Counter rises past the advisory cap — dashboard sees real traffic.
+    expect(mocks.decrementCount).toHaveBeenCalledOnce();
+    const args = mocks.decrementCount.mock.calls[0]?.[0] as {
+      data: { downloadCount: { increment?: number } };
+    };
+    expect(args.data.downloadCount).toEqual({ increment: 1 });
+  });
+
+  it("public-embed link rolls back counter when presign fails (decrement matches the embed-path increment)", async () => {
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({ allowPublicEmbed: true }),
+    );
+    mocks.resolvePolicy.mockResolvedValueOnce(defaultEffective);
+    mocks.enforcePolicy.mockReturnValueOnce(allow);
+    // Both the increment update and the rollback update need a thenable
+    // return value because the rollback chains `.catch(() => {})`.
+    mocks.decrementCount.mockResolvedValue({});
+    mocks.presignGetUrl.mockRejectedValueOnce(new Error("presign-failed"));
+    const res = await GET(req(), {
+      params: params("tok_abc_with_long_enough_token_value_xyz"),
+    });
+    expect(res.status).toBe(403);
+    // Two `update` calls on the same mock: increment then rollback decrement.
+    expect(mocks.decrementCount).toHaveBeenCalledTimes(2);
+    const inc = mocks.decrementCount.mock.calls[0]?.[0] as {
+      data: { downloadCount: { increment?: number; decrement?: number } };
+    };
+    const dec = mocks.decrementCount.mock.calls[1]?.[0] as {
+      data: { downloadCount: { increment?: number; decrement?: number } };
+    };
+    expect(inc.data.downloadCount).toEqual({ increment: 1 });
+    expect(dec.data.downloadCount).toEqual({ decrement: 1 });
+    expect(mocks.auditCreate.mock.calls.at(-1)?.[0].data.action).toBe(
+      "LINK_DENIED",
+    );
+    expect(mocks.auditCreate.mock.calls.at(-1)?.[0].data.metadata.reason).toBe(
+      "presign-failed",
+    );
   });
 
   it("private link (allowPublicEmbed=false / undefined) STILL increments counter — regression guard", async () => {
