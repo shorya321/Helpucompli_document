@@ -232,6 +232,35 @@ export function enforcePolicy(
     // outer /l/[hash] page minted that token only after passing this
     // very same referer check, so the sub-fetch's stripped Referer
     // is not a security signal — it's a referrer-policy artifact.
+    //
+    // Cross-site iframe carve-out (Circle.so / Compass video):
+    // social-platform embed proxies (Iframely, Embedly, etc.) wrap
+    // our /l/<hash> iframe inside a sandboxed iframe of their own.
+    // The immediate Referer to /l/<hash> is then the proxy host
+    // (e.g. cdn.iframe.ly) rather than the user-facing parent
+    // (e.g. app.circle.so). When `Sec-Fetch-Dest=iframe` AND
+    // `Sec-Fetch-Site=cross-site`, the browser-enforced CSP
+    // `frame-ancestors` directive (sourced from the same
+    // `allowedDomains` and emitted by the viewer route) validates
+    // every ancestor in the chain — if either the proxy or the
+    // outermost parent is unlisted the browser refuses to render
+    // and no bytes reach the user. Server-side Referer refinement
+    // adds no defense in this case (CSP already blocks unlisted
+    // chains) and breaks legitimate proxy-wrapped embeds. Direct
+    // browser-tab navigation arrives as `Sec-Fetch-Dest=document`
+    // (or with no header on legacy browsers) and stays under
+    // strict refinement — the c0ca4a6 narrowing for direct nav is
+    // preserved.
+    if (
+      ctx.secFetchDest === "iframe" &&
+      ctx.secFetchSite === "cross-site"
+    ) {
+      return {
+        allow: true,
+        linkTtlSeconds: policy.linkTtlSeconds,
+        maxDownloads: policy.maxDownloads,
+      };
+    }
     if (!refererAllowed(ctx.referer, policy.allowedDomains)) {
       return { allow: false };
     }

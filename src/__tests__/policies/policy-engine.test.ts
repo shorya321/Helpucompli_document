@@ -296,7 +296,52 @@ describe("enforcePolicy", () => {
     ).toMatchObject({ allow: true });
   });
 
-  it("publicEmbedBypass=true + allowedDomains + Sec-Fetch-Dest=iframe + non-matching Referer → DENIES (iframe from non-allowed parent — server defense in depth)", () => {
+  it("publicEmbedBypass=true + allowedDomains + Sec-Fetch-Dest=iframe + Sec-Fetch-Site=cross-site + non-matching Referer → ALLOWS (CSP frame-ancestors is the parent-host gate)", () => {
+    // Cross-site iframe loads pass through this branch. Embed-platform
+    // proxies (Iframely / Embedly / Circle.so / Compass video player)
+    // wrap our /l/<hash> iframe in a sandboxed iframe of their own;
+    // the immediate Referer is then the proxy host, not the user-
+    // facing parent admins listed in `allowedDomains`. Browser-side
+    // CSP `frame-ancestors` (sourced from the same `allowedDomains`)
+    // validates the FULL ancestor chain, so a request that survives
+    // CSP enforcement is by definition coming from an allowed chain.
+    // Server-side Referer refinement therefore adds no defense and
+    // breaks legitimate proxy-wrapped embeds.
+    const policy = { ...openPolicy, allowedDomains: ["embed.test.com"] };
+    expect(
+      enforcePolicy(policy, {
+        ...baseCtx,
+        referer: "https://cdn.iframe.ly/api/iframe?u=...",
+        publicEmbedBypass: true,
+        secFetchDest: "iframe",
+        secFetchSite: "cross-site",
+      }),
+    ).toMatchObject({ allow: true });
+  });
+
+  it("publicEmbedBypass=true + allowedDomains + Sec-Fetch-Dest=iframe + Sec-Fetch-Site=cross-site + null Referer → ALLOWS (sandboxed proxy iframe with stripped referer)", () => {
+    // Same carve-out as above with the harshest Referer case (Iframely-
+    // sandboxed iframe with `Referrer-Policy: no-referrer`). CSP
+    // `frame-ancestors` still gates the chain at the browser, so
+    // letting the bytes flow does not weaken the parent-host
+    // restriction admins configured.
+    const policy = { ...openPolicy, allowedDomains: ["embed.test.com"] };
+    expect(
+      enforcePolicy(policy, {
+        ...baseCtx,
+        referer: null,
+        publicEmbedBypass: true,
+        secFetchDest: "iframe",
+        secFetchSite: "cross-site",
+      }),
+    ).toMatchObject({ allow: true });
+  });
+
+  it("publicEmbedBypass=true + allowedDomains + Sec-Fetch-Dest=iframe + Sec-Fetch-Site=same-origin + non-matching Referer → DENIES (same-origin iframe still under refinement)", () => {
+    // Same-origin iframe loads do NOT get the proxy carve-out —
+    // there is no embed-proxy intermediary involved, so a non-
+    // matching Referer means the request is not coming from an
+    // allowed parent on this origin. Keep strict refinement.
     const policy = { ...openPolicy, allowedDomains: ["embed.test.com"] };
     expect(
       enforcePolicy(policy, {
@@ -304,6 +349,22 @@ describe("enforcePolicy", () => {
         referer: "https://attacker.example/foo",
         publicEmbedBypass: true,
         secFetchDest: "iframe",
+        secFetchSite: "same-origin",
+      }),
+    ).toEqual({ allow: false });
+  });
+
+  it("publicEmbedBypass=true + allowedDomains + Sec-Fetch-Dest=image + Sec-Fetch-Site=cross-site + non-matching Referer → DENIES (image refinement preserved)", () => {
+    // Image embeds (oEmbed type:photo URL inlined as <img>) never go
+    // through a wrapper iframe — Referer is preserved end-to-end. The
+    // F9.10 strict refinement on image-direct embeds is unchanged.
+    const policy = { ...openPolicy, allowedDomains: ["embed.test.com"] };
+    expect(
+      enforcePolicy(policy, {
+        ...baseCtx,
+        referer: "https://attacker.example/foo",
+        publicEmbedBypass: true,
+        secFetchDest: "image",
         secFetchSite: "cross-site",
       }),
     ).toEqual({ allow: false });

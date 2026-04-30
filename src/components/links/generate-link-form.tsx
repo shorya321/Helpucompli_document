@@ -576,8 +576,11 @@ export function GenerateLinkForm({
                     preview via oEmbed) or paste the iframe snippet into
                     any Custom HTML / code block (WordPress, Circle,
                     Notion, Confluence). If a policy with Allowed
-                    Domains is attached, browsers must still send a
-                    matching Referer.
+                    Domains is attached, list both the user-facing host
+                    (e.g. *.circle.so) AND the platform&apos;s embed
+                    proxy (e.g. *.iframe.ly for Circle/Compass video)
+                    so the browser-enforced frame-ancestors check
+                    passes for every step of the iframe chain.
                   </p>
                   {imageUrl && (
                     <>
