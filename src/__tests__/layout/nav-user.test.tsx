@@ -24,15 +24,13 @@ describe("NavUser", () => {
     expect(screen.getAllByText("bob@x.com").length).toBeGreaterThan(0);
   });
 
-  it("opens the menu and exposes a sign-out anchor to /api/auth/audit-logout", async () => {
+  it("opens the menu and exposes a sign-out anchor to /auth/logout", async () => {
     const user = userEvent.setup();
     mount({ name: "A", email: "a@x.com" });
     await user.click(screen.getByRole("button"));
     const signOut = await screen.findByRole("menuitem", { name: /sign out/i });
     const anchor = signOut.querySelector("a") ?? signOut;
-    // Routes through the audit-logout API so the LOGOUT row is written
-    // before Auth0 SDK clears the session at /auth/logout.
-    expect(anchor.getAttribute("href")).toBe("/api/auth/audit-logout");
+    expect(anchor.getAttribute("href")).toBe("/auth/logout");
   });
 
   it("shows the Account menu item when opened", async () => {

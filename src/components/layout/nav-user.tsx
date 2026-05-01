@@ -111,11 +111,10 @@ export function NavUser({ user, role }: NavUserProps) {
               className="text-destructive focus:bg-destructive/10 focus:text-destructive"
             >
               {/*
-                Plain anchor — Auth0 v4 requires a full document navigation.
-                Routes through /api/auth/audit-logout so the LOGOUT row is
-                written before Auth0 SDK clears the session at /auth/logout.
+                Plain anchor — Auth0 v4 requires a full document navigation
+                to /auth/logout so the proxy can execute the sign-out flow.
               */}
-              <a href="/api/auth/audit-logout">
+              <a href="/auth/logout">
                 <LogOut aria-hidden="true" />
                 Sign out
               </a>

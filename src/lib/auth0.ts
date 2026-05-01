@@ -1,5 +1,4 @@
 import { Auth0Client } from "@auth0/nextjs-auth0/server";
-import { buildLoginCallbackResponse } from "@/lib/login-callback-redirect";
 
 export function isSecureCookieOrigin(): boolean {
   if (process.env.NODE_ENV === "production") return true;
@@ -36,18 +35,6 @@ export const auth0: Auth0Client =
   new Auth0Client({
     session: SESSION_CONFIG,
     transactionCookie: TRANSACTION_COOKIE_CONFIG,
-    // Override default callback redirect to land on
-    // /api/auth/audit-login first — that Node-runtime route writes the
-    // LOGIN audit row (Prisma is not available in middleware/edge), then
-    // 302s onward to the original returnTo. Audit failures never block
-    // the auth flow (route swallows errors). The `LOGOUT` counterpart
-    // is wired by flipping the Sign out hrefs to /api/auth/audit-logout.
-    async onCallback(error, ctx) {
-      return buildLoginCallbackResponse(error ?? null, {
-        returnTo: ctx?.returnTo,
-        appBaseUrl: ctx?.appBaseUrl,
-      });
-    },
   });
 
 if (process.env.NODE_ENV !== "production") {
