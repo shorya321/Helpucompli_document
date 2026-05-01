@@ -837,7 +837,7 @@
             "qrcode and @types/qrcode uninstalled from package.json",
             "QrCode import + render removed from generate-link-form share-result panel"
           ],
-          "passes": false
+          "passes": true
         },
         {
           "id": "F9.7",
