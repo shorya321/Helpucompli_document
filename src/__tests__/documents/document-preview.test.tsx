@@ -69,4 +69,37 @@ describe("DocumentPreview", () => {
     expect(html).toContain("No inline preview available");
     expect(html).toContain("unknown");
   });
+
+  it.each([
+    "video/mp4",
+    "video/webm",
+    "video/ogg",
+    "video/quicktime",
+  ])("treats %s as inline-eligible (no fallback dl)", (ct) => {
+    const html = renderToString(
+      <DocumentPreview {...base} contentType={ct} />,
+    );
+    expect(html).not.toContain("No inline preview available");
+  });
+
+  it.each([
+    "audio/mpeg",
+    "audio/mp4",
+    "audio/ogg",
+    "audio/wav",
+    "audio/webm",
+  ])("treats %s as inline-eligible (no fallback dl)", (ct) => {
+    const html = renderToString(
+      <DocumentPreview {...base} contentType={ct} />,
+    );
+    expect(html).not.toContain("No inline preview available");
+  });
+
+  it("still falls back for unrelated binary types like application/zip", () => {
+    const html = renderToString(
+      <DocumentPreview {...base} contentType="application/zip" />,
+    );
+    expect(html).toContain("No inline preview available");
+    expect(html).toContain("application/zip");
+  });
 });

@@ -74,6 +74,11 @@ export function buildCsp(nonce: string, opts: CspOptions): string {
     // surface than inline script injection.
     "style-src": ["'self'", "'unsafe-inline'"],
     "img-src": ["'self'", "data:", "blob:", "https:"],
+    // <video> / <audio> sources for inline document preview. S3 presigned
+    // GETs come from the regional bucket origin; without an explicit
+    // media-src, browsers fall back to default-src 'self' and silently
+    // refuse to decode the stream.
+    "media-src": ["'self'", "blob:", s3UploadOrigin],
     "font-src": ["'self'", "data:"],
     "connect-src": [
       "'self'",

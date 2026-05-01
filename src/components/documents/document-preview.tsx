@@ -17,19 +17,36 @@ interface DocumentPreviewProps {
 
 // Allowlist. Outside this set we render metadata only — no browser
 // attempt to interpret the bytes, no stored-XSS via an SVG or HTML
-// MIME.
+// MIME smuggled past <iframe> / <img>. <video> and <audio> are safe
+// to extend here: those elements only decode demuxable media
+// containers and do not execute embedded scripts or sniff for HTML.
 const INLINE_IMAGE_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/gif",
   "image/webp",
 ]);
+const INLINE_VIDEO_TYPES = new Set([
+  "video/mp4",
+  "video/webm",
+  "video/ogg",
+  "video/quicktime",
+]);
+const INLINE_AUDIO_TYPES = new Set([
+  "audio/mpeg",
+  "audio/mp4",
+  "audio/ogg",
+  "audio/wav",
+  "audio/webm",
+]);
 const INLINE_PDF_TYPE = "application/pdf";
 
 function isInlineType(ct: string | null): boolean {
   if (!ct) return false;
   if (ct === INLINE_PDF_TYPE) return true;
-  return INLINE_IMAGE_TYPES.has(ct);
+  if (INLINE_IMAGE_TYPES.has(ct)) return true;
+  if (INLINE_VIDEO_TYPES.has(ct)) return true;
+  return INLINE_AUDIO_TYPES.has(ct);
 }
 
 export function DocumentPreview({
@@ -75,6 +92,8 @@ export function DocumentPreview({
 
   const isPdf = contentType === INLINE_PDF_TYPE;
   const isImage = contentType ? INLINE_IMAGE_TYPES.has(contentType) : false;
+  const isVideo = contentType ? INLINE_VIDEO_TYPES.has(contentType) : false;
+  const isAudio = contentType ? INLINE_AUDIO_TYPES.has(contentType) : false;
 
   return (
     <Card>
@@ -108,6 +127,21 @@ export function DocumentPreview({
             alt={filename}
             className="border-border max-h-[min(75vh,42rem)] max-w-full rounded-md border object-contain"
           />
+        ) : null}
+
+        {isVideo && url ? (
+          <video
+            controls
+            preload="metadata"
+            src={url}
+            className="border-border max-h-[min(75vh,42rem)] w-full rounded-md border bg-black"
+          >
+            <track kind="captions" />
+          </video>
+        ) : null}
+
+        {isAudio && url ? (
+          <audio controls preload="metadata" src={url} className="w-full" />
         ) : null}
 
         {!isInlineType(contentType) ? (

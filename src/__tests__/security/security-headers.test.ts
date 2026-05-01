@@ -100,6 +100,15 @@ describe("buildCsp", () => {
     expect(csp).toMatch(/frame-src[^;]*https:\/\/\*\.s3\.us-west-2\.amazonaws\.com/);
   });
 
+  it("allows S3 read origin in media-src for video/audio preview", () => {
+    const csp = buildCsp(nonce, { isDev: false, awsRegion: "us-west-2" });
+    expect(csp).toMatch(/media-src[^;]*'self'/);
+    expect(csp).toMatch(/media-src[^;]*blob:/);
+    expect(csp).toMatch(
+      /media-src[^;]*https:\/\/\*\.s3\.us-west-2\.amazonaws\.com/,
+    );
+  });
+
   it("includes Auth0 origin in connect-src and form-action", () => {
     const csp = buildCsp(nonce, {
       isDev: false,
