@@ -11,6 +11,7 @@ describe("buildDocumentMenu", () => {
       prefix: "",
       bucketId: "b1",
       s3Key: "abc-report.pdf",
+      canModify: true,
       canHardDelete: false,
       canGenerateLink: true,
     });
@@ -18,17 +19,33 @@ describe("buildDocumentMenu", () => {
     expect(keys).toEqual(["preview", "download", "move", "copy", "link", "delete"]);
   });
 
-  it("omits link action for viewers (canGenerateLink=false)", () => {
+  it("omits link action for admins without canGenerateLink", () => {
     const menu = buildDocumentMenu({
       bucket: "my-bucket",
       prefix: "",
       bucketId: "b1",
       s3Key: "abc-report.pdf",
+      canModify: true,
       canHardDelete: false,
       canGenerateLink: false,
     });
     const keys = menu.map((m) => m.key);
     expect(keys).toEqual(["preview", "download", "move", "copy", "delete"]);
+  });
+
+  it("returns only View details for viewers (canModify=false)", () => {
+    const menu = buildDocumentMenu({
+      bucket: "my-bucket",
+      prefix: "",
+      bucketId: "b1",
+      s3Key: "abc-report.pdf",
+      canModify: false,
+      canHardDelete: false,
+      canGenerateLink: false,
+    });
+    expect(menu).toHaveLength(1);
+    expect(menu[0]!.key).toBe("preview");
+    expect(menu[0]!.label).toBe("View details");
   });
 
   it("appends hard-delete when canHardDelete=true", () => {
@@ -37,6 +54,7 @@ describe("buildDocumentMenu", () => {
       prefix: "",
       bucketId: "b1",
       s3Key: "abc-report.pdf",
+      canModify: true,
       canHardDelete: true,
       canGenerateLink: true,
     });
@@ -49,6 +67,7 @@ describe("buildDocumentMenu", () => {
       prefix: "",
       bucketId: "b 1",
       s3Key: "a b/c.pdf",
+      canModify: true,
       canHardDelete: false,
       canGenerateLink: true,
     });
@@ -64,6 +83,7 @@ describe("buildDocumentMenu", () => {
       prefix: "",
       bucketId: "b 1",
       s3Key: "a b/c.pdf",
+      canModify: true,
       canHardDelete: false,
       canGenerateLink: false,
     });
@@ -77,6 +97,7 @@ describe("buildDocumentMenu", () => {
       prefix: "folder/",
       bucketId: "b1",
       s3Key: "file.pdf",
+      canModify: true,
       canHardDelete: false,
       canGenerateLink: false,
     });
@@ -92,6 +113,7 @@ describe("buildDocumentMenu", () => {
       prefix: "",
       bucketId: "b1",
       s3Key: "file.pdf",
+      canModify: true,
       canHardDelete: false,
       canGenerateLink: false,
     });
@@ -106,6 +128,7 @@ describe("buildDocumentMenu", () => {
       prefix: "",
       bucketId: "b1",
       s3Key: "k",
+      canModify: true,
       canHardDelete: true,
       canGenerateLink: false,
     });

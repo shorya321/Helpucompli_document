@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { formatStorage } from "@/components/buckets/bucket-card";
-import { DownloadButton } from "@/components/documents/download-button";
 
 interface UploaderSummary {
   readonly id: string;
@@ -132,16 +131,6 @@ export function DocumentSearch({ initialBucketId }: DocumentSearchProps) {
       columnHelper.accessor((row) => row.uploadedBy.name ?? row.uploadedBy.email, {
         id: "uploader",
         header: "Uploader",
-      }),
-      columnHelper.display({
-        id: "actions",
-        header: "",
-        cell: (info) => (
-          <DownloadButton
-            bucketId={info.row.original.bucketId}
-            s3Key={info.row.original.s3Key}
-          />
-        ),
       }),
     ],
     [],

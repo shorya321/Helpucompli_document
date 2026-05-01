@@ -230,6 +230,7 @@ export default async function DocumentsPage({ searchParams }: PageProps) {
             <FileList
               bucket={inScope.name}
               bucketId={inScope.id}
+              canModify={role !== "viewer"}
               canHardDelete={role === "superadmin"}
               canGenerateLink={role === "superadmin" || role === "admin"}
               canDeleteFolder={role === "superadmin" || role === "admin"}

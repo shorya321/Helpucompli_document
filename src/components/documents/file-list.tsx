@@ -25,6 +25,7 @@ export type FileListEntry =
 interface FileListProps {
   readonly bucket: string;
   readonly bucketId?: string;
+  readonly canModify?: boolean;
   readonly canHardDelete?: boolean;
   readonly canGenerateLink?: boolean;
   readonly canDeleteFolder?: boolean;
@@ -39,6 +40,7 @@ interface FileRowProps {
   readonly bucket: string;
   readonly bucketId?: string;
   readonly prefix: string;
+  readonly canModify: boolean;
   readonly canHardDelete: boolean;
   readonly canGenerateLink: boolean;
 }
@@ -57,6 +59,7 @@ function FileRow({
   bucket,
   bucketId,
   prefix,
+  canModify,
   canHardDelete,
   canGenerateLink,
 }: FileRowProps) {
@@ -68,6 +71,7 @@ function FileRow({
         prefix,
         bucketId,
         s3Key: entry.key,
+        canModify,
         canHardDelete,
         canGenerateLink,
       })
@@ -181,6 +185,7 @@ function filenameFromKey(key: string): string {
 export function FileList({
   bucket,
   bucketId,
+  canModify = false,
   canHardDelete = false,
   canGenerateLink = false,
   canDeleteFolder = false,
@@ -265,6 +270,7 @@ export function FileList({
                 bucket={bucket}
                 bucketId={bucketId}
                 prefix={prefix}
+                canModify={canModify}
                 canHardDelete={canHardDelete}
                 canGenerateLink={canGenerateLink}
               />

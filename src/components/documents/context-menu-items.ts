@@ -10,6 +10,7 @@ export function buildDocumentMenu({
   prefix = "",
   bucketId,
   s3Key,
+  canModify,
   canHardDelete,
   canGenerateLink,
   basePath = "/documents",
@@ -18,6 +19,9 @@ export function buildDocumentMenu({
   readonly prefix?: string;
   readonly bucketId: string;
   readonly s3Key: string;
+  // Viewer role short-circuits to a single "View details" entry. Backend
+  // routes still enforce role; this just keeps the menu honest.
+  readonly canModify: boolean;
   readonly canHardDelete: boolean;
   readonly canGenerateLink: boolean;
   readonly basePath?: string;
@@ -33,6 +37,10 @@ export function buildDocumentMenu({
     `${basePath}?${browse}&op=${op}` +
     `&bucketId=${encodeURIComponent(bucketId)}` +
     `&s3Key=${encodeURIComponent(s3Key)}`;
+  // Viewers get only "View details" — Download/Move/Copy/Delete hidden.
+  if (!canModify) {
+    return [{ key: "preview", label: "View details", href: q("preview") }];
+  }
   // "Generate link" jumps to the /links page with the source document
   // preselected. Only admin+superadmin see the item — the /links page
   // renders an empty state for viewers, so hiding the entry here keeps
