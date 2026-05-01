@@ -27,15 +27,20 @@ function firstValue(v: unknown): string | undefined {
 export function parseUserListQuery(
   params: Record<string, unknown>,
 ): UserListQuery | null {
+  const emptyToUndef = (v: string | undefined): string | undefined =>
+    v === "" ? undefined : v;
+
+  const pageRaw = firstValue(params.page);
+  const pageSizeRaw = firstValue(params.pageSize);
+
   const raw = {
-    q: firstValue(params.q),
-    role: firstValue(params.role),
-    status: firstValue(params.status),
-    sort: firstValue(params.sort) ?? "createdAt",
-    dir: firstValue(params.dir) ?? "desc",
-    page: params.page !== undefined ? Number(firstValue(params.page)) : 1,
-    pageSize:
-      params.pageSize !== undefined ? Number(firstValue(params.pageSize)) : 10,
+    q: emptyToUndef(firstValue(params.q)),
+    role: emptyToUndef(firstValue(params.role)),
+    status: emptyToUndef(firstValue(params.status)),
+    sort: emptyToUndef(firstValue(params.sort)) ?? "createdAt",
+    dir: emptyToUndef(firstValue(params.dir)) ?? "desc",
+    page: pageRaw && pageRaw !== "" ? Number(pageRaw) : 1,
+    pageSize: pageSizeRaw && pageSizeRaw !== "" ? Number(pageSizeRaw) : 10,
   };
   const parsed = userListQuerySchema.safeParse(raw);
   return parsed.success ? parsed.data : null;

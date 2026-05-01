@@ -37,6 +37,26 @@ describe("parseUserListQuery", () => {
     expect(parseUserListQuery({ pageSize: "500" })).toBeNull();
     expect(parseUserListQuery({ q: "x".repeat(129) })).toBeNull();
   });
+
+  it("treats empty role/status as undefined (form 'All' option)", () => {
+    const parsed = parseUserListQuery({ q: "john", role: "", status: "" });
+    expect(parsed).not.toBeNull();
+    expect(parsed).toMatchObject({
+      q: "john",
+      role: undefined,
+      status: undefined,
+    });
+  });
+
+  it("treats empty page/pageSize as defaults", () => {
+    const parsed = parseUserListQuery({ page: "", pageSize: "" });
+    expect(parsed).toMatchObject({ page: 1, pageSize: 10 });
+  });
+
+  it("treats empty sort/dir as defaults", () => {
+    const parsed = parseUserListQuery({ sort: "", dir: "" });
+    expect(parsed).toMatchObject({ sort: "createdAt", dir: "desc" });
+  });
 });
 
 describe("listUsers", () => {
