@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { formatStorage } from "@/components/buckets/bucket-card";
 
 interface DocumentPreviewProps {
@@ -96,80 +95,79 @@ export function DocumentPreview({
   const isAudio = contentType ? INLINE_AUDIO_TYPES.has(contentType) : false;
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row flex-wrap items-baseline justify-between gap-2 space-y-0 pb-3">
+    <div className="flex flex-col gap-3">
+      <header className="flex flex-row flex-wrap items-baseline justify-between gap-2 pr-8">
         <h2 className="text-foreground m-0 break-all text-base font-semibold">
           {filename}
         </h2>
         <span className="text-muted-foreground text-xs tabular-nums">
           {contentType ?? "unknown"} · {formatStorage(sizeBytes)}
         </span>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        {err ? (
-          <p role="alert" className="text-destructive m-0 text-sm">
-            {err}
-          </p>
-        ) : null}
+      </header>
 
-        {isPdf && url ? (
-          <iframe
-            title={`Preview of ${filename}`}
-            src={url}
-            className="border-border h-[min(75vh,42rem)] w-full rounded-md border"
-          />
-        ) : null}
+      {err ? (
+        <p role="alert" className="text-destructive m-0 text-sm">
+          {err}
+        </p>
+      ) : null}
 
-        {isImage && url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={url}
-            alt={filename}
-            className="border-border max-h-[min(75vh,42rem)] max-w-full rounded-md border object-contain"
-          />
-        ) : null}
+      {isPdf && url ? (
+        <iframe
+          title={`Preview of ${filename}`}
+          src={url}
+          className="h-[min(75vh,42rem)] w-full rounded-md"
+        />
+      ) : null}
 
-        {isVideo && url ? (
-          <video
-            controls
-            preload="metadata"
-            src={url}
-            className="border-border max-h-[min(75vh,42rem)] w-full rounded-md border bg-black"
-          >
-            <track kind="captions" />
-          </video>
-        ) : null}
+      {isImage && url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={url}
+          alt={filename}
+          className="max-h-[min(75vh,42rem)] max-w-full rounded-md object-contain"
+        />
+      ) : null}
 
-        {isAudio && url ? (
-          <audio controls preload="metadata" src={url} className="w-full" />
-        ) : null}
+      {isVideo && url ? (
+        <video
+          controls
+          preload="metadata"
+          src={url}
+          className="max-h-[min(75vh,42rem)] w-full rounded-md bg-black"
+        >
+          <track kind="captions" />
+        </video>
+      ) : null}
 
-        {!isInlineType(contentType) ? (
-          <dl className="m-0 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-sm">
-            <dt className="text-muted-foreground font-semibold">Type</dt>
-            <dd className="text-foreground m-0 tabular-nums">
-              {contentType ?? "unknown"}
-            </dd>
-            <dt className="text-muted-foreground font-semibold">Size</dt>
-            <dd className="text-foreground m-0 tabular-nums">
-              {formatStorage(sizeBytes)}
-            </dd>
-            <dt className="text-muted-foreground font-semibold">Uploaded</dt>
-            <dd className="text-foreground m-0 tabular-nums">
-              {uploadedAt.toISOString()}
-            </dd>
-            {uploadedByName ? (
-              <>
-                <dt className="text-muted-foreground font-semibold">By</dt>
-                <dd className="text-foreground m-0">{uploadedByName}</dd>
-              </>
-            ) : null}
-            <dt className="text-muted-foreground col-span-2 mt-1 text-xs italic">
-              No inline preview available for this file type.
-            </dt>
-          </dl>
-        ) : null}
-      </CardContent>
-    </Card>
+      {isAudio && url ? (
+        <audio controls preload="metadata" src={url} className="w-full" />
+      ) : null}
+
+      {!isInlineType(contentType) ? (
+        <dl className="m-0 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-sm">
+          <dt className="text-muted-foreground font-semibold">Type</dt>
+          <dd className="text-foreground m-0 tabular-nums">
+            {contentType ?? "unknown"}
+          </dd>
+          <dt className="text-muted-foreground font-semibold">Size</dt>
+          <dd className="text-foreground m-0 tabular-nums">
+            {formatStorage(sizeBytes)}
+          </dd>
+          <dt className="text-muted-foreground font-semibold">Uploaded</dt>
+          <dd className="text-foreground m-0 tabular-nums">
+            {uploadedAt.toISOString()}
+          </dd>
+          {uploadedByName ? (
+            <>
+              <dt className="text-muted-foreground font-semibold">By</dt>
+              <dd className="text-foreground m-0">{uploadedByName}</dd>
+            </>
+          ) : null}
+          <dt className="text-muted-foreground col-span-2 mt-1 text-xs italic">
+            No inline preview available for this file type.
+          </dt>
+        </dl>
+      ) : null}
+    </div>
   );
 }
