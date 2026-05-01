@@ -292,6 +292,37 @@ describe("parseBucketListQuery", () => {
       parseBucketListQuery({ sort: ["name", "createdAt"] }),
     ).toEqual({ sort: { field: "name", dir: "asc" } });
   });
+
+  // Regression: the buckets filter form ships every field on submit,
+  // including blanks (e.g. `?sort=name&dir=asc&region=&status=inactive`
+  // when the user leaves Region empty). Treating "" as a real value
+  // makes Zod reject the whole bag (`.min(1)` on region, enums on the
+  // others) and the page silently drops every filter the user picked.
+  it("treats empty-string region as absent and keeps the rest of the filters", () => {
+    expect(
+      parseBucketListQuery({
+        sort: "name",
+        dir: "asc",
+        region: "",
+        status: "inactive",
+      }),
+    ).toEqual({
+      sort: { field: "name", dir: "asc" },
+      filters: { status: "inactive" },
+    });
+  });
+
+  it("treats an all-empty form submission as no filters", () => {
+    expect(
+      parseBucketListQuery({ sort: "", dir: "", region: "", status: "" }),
+    ).toEqual({});
+  });
+
+  it("treats empty-string status as absent", () => {
+    expect(
+      parseBucketListQuery({ region: "us-east-1", status: "" }),
+    ).toEqual({ filters: { region: "us-east-1" } });
+  });
 });
 
 describe("getBucketList — shape", () => {

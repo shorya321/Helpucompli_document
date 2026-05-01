@@ -93,11 +93,15 @@ export function parseBucketListQuery(
   params: Record<string, string | string[] | undefined>,
 ): BucketListOptions | null {
   // Collapse array-valued params to the first string — URLSearchParams
-  // tolerates duplicates but the schema wants single values.
+  // tolerates duplicates but the schema wants single values. Empty
+  // strings are coerced to absent: the GET filter form ships
+  // `region=&status=...` when the user leaves Region blank, and Zod's
+  // `.optional()` enums / `.min(1)` strings reject "" — without this
+  // coercion safeParse fails and every filter is silently dropped.
   const flat: Record<string, string> = {};
   for (const [k, v] of Object.entries(params)) {
-    if (typeof v === "string") flat[k] = v;
-    else if (Array.isArray(v) && typeof v[0] === "string") flat[k] = v[0];
+    const raw = typeof v === "string" ? v : Array.isArray(v) && typeof v[0] === "string" ? v[0] : undefined;
+    if (raw !== undefined && raw !== "") flat[k] = raw;
   }
   const parsed = bucketListQuerySchema.safeParse(flat);
   if (!parsed.success) return null;
