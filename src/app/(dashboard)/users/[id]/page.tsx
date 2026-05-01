@@ -12,12 +12,9 @@ import {
   getBucketList,
   type BucketSummary,
 } from "@/lib/bucket-list";
-import {
-  asAuditQueryPrisma,
-  queryAuditLogs,
-  type AuditQueryRow,
-} from "@/lib/audit-query";
+import { asAuditQueryPrisma, queryAuditLogs } from "@/lib/audit-query";
 import { BucketAccess } from "@/components/users/bucket-access";
+import { UserActivityPaged } from "@/components/users/user-activity-paged";
 import { RoleBadge, StatusBadge } from "@/components/users/user-table";
 import { formatDate, formatDateTime } from "@/lib/format-datetime";
 import { Button } from "@/components/ui/button";
@@ -84,7 +81,7 @@ export default async function UserDetailsPage({
       : Promise.resolve<ReadonlyArray<BucketSummary>>([]),
     queryAuditLogs(asAuditQueryPrisma(prisma), {
       userId: target.id,
-      limit: 25,
+      limit: 10,
     }),
   ]);
 
@@ -157,17 +154,11 @@ export default async function UserDetailsPage({
           <CardTitle className="text-base">Recent activity</CardTitle>
         </CardHeader>
         <CardContent>
-          {audit.rows.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              No audited activity for this user yet.
-            </p>
-          ) : (
-            <ul role="list" className="m-0 list-none p-0">
-              {audit.rows.map((row) => (
-                <ActivityItem key={row.id} row={row} />
-              ))}
-            </ul>
-          )}
+          <UserActivityPaged
+            userId={target.id}
+            initialRows={audit.rows}
+            initialNextCursor={audit.nextCursor}
+          />
         </CardContent>
       </Card>
     </section>
@@ -191,16 +182,3 @@ function DtDd({
   );
 }
 
-function ActivityItem({ row }: { readonly row: AuditQueryRow }) {
-  return (
-    <li className="border-border grid grid-cols-[9rem_1fr_auto] gap-3 border-b py-2 text-xs last:border-b-0">
-      <span className="text-muted-foreground tabular-nums">
-        {formatDateTime(row.createdAt)}
-      </span>
-      <span className="text-foreground font-semibold">{row.action}</span>
-      <span className="text-muted-foreground text-xs">
-        {row.targetType}:{row.targetId}
-      </span>
-    </li>
-  );
-}
