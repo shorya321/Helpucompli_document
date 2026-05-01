@@ -77,13 +77,8 @@ claude-progress.json
 # design mockups — static HTML prototypes, not shipped code
 design-mockups/
 
-# scratch / tool-generated / noisy docs
-docs/superpowers/
-docs/design.md
-docs/POST-LAUNCH-OBSERVATIONS.md
-
-# generated PDFs — rebuild from markdown via scripts/build-overview-pdf.sh
-docs/*.pdf
+# docs folder — kept locally only, not tracked in git
+docs/
 
 # pdfjs runtime — copied from node_modules by scripts/copy-pdfjs.mjs at
 # postinstall time. Hand-written viewer.html stays in git; the .mjs
