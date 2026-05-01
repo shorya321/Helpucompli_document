@@ -835,7 +835,7 @@
             "src/components/links/qr-code.tsx deleted",
             "src/__tests__/links/qr-code.test.ts deleted",
             "qrcode and @types/qrcode uninstalled from package.json",
-            "QrCode import + render removed from generate-link-form share-result panel"
+            "QrCode import + render removed from generate-link-form share-result panels"
           ],
           "passes": true
         },
