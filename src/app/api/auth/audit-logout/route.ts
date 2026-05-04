@@ -21,10 +21,21 @@ function readSid(session: { internal?: { sid?: unknown } } | null): string | nul
   return typeof sid === "string" && sid.length > 0 ? sid : null;
 }
 
+// Inbound `request.url` carries the container bind host (0.0.0.0:3000 in
+// Docker), which would produce an unreachable Location. Pin to APP_BASE_URL.
+function resolveLogoutBase(request: NextRequest): string {
+  const configured = process.env.APP_BASE_URL;
+  if (configured && configured.length > 0) return configured;
+  return request.nextUrl.origin;
+}
+
 function redirectToAuth0Logout(request: NextRequest): NextResponse {
   // 307 preserves method (anchor = GET, harmless either way) and tells
   // the browser this is temporary — Auth0 SDK owns /auth/logout.
-  return NextResponse.redirect(new URL(LOGOUT_REDIRECT, request.url), 307);
+  return NextResponse.redirect(
+    new URL(LOGOUT_REDIRECT, resolveLogoutBase(request)),
+    307,
+  );
 }
 
 // Records LOGOUT audit (best-effort), then hands off to Auth0 SDK's

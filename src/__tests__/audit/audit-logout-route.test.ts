@@ -34,6 +34,7 @@ const ORIGINAL_ENV = { ...process.env };
 
 beforeEach(() => {
   delete process.env.AUDIT_LOGIN_LOGOUT_ENABLED;
+  delete process.env.APP_BASE_URL;
 });
 
 afterEach(() => {
@@ -45,7 +46,11 @@ afterEach(() => {
 });
 
 function makeReq() {
-  return new NextRequest("http://localhost/api/auth/audit-logout", {
+  return makeReqAt("http://localhost/api/auth/audit-logout");
+}
+
+function makeReqAt(url: string) {
+  return new NextRequest(url, {
     method: "GET",
     headers: {
       "x-forwarded-for": "10.5.5.5",
@@ -135,5 +140,30 @@ describe("GET /api/auth/audit-logout", () => {
     expect(res.headers.get("location")).toMatch(/\/auth\/logout$/);
     expect(mocks.ensureUser).not.toHaveBeenCalled();
     expect(mocks.auditCreate).not.toHaveBeenCalled();
+  });
+
+  it("uses APP_BASE_URL origin even when inbound Host is the container bind (0.0.0.0:3000)", async () => {
+    process.env.APP_BASE_URL = "https://docs.helpucompli.com";
+    mocks.getSession.mockResolvedValue(null);
+
+    const res = await GET(
+      makeReqAt("http://0.0.0.0:3000/api/auth/audit-logout"),
+    );
+
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toBe(
+      "https://docs.helpucompli.com/auth/logout",
+    );
+  });
+
+  it("falls back to request origin when APP_BASE_URL is unset (dev only)", async () => {
+    mocks.getSession.mockResolvedValue(null);
+
+    const res = await GET(makeReq());
+
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toBe(
+      "http://localhost/auth/logout",
+    );
   });
 });
