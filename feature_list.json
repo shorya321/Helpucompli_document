@@ -612,7 +612,9 @@
             "Actions: LOGIN, LOGOUT, BUCKET_CREATE, BUCKET_DELETE, DOCUMENT_UPLOAD, DOCUMENT_DOWNLOAD, DOCUMENT_SOFT_DELETE, DOCUMENT_HARD_DELETE, DOCUMENT_MOVE, DOCUMENT_COPY, POLICY_CREATE, POLICY_UPDATE, POLICY_DELETE, LINK_GENERATE, LINK_ACCESS, LINK_DENIED, LINK_REVOKE, USER_INVITE, USER_ROLE_CHANGE, USER_DISABLE, USER_ENABLE",
             "Export TypeScript type from Prisma-generated client",
             "Verify enum is used consistently across all modules",
-            "Test each action type can be written to audit_logs"
+            "Test each action type can be written to audit_logs",
+            "LOGIN producer wired in src/lib/log-login-once.ts — called from src/app/(dashboard)/layout.tsx after ensureUser; idempotent dedup by session.internal.sid; AUDIT_LOGIN_LOGOUT_ENABLED=false kill-switch; never blocks render (try/catch swallows DB errors)",
+            "LOGOUT producer wired in src/app/api/auth/audit-logout/route.ts — Sign out hrefs in nav-user.tsx + profile-dropdown.tsx flipped to /api/auth/audit-logout; route writes LOGOUT row then 307s to /auth/logout (Auth0 SDK clears session); no onCallback override (avoids prior-attempt breakage)"
           ],
           "passes": true
         },
