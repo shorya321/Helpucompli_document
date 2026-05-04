@@ -13,6 +13,7 @@ export const auditActionSchema = z.enum([
   "DOCUMENT_DOWNLOAD",
   "DOCUMENT_SOFT_DELETE",
   "DOCUMENT_HARD_DELETE",
+  "DOCUMENT_RESTORE",
   "DOCUMENT_MOVE",
   "DOCUMENT_COPY",
   "POLICY_CREATE",
@@ -226,6 +227,7 @@ export type BadgeTone = "info" | "success" | "warning" | "danger";
 const TONE_MAP: Record<AuditAction, BadgeTone> = {
   LOGIN: "success",
   USER_ENABLE: "success",
+  DOCUMENT_RESTORE: "success",
   LOGOUT: "info",
   DOCUMENT_UPLOAD: "info",
   DOCUMENT_DOWNLOAD: "info",

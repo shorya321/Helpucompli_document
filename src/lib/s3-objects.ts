@@ -407,3 +407,68 @@ export async function deleteObjects(
   }
   return { deleted, errors };
 }
+
+// F6.7 — Restore a soft-deleted object by removing the latest delete
+// marker. Versioning is Enabled on every managed bucket (F3.2), so a
+// soft-delete leaves prior versions intact under a delete marker. We
+// pop ONLY the latest delete marker — older markers (if any) stay
+// untouched. If the object is not currently soft-deleted (no delete
+// marker at the top of the version stack), we throw NotDeletedError so
+// the caller maps to a 409 instead of an opaque AWS failure.
+export class NotDeletedError extends Error {
+  constructor(reason: string) {
+    super(reason);
+    this.name = "NotDeletedError";
+  }
+}
+
+export interface RestoreObjectInput {
+  bucket: string;
+  key: string;
+}
+
+export interface RestoreObjectResult {
+  restoredFromVersionId: string;
+}
+
+export async function restoreObject(
+  input: RestoreObjectInput,
+): Promise<RestoreObjectResult> {
+  assertBucket(input.bucket);
+  assertKey(input.key);
+
+  // Use the existing facade — same code path that F6.5 hard-delete UX
+  // uses to enumerate versions. We only need the first page: the latest
+  // delete marker for an exact-key match must appear before any older
+  // versions. Prefix-based listing can surface sibling keys (e.g. a key
+  // that starts with our key string), so we filter on exact key match.
+  const page = await listObjectVersions({
+    bucket: input.bucket,
+    prefix: input.key,
+    maxKeys: LIST_MAX_KEYS_CAP,
+  });
+
+  const marker = page.versions.find(
+    (v) =>
+      v.key === input.key && v.isDeleteMarker && v.isLatest && Boolean(v.versionId),
+  );
+  if (!marker || !marker.versionId) {
+    throw new NotDeletedError(
+      "No latest delete-marker for this key — object is not in a soft-deleted state",
+    );
+  }
+
+  // Removing a delete marker by its VersionId restores the prior
+  // version as the current object. Reuses the existing primitive so
+  // the SDK call shape matches F6.5 hard-delete and stays inside the
+  // proven facade.
+  const removed = await hardDeleteObjectVersion({
+    bucket: input.bucket,
+    key: input.key,
+    versionId: marker.versionId,
+  });
+
+  return {
+    restoredFromVersionId: removed.versionId ?? marker.versionId,
+  };
+}

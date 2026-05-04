@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FolderPlus } from "lucide-react";
+import { FolderPlus, Trash2 } from "lucide-react";
 import { auth0 } from "@/lib/auth0";
 import { resolveRole } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
@@ -26,6 +26,8 @@ import { DownloadButton } from "@/components/documents/download-button";
 import { DeleteFolderDialog } from "@/components/documents/delete-folder-dialog";
 import { DocumentPreviewDialog } from "@/components/documents/document-preview-dialog";
 import { DocumentSearch } from "@/components/documents/document-search";
+import { TrashView, type TrashEntry } from "@/components/documents/trash-view";
+import { ensureUser } from "@/lib/ensure-user";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +73,69 @@ export default async function DocumentsPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const q = parseBrowseQuery(params);
   const isSearchView = params.op === "search";
+  const isTrashView = params.trash === "1";
+
+  // F6.7 — Trash view. Mounted only on `?trash=1` opt-in. Listing,
+  // restore, and per-row purge controls live here. Default browser
+  // (no `?trash=1`) is unchanged so existing tests + behavior keep
+  // working bit-for-bit.
+  if (isTrashView) {
+    if (role !== "superadmin" && role !== "admin") {
+      return <EmptyPage message="You do not have access to the trash." />;
+    }
+    const dbUser = await ensureUser(prisma, {
+      session: session!,
+      role: role === "superadmin" ? "superadmin" : "admin",
+    });
+    let bucketIdScope: string[] | null = null;
+    if (role === "admin") {
+      const accessRows = await prisma.userBucketAccess.findMany({
+        where: { userId: dbUser.id },
+        select: { bucketId: true },
+      });
+      bucketIdScope = accessRows.map((r) => r.bucketId);
+      if (bucketIdScope.length === 0) {
+        return <EmptyPage message="Trash is empty." />;
+      }
+    }
+    const where = {
+      isDeleted: true,
+      ...(bucketIdScope !== null ? { bucketId: { in: bucketIdScope } } : {}),
+    };
+    const rows = await prisma.document.findMany({
+      where,
+      orderBy: { deletedAt: "desc" },
+      take: 200,
+      select: {
+        id: true,
+        bucketId: true,
+        s3Key: true,
+        filename: true,
+        contentType: true,
+        sizeBytes: true,
+        deletedAt: true,
+        bucket: { select: { name: true } },
+        deletedBy: { select: { email: true } },
+      },
+    });
+    const entries: TrashEntry[] = rows.map((r) => ({
+      id: r.id,
+      bucketId: r.bucketId,
+      bucketName: r.bucket.name,
+      s3Key: r.s3Key,
+      filename: r.filename,
+      contentType: r.contentType,
+      sizeBytes: r.sizeBytes ?? BigInt(0),
+      deletedAt: r.deletedAt,
+      deletedByEmail: r.deletedBy?.email ?? null,
+    }));
+    return (
+      <TrashView
+        entries={entries}
+        canHardDelete={role === "superadmin"}
+      />
+    );
+  }
 
   // Scope the sidebar bucket list the same way the bucket manager does:
   // viewers only see buckets they have UserBucketAccess rows for.
@@ -169,19 +234,35 @@ export default async function DocumentsPage({ searchParams }: PageProps) {
           <h1 className="text-foreground m-0 text-3xl font-semibold tracking-tight">
             Documents
           </h1>
+          {!inScope && (role === "superadmin" || role === "admin") ? (
+            <Button asChild variant="outline" size="sm">
+              <Link href="/documents?trash=1">
+                <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
+                Trash
+              </Link>
+            </Button>
+          ) : null}
           {inScope ? (
             <div className="flex items-center gap-2">
               {role === "superadmin" || role === "admin" ? (
-                <Button asChild variant="outline" size="sm">
-                  <Link
-                    href={`/documents?bucket=${encodeURIComponent(inScope.name)}${
-                      q.prefix ? `&prefix=${encodeURIComponent(q.prefix)}` : ""
-                    }&newFolder=1`}
-                  >
-                    <FolderPlus aria-hidden="true" className="h-3.5 w-3.5" />
-                    New folder
-                  </Link>
-                </Button>
+                <>
+                  <Button asChild variant="outline" size="sm">
+                    <Link
+                      href={`/documents?bucket=${encodeURIComponent(inScope.name)}${
+                        q.prefix ? `&prefix=${encodeURIComponent(q.prefix)}` : ""
+                      }&newFolder=1`}
+                    >
+                      <FolderPlus aria-hidden="true" className="h-3.5 w-3.5" />
+                      New folder
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/documents?trash=1">
+                      <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
+                      Trash
+                    </Link>
+                  </Button>
+                </>
               ) : null}
               <Button asChild variant={isSearchView ? "default" : "outline"} size="sm">
                 <Link

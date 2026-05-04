@@ -568,6 +568,20 @@
             "Test search and filter results"
           ],
           "passes": true
+        },
+        {
+          "id": "F6.9",
+          "description": "Document restore (recover from soft-delete)",
+          "steps": [
+            "Add DOCUMENT_RESTORE to AuditAction Prisma enum (additive ALTER TYPE migration) + Zod schema + categoryForAction + activity-feed TONE_MAP + audit-filters dropdown",
+            "Add restoreObject + NotDeletedError exports in src/lib/s3-objects.ts (reuses listObjectVersions + hardDeleteObjectVersion to remove the latest delete-marker only)",
+            "POST /api/s3/restore — admin+superadmin, 10/60s rate-limit (separate prefix from delete), idempotency: 409 on not-deleted / inactive bucket / no-delete-marker, transaction flips isDeleted/deletedAt/deletedById + writes DOCUMENT_RESTORE audit row",
+            "GET /api/s3/trash — admin+superadmin, scoped to UserBucketAccess (admins) or all buckets (superadmin), pagination, optional ?bucketId filter",
+            "Trash UI: src/components/documents/restore-button.tsx + trash-view.tsx + ?trash=1 conditional in (dashboard)/documents/page.tsx — default browser bit-for-bit unchanged",
+            "Toolbar 'Trash' button renders for admin+superadmin in both no-bucket-selected and in-scope states",
+            "Tests: 5 restoreObject pure-logic + 14 restore-route + 7 trash-route — full suite 1901/1901 GREEN"
+          ],
+          "passes": true
         }
       ]
     },

@@ -39,6 +39,7 @@ export function categoryForAction(action: AuditAction): ActivityCategory {
     case "DOCUMENT_DOWNLOAD":
     case "DOCUMENT_SOFT_DELETE":
     case "DOCUMENT_HARD_DELETE":
+    case "DOCUMENT_RESTORE":
     case "DOCUMENT_MOVE":
     case "DOCUMENT_COPY":
       return "document";
