@@ -346,6 +346,119 @@ describe("F3.4 — softDeleteObject / hardDeleteObjectVersion", () => {
   });
 });
 
+describe("F6.7 — restoreObject", () => {
+  beforeEach(() => vi.unstubAllEnvs());
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.doUnmock("@/lib/s3");
+    vi.resetModules();
+  });
+
+  it("removes the latest delete-marker for the key and returns its versionId", async () => {
+    stubAll();
+    const send = vi.fn(async (cmd: object) => {
+      if (cmd instanceof ListObjectVersionsCommand) {
+        return {
+          Versions: [
+            { Key: "k.pdf", VersionId: "v1", IsLatest: false, Size: 100, LastModified: new Date("2026-04-01") },
+          ],
+          DeleteMarkers: [
+            { Key: "k.pdf", VersionId: "dm-latest", IsLatest: true, LastModified: new Date("2026-04-15") },
+          ],
+          IsTruncated: false,
+        };
+      }
+      if (cmd instanceof DeleteObjectCommand) {
+        return { DeleteMarker: false, VersionId: "dm-latest" };
+      }
+      return {};
+    });
+    const { restoreObject } = await importObjects(send);
+    const res = await restoreObject({ bucket: "b", key: "k.pdf" });
+    expect(res.restoredFromVersionId).toBe("dm-latest");
+    const deletes = commandCalls(send, DeleteObjectCommand);
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0]!.input.Bucket).toBe("b");
+    expect(deletes[0]!.input.Key).toBe("k.pdf");
+    expect(deletes[0]!.input.VersionId).toBe("dm-latest");
+  });
+
+  it("ignores delete markers belonging to sibling keys with the same prefix", async () => {
+    stubAll();
+    const send = vi.fn(async (cmd: object) => {
+      if (cmd instanceof ListObjectVersionsCommand) {
+        return {
+          Versions: [],
+          DeleteMarkers: [
+            { Key: "k.pdf.bak", VersionId: "dm-sibling", IsLatest: true, LastModified: new Date("2026-04-15") },
+            { Key: "k.pdf", VersionId: "dm-self", IsLatest: true, LastModified: new Date("2026-04-15") },
+          ],
+          IsTruncated: false,
+        };
+      }
+      return { DeleteMarker: false, VersionId: "dm-self" };
+    });
+    const { restoreObject } = await importObjects(send);
+    const res = await restoreObject({ bucket: "b", key: "k.pdf" });
+    expect(res.restoredFromVersionId).toBe("dm-self");
+    const deletes = commandCalls(send, DeleteObjectCommand);
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0]!.input.VersionId).toBe("dm-self");
+  });
+
+  it("throws NotDeletedError when no latest delete-marker exists", async () => {
+    stubAll();
+    const send = vi.fn(async (cmd: object) => {
+      if (cmd instanceof ListObjectVersionsCommand) {
+        return {
+          Versions: [
+            { Key: "k.pdf", VersionId: "v1", IsLatest: true, Size: 100, LastModified: new Date("2026-04-01") },
+          ],
+          DeleteMarkers: [],
+          IsTruncated: false,
+        };
+      }
+      return {};
+    });
+    const { restoreObject, NotDeletedError } = await importObjects(send);
+    await expect(restoreObject({ bucket: "b", key: "k.pdf" })).rejects.toBeInstanceOf(
+      NotDeletedError,
+    );
+    expect(commandCalls(send, DeleteObjectCommand)).toHaveLength(0);
+  });
+
+  it("throws NotDeletedError when delete marker is not the latest version", async () => {
+    stubAll();
+    const send = vi.fn(async (cmd: object) => {
+      if (cmd instanceof ListObjectVersionsCommand) {
+        return {
+          Versions: [
+            { Key: "k.pdf", VersionId: "v2", IsLatest: true, Size: 100, LastModified: new Date("2026-04-20") },
+          ],
+          DeleteMarkers: [
+            { Key: "k.pdf", VersionId: "dm-old", IsLatest: false, LastModified: new Date("2026-04-15") },
+          ],
+          IsTruncated: false,
+        };
+      }
+      return {};
+    });
+    const { restoreObject, NotDeletedError } = await importObjects(send);
+    await expect(restoreObject({ bucket: "b", key: "k.pdf" })).rejects.toBeInstanceOf(
+      NotDeletedError,
+    );
+    expect(commandCalls(send, DeleteObjectCommand)).toHaveLength(0);
+  });
+
+  it("rejects empty bucket / key / traversal segments", async () => {
+    stubAll();
+    const { restoreObject } = await importObjects();
+    await expect(restoreObject({ bucket: "", key: "k" })).rejects.toThrow();
+    await expect(restoreObject({ bucket: "b", key: "" })).rejects.toThrow();
+    await expect(restoreObject({ bucket: "b", key: "../etc" })).rejects.toThrow();
+  });
+});
+
 describe("F3.4 — deleteObjects (bulk)", () => {
   beforeEach(() => vi.unstubAllEnvs());
   afterEach(() => {

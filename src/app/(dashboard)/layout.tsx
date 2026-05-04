@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { auth0 } from "@/lib/auth0";
 import { resolveRole } from "@/lib/auth-guard";
 import { ensureUser } from "@/lib/ensure-user";
+import { logLoginOnce } from "@/lib/log-login-once";
 import { prisma } from "@/lib/prisma";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
@@ -32,6 +34,15 @@ export default async function DashboardLayout({ children }: LayoutProps) {
   // passed to NavUser so the Account dropdown link can route to the
   // canonical user detail page (/users/[id]).
   const dbUser = await ensureUser(prisma, { session, role });
+
+  // Best-effort, idempotent LOGIN audit row keyed by session.internal.sid.
+  // Helper swallows errors and respects AUDIT_LOGIN_LOGOUT_ENABLED=false
+  // kill-switch; never blocks render.
+  await logLoginOnce(prisma, session, {
+    userDbId: dbUser.id,
+    headers: await headers(),
+  });
+
   const user = {
     id: dbUser.id,
     name: (session.user.name as string | null | undefined) ?? null,

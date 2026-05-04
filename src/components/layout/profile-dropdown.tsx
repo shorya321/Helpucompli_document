@@ -92,8 +92,10 @@ export function ProfileDropdown({ user, role }: ProfileDropdownProps) {
           asChild
           className="text-destructive focus:bg-destructive/10 focus:text-destructive"
         >
-          {/* Plain anchor — Auth0 v4 proxy needs a document navigation. */}
-          <a href="/auth/logout">
+          {/* Plain anchor — Auth0 v4 proxy needs a document navigation.
+              Routes through /api/auth/audit-logout so the LOGOUT audit
+              row is written before Auth0 SDK clears the session. */}
+          <a href="/api/auth/audit-logout">
             <LogOut aria-hidden="true" />
             Sign out
           </a>
