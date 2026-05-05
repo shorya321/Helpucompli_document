@@ -225,15 +225,6 @@ export async function resolveAndAuthorizeLink(
     }
   }
 
-  // Embeddable links (the per-link `allowPublicEmbed` toggle) treat
-  // `maxDownloads` as advisory only — each WP / Notion page render
-  // produces multiple viewer hits (server-side oEmbed discovery +
-  // browser iframe load), and counting them would exhaust any
-  // finite cap on a handful of legitimate page views. Force the cap
-  // to `null` for the status computation so a row with
-  // downloadCount >= maxDownloads is still served. Revoke +
-  // expiresAt are still respected.
-  //
   // The `allowPublicEmbed` flag is the SOLE embed-enable signal.
   // `policy.allowedDomains` is enforced strictly by the policy
   // engine per F9.3 / F8.7 ("If ANY check fails: return 403"). When
@@ -242,14 +233,18 @@ export async function resolveAndAuthorizeLink(
   // iframe it. The two responsibilities never collapse — a domain-
   // restricted policy on a non-embeddable link must still gate
   // direct browser navigation.
+  //
+  // `maxDownloads` is enforced strictly for both embed and non-embed
+  // links: each canonical /l/<hash> hit increments the counter once,
+  // /api/oembed does not increment, and /raw passes
+  // isSubResource=true to skip increment. So a configured cap of N
+  // means at most N parent-page renders, matching admin intent.
   const isEmbeddableLink = link.allowPublicEmbed === true;
   const status = computeLinkStatus({
     isRevoked: link.isRevoked as boolean,
     expiresAt: (link.expiresAt as Date | null) ?? null,
     downloadCount: link.downloadCount as number,
-    maxDownloads: isEmbeddableLink
-      ? null
-      : ((link.maxDownloads as number | null) ?? null),
+    maxDownloads: (link.maxDownloads as number | null) ?? null,
   });
   if (status !== "active" || !link.document || link.document.isDeleted) {
     await writeAudit(
@@ -363,56 +358,46 @@ export async function resolveAndAuthorizeLink(
   //     Iframely media, og:image discovery) NEVER increment. Each
   //     parent render pulls N media assets; counting them would
   //     multiply the dashboard view count by N.
-  //   - Embed primary access (`/l/<hash>` HTML viewer or 302 download
-  //     on a link with `allowPublicEmbed=true`): unconditional
-  //     increment, no `maxDownloads` cap WHERE. Cap stays advisory
-  //     so a finite `maxDownloads` cannot exhaust on a handful of
-  //     legitimate WP/Notion page renders. Lifecycle = revoke +
-  //     `expiresAt` (unchanged contract).
-  //   - Non-embed primary access: cap-gated `updateMany` exactly as
-  //     before — race-loss returns `forbidden` with `LINK_DENIED
-  //     reason='race-lost-or-just-exhausted'`. Byte-identical.
+  //   - Primary access (canonical /l/<hash> HTML viewer or 302
+  //     download): cap-gated `updateMany` — race-loss returns
+  //     `forbidden` with `LINK_DENIED reason='race-lost-or-just-
+  //     exhausted'`. Applies uniformly to embed and non-embed: each
+  //     parent render is one increment, /api/oembed never increments,
+  //     so a configured maxDownloads of N admits exactly N renders.
   // Audit row below fires for every accepted access regardless.
   const isSubResource = options.isSubResource === true;
   const incrementedCounter = !isSubResource;
   if (!isSubResource) {
-    if (isPublicEmbed) {
-      await prisma.generatedLink.update({
-        where: { id: link.id },
-        data: { downloadCount: { increment: 1 } },
-      });
-    } else {
-      const cap = link.maxDownloads as number | null;
-      const now = new Date();
-      const where: Record<string, unknown> = {
-        id: link.id,
-        isRevoked: false,
-        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-      };
-      if (cap !== null) where.downloadCount = { lt: cap };
-      const updated = await prisma.generatedLink.updateMany({
-        where: where as Parameters<
-          typeof prisma.generatedLink.updateMany
-        >[0]["where"],
-        data: { downloadCount: { increment: 1 } },
-      });
-      if (updated.count === 0) {
-        await writeAudit(
-          "LINK_DENIED",
-          {
-            id: link.id,
-            documentId: link.documentId,
-            policyId: link.policyId,
-          },
-          {
-            ipAddress,
-            userAgent,
-            userId: dbUserId,
-            reason: "race-lost-or-just-exhausted",
-          },
-        );
-        return { kind: "forbidden" };
-      }
+    const cap = link.maxDownloads as number | null;
+    const now = new Date();
+    const where: Record<string, unknown> = {
+      id: link.id,
+      isRevoked: false,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    };
+    if (cap !== null) where.downloadCount = { lt: cap };
+    const updated = await prisma.generatedLink.updateMany({
+      where: where as Parameters<
+        typeof prisma.generatedLink.updateMany
+      >[0]["where"],
+      data: { downloadCount: { increment: 1 } },
+    });
+    if (updated.count === 0) {
+      await writeAudit(
+        "LINK_DENIED",
+        {
+          id: link.id,
+          documentId: link.documentId,
+          policyId: link.policyId,
+        },
+        {
+          ipAddress,
+          userAgent,
+          userId: dbUserId,
+          reason: "race-lost-or-just-exhausted",
+        },
+      );
+      return { kind: "forbidden" };
     }
   }
 

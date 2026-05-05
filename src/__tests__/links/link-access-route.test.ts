@@ -343,38 +343,39 @@ describe("GET /api/links/[hash]", () => {
     expect(presignArgs.ttlSeconds).toBe(1200);
   });
 
-  // ---- allowPublicEmbed=true: maxDownloads cap stays advisory; counter
-  // now increments via prisma.update (not updateMany). The cap WHERE was
-  // dropped from the embed branch so a finite `maxDownloads` cannot
-  // exhaust on a WP/Notion render's multi-hit traffic. Counter rises so
-  // the dashboard reflects real activity (was previously stuck at 0).
+  // ---- allowPublicEmbed=true: maxDownloads cap is enforced strictly,
+  // identical to the non-embed path. Each canonical /l/<hash> hit is
+  // exactly one increment (sub-resource /raw fetches and /api/oembed
+  // discovery never increment), so a configured cap of N admits N
+  // parent-page renders before exhausting.
 
-  it("public-embed link calls update with { increment: 1 } (no cap WHERE)", async () => {
+  it("public-embed link calls cap-gated updateMany (same as non-embed)", async () => {
     mocks.findLink.mockResolvedValueOnce(
-      linkRow({ allowPublicEmbed: true }),
+      linkRow({ allowPublicEmbed: true, maxDownloads: 5, downloadCount: 0 }),
     );
     mocks.resolvePolicy.mockResolvedValueOnce(defaultEffective);
     mocks.enforcePolicy.mockReturnValueOnce(allow);
+    mocks.updateMany.mockResolvedValueOnce({ count: 1 });
     mocks.presignGetUrl.mockResolvedValueOnce("https://s3/x?sig=1");
     const res = await GET(req(), {
       params: params("tok_abc_with_long_enough_token_value_xyz"),
     });
     expect(res.status).toBe(302);
-    // Embed path uses unconditional `update`, not cap-gated `updateMany`.
-    expect(mocks.updateMany).not.toHaveBeenCalled();
-    expect(mocks.decrementCount).toHaveBeenCalledOnce();
-    const args = mocks.decrementCount.mock.calls[0]?.[0] as {
-      where: { id: string };
-      data: { downloadCount: { increment?: number; decrement?: number } };
+    expect(mocks.updateMany).toHaveBeenCalledOnce();
+    const args = mocks.updateMany.mock.calls[0]?.[0] as {
+      where: Record<string, unknown>;
+      data: { downloadCount: { increment?: number } };
     };
     expect(args.where.id).toBe("link-1");
+    expect(args.where.downloadCount).toEqual({ lt: 5 });
+    expect(args.where.isRevoked).toBe(false);
     expect(args.data.downloadCount).toEqual({ increment: 1 });
     expect(mocks.auditCreate.mock.calls[0]?.[0].data.action).toBe(
       "LINK_ACCESS",
     );
   });
 
-  it("public-embed link with downloadCount === maxDownloads STILL serves + increments (cap stays advisory)", async () => {
+  it("public-embed link with downloadCount === maxDownloads returns 403 (cap is strict)", async () => {
     mocks.findLink.mockResolvedValueOnce(
       linkRow({
         allowPublicEmbed: true,
@@ -382,44 +383,71 @@ describe("GET /api/links/[hash]", () => {
         maxDownloads: 5,
       }),
     );
+    const res = await GET(req(), {
+      params: params("tok_abc_with_long_enough_token_value_xyz"),
+    });
+    expect(res.status).toBe(403);
+    expect(mocks.updateMany).not.toHaveBeenCalled();
+    expect(mocks.presignGetUrl).not.toHaveBeenCalled();
+  });
+
+  it("public-embed link with maxDownloads=null still increments unconditionally (legacy unlimited)", async () => {
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({ allowPublicEmbed: true, maxDownloads: null }),
+    );
     mocks.resolvePolicy.mockResolvedValueOnce(defaultEffective);
     mocks.enforcePolicy.mockReturnValueOnce(allow);
+    mocks.updateMany.mockResolvedValueOnce({ count: 1 });
     mocks.presignGetUrl.mockResolvedValueOnce("https://s3/x?sig=1");
     const res = await GET(req(), {
       params: params("tok_abc_with_long_enough_token_value_xyz"),
     });
     expect(res.status).toBe(302);
-    // Counter rises past the advisory cap — dashboard sees real traffic.
-    expect(mocks.decrementCount).toHaveBeenCalledOnce();
-    const args = mocks.decrementCount.mock.calls[0]?.[0] as {
-      data: { downloadCount: { increment?: number } };
+    const args = mocks.updateMany.mock.calls[0]?.[0] as {
+      where: Record<string, unknown>;
     };
-    expect(args.data.downloadCount).toEqual({ increment: 1 });
+    // No cap WHERE clause when maxDownloads is null.
+    expect(args.where.downloadCount).toBeUndefined();
   });
 
-  it("public-embed link rolls back counter when presign fails (decrement matches the embed-path increment)", async () => {
+  it("public-embed link with race-loss on cap-gated update returns 403", async () => {
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({ allowPublicEmbed: true, downloadCount: 4, maxDownloads: 5 }),
+    );
+    mocks.resolvePolicy.mockResolvedValueOnce(defaultEffective);
+    mocks.enforcePolicy.mockReturnValueOnce(allow);
+    mocks.updateMany.mockResolvedValueOnce({ count: 0 });
+    const res = await GET(req(), {
+      params: params("tok_abc_with_long_enough_token_value_xyz"),
+    });
+    expect(res.status).toBe(403);
+    expect(mocks.presignGetUrl).not.toHaveBeenCalled();
+    expect(mocks.auditCreate.mock.calls.at(-1)?.[0].data.action).toBe(
+      "LINK_DENIED",
+    );
+    expect(mocks.auditCreate.mock.calls.at(-1)?.[0].data.metadata.reason).toBe(
+      "race-lost-or-just-exhausted",
+    );
+  });
+
+  it("public-embed link rolls back counter when presign fails", async () => {
     mocks.findLink.mockResolvedValueOnce(
       linkRow({ allowPublicEmbed: true }),
     );
     mocks.resolvePolicy.mockResolvedValueOnce(defaultEffective);
     mocks.enforcePolicy.mockReturnValueOnce(allow);
-    // Both the increment update and the rollback update need a thenable
-    // return value because the rollback chains `.catch(() => {})`.
+    mocks.updateMany.mockResolvedValueOnce({ count: 1 });
     mocks.decrementCount.mockResolvedValue({});
     mocks.presignGetUrl.mockRejectedValueOnce(new Error("presign-failed"));
     const res = await GET(req(), {
       params: params("tok_abc_with_long_enough_token_value_xyz"),
     });
     expect(res.status).toBe(403);
-    // Two `update` calls on the same mock: increment then rollback decrement.
-    expect(mocks.decrementCount).toHaveBeenCalledTimes(2);
-    const inc = mocks.decrementCount.mock.calls[0]?.[0] as {
-      data: { downloadCount: { increment?: number; decrement?: number } };
+    expect(mocks.updateMany).toHaveBeenCalledOnce();
+    expect(mocks.decrementCount).toHaveBeenCalledTimes(1);
+    const dec = mocks.decrementCount.mock.calls[0]?.[0] as {
+      data: { downloadCount: { decrement?: number } };
     };
-    const dec = mocks.decrementCount.mock.calls[1]?.[0] as {
-      data: { downloadCount: { increment?: number; decrement?: number } };
-    };
-    expect(inc.data.downloadCount).toEqual({ increment: 1 });
     expect(dec.data.downloadCount).toEqual({ decrement: 1 });
     expect(mocks.auditCreate.mock.calls.at(-1)?.[0].data.action).toBe(
       "LINK_DENIED",
@@ -454,6 +482,7 @@ describe("GET /api/links/[hash]", () => {
     );
     mocks.resolvePolicy.mockResolvedValueOnce(defaultEffective);
     mocks.enforcePolicy.mockReturnValueOnce(allow);
+    mocks.updateMany.mockResolvedValueOnce({ count: 1 });
     mocks.presignGetUrl.mockResolvedValueOnce("https://s3/x?sig=1");
     await GET(req(), {
       params: params("tok_abc_with_long_enough_token_value_xyz"),
@@ -589,6 +618,7 @@ describe("GET /api/links/[hash]", () => {
       }),
     );
     mocks.enforcePolicy.mockReturnValueOnce(allow);
+    mocks.updateMany.mockResolvedValueOnce({ count: 1 });
     mocks.presignGetUrl.mockResolvedValueOnce("https://s3/x?sig=1");
     await GET(
       req({
@@ -627,6 +657,7 @@ describe("GET /api/links/[hash]", () => {
       }),
     );
     mocks.enforcePolicy.mockReturnValueOnce(allow);
+    mocks.updateMany.mockResolvedValueOnce({ count: 1 });
     mocks.presignGetUrl.mockResolvedValueOnce("https://s3/x?sig=1");
     await GET(
       new NextRequest(
