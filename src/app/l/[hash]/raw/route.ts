@@ -31,12 +31,18 @@ interface RouteCtx {
   readonly params: Promise<{ hash: string }>;
 }
 
+// `etag` and `last-modified` deliberately NOT forwarded. With them
+// present, well-behaved intermediaries (Iframely / Circle / WP unfurl
+// CDNs) may issue conditional GETs and serve stale 304s past link
+// expiry — surfacing as "expired link still works on embed". Stripping
+// the validators leaves `Cache-Control: no-store, no-cache,
+// must-revalidate` (set below) as the sole caching directive, which
+// conformant proxies treat as terminal. Range seeking is unaffected
+// (Content-Range stays in passthrough).
 const PASSTHROUGH_HEADERS = [
   "content-length",
   "accept-ranges",
   "content-range",
-  "etag",
-  "last-modified",
 ] as const;
 
 // Build an RFC 5987 / RFC 6266 `Content-Disposition: inline` header.
@@ -72,7 +78,10 @@ function forbidden(): NextResponse {
   return new NextResponse(null, {
     status: 403,
     headers: {
-      "Cache-Control": "no-store, private",
+      "Cache-Control":
+        "private, no-store, no-cache, max-age=0, must-revalidate",
+      "Pragma": "no-cache",
+      "Expires": "0",
       "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
       "Access-Control-Allow-Origin": "*",
     },
@@ -83,7 +92,10 @@ function tooManyRequests(retryAfterSec: number): NextResponse {
   return new NextResponse(null, {
     status: 429,
     headers: {
-      "Cache-Control": "no-store, private",
+      "Cache-Control":
+        "private, no-store, no-cache, max-age=0, must-revalidate",
+      "Pragma": "no-cache",
+      "Expires": "0",
       "Retry-After": String(retryAfterSec),
       "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
       "Access-Control-Allow-Origin": "*",
@@ -202,7 +214,19 @@ export async function GET(
     document.contentType ?? "application/octet-stream",
   );
   headers.set("Content-Disposition", buildContentDisposition(document.filename));
-  headers.set("Cache-Control", "private, no-store");
+  // Belt-and-suspenders against external CDN caches (Iframely, Circle,
+  // WP unfurl) that previously kept serving bytes after link expiry.
+  // `no-store` forbids storage; `no-cache` forces revalidation;
+  // `must-revalidate` blocks stale-on-error fallback. Pragma + Expires
+  // cover HTTP/1.0 / legacy proxies. With etag/last-modified stripped
+  // above, there is no validator to revalidate against — every fetch
+  // re-hits this route and re-runs `resolveAndAuthorizeLink`.
+  headers.set(
+    "Cache-Control",
+    "private, no-store, no-cache, max-age=0, must-revalidate",
+  );
+  headers.set("Pragma", "no-cache");
+  headers.set("Expires", "0");
   headers.set("Referrer-Policy", "no-referrer");
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("Access-Control-Allow-Origin", "*");

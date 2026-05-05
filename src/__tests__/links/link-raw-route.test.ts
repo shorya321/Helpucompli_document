@@ -108,7 +108,11 @@ describe("GET /l/[hash]/raw — same-origin streaming proxy", () => {
     const res = await GET(req(), { params: params(TOKEN) });
     expect(res.status).toBe(403);
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(res.headers.get("cache-control")).toBe("no-store, private");
+    expect(res.headers.get("cache-control")).toBe(
+      "private, no-store, no-cache, max-age=0, must-revalidate",
+    );
+    expect(res.headers.get("pragma")).toBe("no-cache");
+    expect(res.headers.get("expires")).toBe("0");
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
   });
 
@@ -141,13 +145,38 @@ describe("GET /l/[hash]/raw — same-origin streaming proxy", () => {
     expect(res.headers.get("content-disposition")).toContain(
       'filename="Spec.pdf"',
     );
-    expect(res.headers.get("cache-control")).toBe("private, no-store");
+    expect(res.headers.get("cache-control")).toBe(
+      "private, no-store, no-cache, max-age=0, must-revalidate",
+    );
+    expect(res.headers.get("pragma")).toBe("no-cache");
+    expect(res.headers.get("expires")).toBe("0");
     expect(res.headers.get("referrer-policy")).toBe("no-referrer");
     expect(res.headers.get("x-content-type-options")).toBe("nosniff");
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
     expect(res.headers.get("content-length")).toBe("8");
     const text = await res.text();
     expect(text).toBe("PDFBYTES");
+  });
+
+  it("does NOT forward etag or last-modified from S3 (prevents external CDN conditional revalidation past expiry)", async () => {
+    mocks.resolveAndAuthorizeLink.mockResolvedValueOnce(okResult());
+    fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      fakeS3Response({
+        status: 200,
+        body: "x",
+        headers: {
+          etag: '"deadbeef"',
+          "last-modified": "Wed, 01 Jan 2025 00:00:00 GMT",
+          "content-length": "1",
+        },
+      }),
+    );
+    const res = await GET(req(), { params: params(TOKEN) });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("etag")).toBeNull();
+    expect(res.headers.get("last-modified")).toBeNull();
+    // Content-Length still passes through (needed for inline rendering).
+    expect(res.headers.get("content-length")).toBe("1");
   });
 
   it("forwards the Range header upstream and proxies a 206 + Content-Range response", async () => {
