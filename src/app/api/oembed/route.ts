@@ -86,9 +86,21 @@ const DEFAULT_HEIGHT = 600;
 const MIN_DIM = 200;
 const MAX_DIM = 4096;
 
-// 60s cache TTL on the response so a busy WordPress site does not hit
-// us 100 times for the same URL. Per oEmbed spec recommendation.
-const CACHE_AGE_SEC = 300;
+// oEmbed JSON is NOT cached at any layer: revoke / expiresAt / cap
+// changes must propagate on the next render. A previous 5-minute
+// `public, s-maxage=300` window let Iframely-backed surfaces (Circle,
+// Compass) keep serving the photo `url` field for up to 5 min after
+// admin revoke — and Compass's image-proxy CDN, in turn, would cache
+// the bytes from that URL on its own side, so the embed kept rendering
+// even though /raw correctly returned 403 on every fresh fetch. By
+// matching the strict no-store posture used on /l/<hash> and /raw, the
+// JSON is re-resolved each render, post-revoke we 404, and the embed
+// surface drops the photo URL on its next refresh. We cannot evict
+// already-stored bytes from a third-party image-proxy CDN; reducing
+// the JSON cache window is the bound we control.
+//
+// `cache_age: 0` is the explicit oEmbed-body hint matching the header.
+const CACHE_AGE_SEC = 0;
 
 const PROVIDER_NAME = "HelpUcompli Documents";
 
@@ -349,7 +361,15 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     status: 200,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": `public, max-age=${CACHE_AGE_SEC}, s-maxage=${CACHE_AGE_SEC}`,
+      // Strict no-store mirrors /l/<hash> and /l/<hash>/raw. Any cache
+      // window here translates directly into a "revoked image still
+      // shows" gap on Iframely-backed surfaces (see CACHE_AGE_SEC
+      // comment above). Pragma + Expires cover legacy proxies; with
+      // the JSON re-fetched on every render, our 404-on-revoke
+      // immediately tells the embed surface to drop the photo URL.
+      "Cache-Control": "private, no-store, no-cache, max-age=0, must-revalidate",
+      "Pragma": "no-cache",
+      "Expires": "0",
       "X-Content-Type-Options": "nosniff",
       // Do not advertise X-Frame-Options here — the response is JSON,
       // not framed content. Belt-and-suspenders against future code

@@ -198,7 +198,12 @@ describe("GET /api/oembed", () => {
     expect(body.title).toBe("Spec.pdf");
     expect(body.html).toMatch(/<iframe /);
     expect(body.html).toContain(`src="${SHARE_URL}"`);
-    expect(body.cache_age).toBe(300);
+    // cache_age=0 — explicit "do not cache" hint matching the
+    // Cache-Control: no-store header. Revoke / expiresAt / cap
+    // changes must propagate on the next render; previously 300 s
+    // let Iframely-backed surfaces serve a revoked photo URL for
+    // up to 5 minutes after admin revoke.
+    expect(body.cache_age).toBe(0);
   });
 
   it("200 photo response for image/png — url points to /raw with a long-lived raw-fetch token (raw bytes per oEmbed spec)", async () => {
@@ -235,7 +240,10 @@ describe("GET /api/oembed", () => {
     );
     expect(body.width).toBe(800);
     expect(body.height).toBe(600);
-    expect(body.cache_age).toBe(300);
+    // cache_age=0 here too — see rich-PDF response test for context.
+    // The photo branch is the path Iframely / Compass exercise for
+    // image MIMEs, so the no-cache hint matters most here.
+    expect(body.cache_age).toBe(0);
   });
 
   it("photo url's raw-fetch token is verifiable + bound to the link hash", async () => {
@@ -367,12 +375,28 @@ describe("GET /api/oembed", () => {
     expect(html).toMatch(/title="[^"]*&lt;script&gt;/);
   });
 
-  it("emits Cache-Control public + s-maxage so platform proxies can cache", async () => {
+  it("emits Cache-Control: no-store so platform proxies cannot serve a revoked embed past the next refresh", async () => {
+    // Previously this route emitted `public, max-age=300, s-maxage=300`
+    // so Iframely / WordPress could cache the JSON for 5 minutes.
+    // Side-effect: after admin revoke, Iframely-backed surfaces
+    // (Circle.so, Compass) kept handing the cached photo `url` to
+    // their own image-proxy CDN, which then cached the bytes — so a
+    // revoked image kept rendering on Compass even though /raw
+    // correctly returned 403 to every fresh fetch. Forcing oEmbed
+    // re-resolution on every render lets our 404-on-revoke propagate
+    // immediately. Pragma + Expires are belt-and-suspenders for
+    // HTTP/1.0 / legacy proxies, mirroring /l/<hash> + /raw.
     mocks.findLink.mockResolvedValueOnce(linkRow());
     const res = await GET(req(oembedUrl(SHARE_URL)));
     const cc = res.headers.get("cache-control") ?? "";
-    expect(cc).toContain("public");
-    expect(cc).toContain("s-maxage=300");
+    expect(cc).toContain("no-store");
+    expect(cc).toContain("no-cache");
+    expect(cc).toContain("must-revalidate");
+    expect(cc).toContain("private");
+    expect(cc).not.toContain("public");
+    expect(cc).not.toMatch(/s-maxage=[1-9]/);
+    expect(res.headers.get("pragma")).toBe("no-cache");
+    expect(res.headers.get("expires")).toBe("0");
   });
 
   it("audits LINK_OEMBED_FETCHED on success (best-effort, never blocks)", async () => {
