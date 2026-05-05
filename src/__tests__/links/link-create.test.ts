@@ -126,6 +126,7 @@ type Tx = {
   };
   accessPolicy: {
     findUnique: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
   };
   generatedLink: {
     create: ReturnType<typeof vi.fn>;
@@ -138,6 +139,11 @@ type Tx = {
 function makeStub(opts: {
   document?: Record<string, unknown> | null;
   policy?: Record<string, unknown> | null;
+  // Rows returned by accessPolicy.findMany during the inheritance
+  // fallback branch (policyId=null). Default = [] (no inherited policy)
+  // so existing tests preserve the legacy "policy=null → unlimited"
+  // shape they were written against.
+  inheritedRows?: Array<Record<string, unknown>>;
 } = {}) {
   const audit: Record<string, unknown>[] = [];
   const tx: Tx = {
@@ -146,6 +152,7 @@ function makeStub(opts: {
     },
     accessPolicy: {
       findUnique: vi.fn(async () => opts.policy ?? null),
+      findMany: vi.fn(async () => opts.inheritedRows ?? []),
     },
     generatedLink: {
       create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
@@ -380,6 +387,83 @@ describe("createLink", () => {
     );
     expect(result.expiresAt).not.toBeNull();
     expect(result.ttlSeconds).toBe(900);
+  });
+
+  it("policyId=null with bucket-inherited policy snapshots maxDownloads from inheritance", async () => {
+    // Reproduces the user-reported bug: policy created without max,
+    // edited later to set maxDownloads=3. Prior to the fix, the link
+    // generated with the default "Use inherited policy" option captured
+    // null cap and downloaded unlimited times.
+    const stub = makeStub({
+      document: baseDoc,
+      inheritedRows: [
+        {
+          id: "p-bucket",
+          targetType: "bucket",
+          targetValue: "alpha-bucket",
+          allowedDomains: [],
+          allowedIpRanges: [],
+          linkTtlSeconds: 900,
+          maxDownloads: 3,
+          requireAuth: false,
+        },
+      ],
+    });
+    const result = await createLink(stub.client, baseInput, ctx);
+    expect(result.maxDownloads).toBe(3);
+    const args = stub.tx.generatedLink.create.mock.calls[0]?.[0] as {
+      data: Record<string, unknown>;
+    };
+    expect(args.data.maxDownloads).toBe(3);
+    const meta = stub.audit[0]?.metadata as Record<string, unknown>;
+    expect(meta.resolvedPolicyId).toBe("p-bucket");
+  });
+
+  it("policyId=null with no inherited policy keeps maxDownloads=null (legacy unlimited path)", async () => {
+    const stub = makeStub({ document: baseDoc, inheritedRows: [] });
+    const result = await createLink(stub.client, baseInput, ctx);
+    expect(result.maxDownloads).toBeNull();
+    const meta = stub.audit[0]?.metadata as Record<string, unknown>;
+    expect(meta.resolvedPolicyId).toBeNull();
+  });
+
+  it("policyId=null with inherited policy + maxDownloadsOverride clamps to inherited cap", async () => {
+    const stub = makeStub({
+      document: baseDoc,
+      inheritedRows: [
+        {
+          id: "p-bucket",
+          targetType: "bucket",
+          targetValue: "alpha-bucket",
+          allowedDomains: [],
+          allowedIpRanges: [],
+          linkTtlSeconds: 900,
+          maxDownloads: 3,
+          requireAuth: false,
+        },
+      ],
+    });
+    const result = await createLink(
+      stub.client,
+      { ...baseInput, maxDownloadsOverride: 100 },
+      ctx,
+    );
+    expect(result.maxDownloads).toBe(3);
+  });
+
+  it("explicit policyId branch is unaffected by inheritance fallback", async () => {
+    // Regression guard: explicit-policy path must NOT call findMany.
+    const stub = makeStub({
+      document: baseDoc,
+      policy: { id: "p-1", linkTtlSeconds: 900, maxDownloads: 7 },
+    });
+    const result = await createLink(
+      stub.client,
+      { ...baseInput, policyId: "p-1" },
+      ctx,
+    );
+    expect(result.maxDownloads).toBe(7);
+    expect(stub.tx.accessPolicy.findMany).not.toHaveBeenCalled();
   });
 
   it("audit metadata includes documentId + policyId for forensic review", async () => {

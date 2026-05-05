@@ -1,5 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { MAX_GET_TTL_SECONDS } from "@/lib/s3-presign";
+import {
+  asPolicyEnginePrisma,
+  resolvePolicyOrNull,
+} from "@/lib/policy-engine";
 
 // Link tokens are independent of presign TTL — the access endpoint
 // generates a fresh, short presigned URL on every redirect (Module 09
@@ -165,6 +169,10 @@ interface LinkTxClient {
       where: { id: string };
       select?: Record<string, unknown>;
     }) => Promise<Record<string, unknown> | null>;
+    findMany: (args: {
+      where: Record<string, unknown>;
+      select: Record<string, unknown>;
+    }) => Promise<Array<Record<string, unknown>>>;
   };
   readonly generatedLink: {
     create: (args: { data: Record<string, unknown> }) => Promise<
@@ -188,13 +196,19 @@ export async function createLink(
   return prisma.$transaction(async (tx) => {
     const doc = await tx.document.findUnique({
       where: { id: input.documentId },
-      select: { id: true, isDeleted: true },
+      select: {
+        id: true,
+        isDeleted: true,
+        s3Key: true,
+        bucket: { select: { name: true } },
+      },
     });
     if (!doc || doc.isDeleted === true) {
       throw new DocumentNotFoundError(input.documentId);
     }
 
     let policy: PolicyInfo | null = null;
+    let resolvedPolicyId: string | null = input.policyId;
     if (input.policyId) {
       const row = await tx.accessPolicy.findUnique({
         where: { id: input.policyId },
@@ -205,6 +219,27 @@ export async function createLink(
         linkTtlSeconds: row.linkTtlSeconds as number,
         maxDownloads: (row.maxDownloads as number | null) ?? null,
       };
+    } else {
+      // Inheritance fallback. Mirrors /api/policies/effective so the
+      // generate-link banner preview and the persisted snapshot agree.
+      // Without this, a bucket/prefix policy with maxDownloads set never
+      // reaches the link row when the form is submitted with the default
+      // "Use inherited policy" option (policyId=null).
+      const bucketName = (doc.bucket as { name: string } | undefined)?.name;
+      const s3Key = doc.s3Key as string | undefined;
+      if (bucketName && typeof s3Key === "string") {
+        const resolved = await resolvePolicyOrNull(asPolicyEnginePrisma(tx), {
+          bucketName,
+          s3Key,
+        });
+        if (resolved) {
+          policy = {
+            linkTtlSeconds: resolved.linkTtlSeconds,
+            maxDownloads: resolved.maxDownloads,
+          };
+          resolvedPolicyId = resolved.policyId;
+        }
+      }
     }
 
     // neverExpires short-circuits TTL resolution entirely — policy TTL
@@ -271,6 +306,11 @@ export async function createLink(
         metadata: {
           documentId: input.documentId,
           policyId: input.policyId,
+          // Resolved id includes the inherited bucket/prefix/object
+          // policy applied when policyId was not explicit. Equals
+          // policyId for explicit selection. null only when no policy
+          // matched at all (default policy).
+          resolvedPolicyId,
           ttlSeconds,
           maxDownloads,
           expiresAt: expiresAt === null ? null : expiresAt.toISOString(),
