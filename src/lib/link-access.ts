@@ -92,13 +92,25 @@ function effectiveFromStored(
 
 async function writeAudit(
   action: "LINK_ACCESS" | "LINK_DENIED",
-  link: { id: string; documentId: string; policyId: string | null },
+  link: {
+    id: string;
+    documentId: string;
+    policyId: string | null;
+    // Forensic fields — additive. When present, recorded in the audit
+    // metadata so admins debugging "embed view didn't count" can
+    // correlate the event with the cap snapshot, the post-event counter
+    // value, and whether the hit was a sub-resource (no increment).
+    maxDownloads?: number | null;
+    allowPublicEmbed?: boolean;
+    downloadCountAfter?: number;
+  },
   ctx: {
     ipAddress: string;
     userAgent: string;
     userId: string | null;
     reason?: string;
     tokenKind?: "sub-fetch" | "external-embed" | null;
+    isSubResource?: boolean;
   },
 ): Promise<void> {
   try {
@@ -111,6 +123,18 @@ async function writeAudit(
         metadata: {
           documentId: link.documentId,
           policyId: link.policyId,
+          ...(link.maxDownloads !== undefined
+            ? { maxDownloads: link.maxDownloads }
+            : {}),
+          ...(link.allowPublicEmbed !== undefined
+            ? { allowPublicEmbed: link.allowPublicEmbed }
+            : {}),
+          ...(link.downloadCountAfter !== undefined
+            ? { downloadCountAfter: link.downloadCountAfter }
+            : {}),
+          ...(ctx.isSubResource !== undefined
+            ? { isSubResource: ctx.isSubResource }
+            : {}),
           ...(ctx.reason ? { reason: ctx.reason } : {}),
           ...(ctx.tokenKind ? { tokenKind: ctx.tokenKind } : {}),
         },
@@ -253,6 +277,9 @@ export async function resolveAndAuthorizeLink(
         id: link.id,
         documentId: link.documentId,
         policyId: link.policyId,
+        maxDownloads: (link.maxDownloads as number | null) ?? null,
+        allowPublicEmbed: link.allowPublicEmbed === true,
+        downloadCountAfter: link.downloadCount as number,
       },
       {
         ipAddress,
@@ -313,6 +340,9 @@ export async function resolveAndAuthorizeLink(
         id: link.id,
         documentId: link.documentId,
         policyId: link.policyId,
+        maxDownloads: (link.maxDownloads as number | null) ?? null,
+        allowPublicEmbed: link.allowPublicEmbed === true,
+        downloadCountAfter: link.downloadCount as number,
       },
       {
         ipAddress,
@@ -320,6 +350,7 @@ export async function resolveAndAuthorizeLink(
         userId: dbUserId,
         reason: "policy-deny",
         tokenKind: options.tokenKind ?? null,
+        isSubResource: options.isSubResource === true,
       },
     );
     return { kind: "forbidden" };
@@ -335,7 +366,14 @@ export async function resolveAndAuthorizeLink(
     if (remainingSec < LINK_ABORT_FLOOR_SEC) {
       await writeAudit(
         "LINK_DENIED",
-        { id: link.id, documentId: link.documentId, policyId: link.policyId },
+        {
+          id: link.id,
+          documentId: link.documentId,
+          policyId: link.policyId,
+          maxDownloads: (link.maxDownloads as number | null) ?? null,
+          allowPublicEmbed: link.allowPublicEmbed === true,
+          downloadCountAfter: link.downloadCount as number,
+        },
         {
           ipAddress,
           userAgent,
@@ -389,6 +427,11 @@ export async function resolveAndAuthorizeLink(
           id: link.id,
           documentId: link.documentId,
           policyId: link.policyId,
+          maxDownloads: (link.maxDownloads as number | null) ?? null,
+          allowPublicEmbed: link.allowPublicEmbed === true,
+          // Race-loss: counter unchanged at the snapshot value because
+          // the cap-gated WHERE clause matched zero rows.
+          downloadCountAfter: link.downloadCount as number,
         },
         {
           ipAddress,
@@ -428,20 +471,43 @@ export async function resolveAndAuthorizeLink(
         id: link.id,
         documentId: link.documentId,
         policyId: link.policyId,
+        maxDownloads: (link.maxDownloads as number | null) ?? null,
+        allowPublicEmbed: link.allowPublicEmbed === true,
+        // Presign failed AFTER any successful increment was rolled back
+        // (decrement above), so the counter nets back to the snapshot.
+        downloadCountAfter: link.downloadCount as number,
       },
-      { ipAddress, userAgent, userId: dbUserId, reason: "presign-failed" },
+      {
+        ipAddress,
+        userAgent,
+        userId: dbUserId,
+        reason: "presign-failed",
+        isSubResource: options.isSubResource === true,
+      },
     );
     return { kind: "forbidden" };
   }
 
   await writeAudit(
     "LINK_ACCESS",
-    { id: link.id, documentId: link.documentId, policyId: link.policyId },
+    {
+      id: link.id,
+      documentId: link.documentId,
+      policyId: link.policyId,
+      maxDownloads: (link.maxDownloads as number | null) ?? null,
+      allowPublicEmbed: link.allowPublicEmbed === true,
+      // /raw sub-resources skip the increment so the counter is
+      // unchanged; the canonical /l/<hash> path always +1's.
+      downloadCountAfter: incrementedCounter
+        ? (link.downloadCount as number) + 1
+        : (link.downloadCount as number),
+    },
     {
       ipAddress,
       userAgent,
       userId: dbUserId,
       tokenKind: options.tokenKind ?? null,
+      isSubResource: options.isSubResource === true,
     },
   );
 

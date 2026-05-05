@@ -674,6 +674,135 @@ describe("GET /api/links/[hash]", () => {
     expect(ctx.secFetchSite).toBeNull();
   });
 
+  // ---- Audit metadata enrichment (additive forensic fields) ----
+  // LINK_ACCESS and LINK_DENIED now carry the cap snapshot
+  // (`maxDownloads`), the `allowPublicEmbed` flag, the post-event
+  // counter value (`downloadCountAfter`), and `isSubResource` so
+  // admins debugging "embed view didn't count" can correlate the
+  // event with the link's state at the moment of access. No business
+  // logic change — pure metadata expansion. Existing assertions on
+  // `action`, `targetType`, `targetId`, `policyId`, `reason`, and
+  // `tokenKind` continue to pass.
+
+  it("LINK_ACCESS audit carries maxDownloads + allowPublicEmbed + post-increment counter", async () => {
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({
+        allowPublicEmbed: true,
+        maxDownloads: 10,
+        downloadCount: 3,
+      }),
+    );
+    mocks.resolvePolicy.mockResolvedValueOnce(defaultEffective);
+    mocks.enforcePolicy.mockReturnValueOnce(allow);
+    mocks.updateMany.mockResolvedValueOnce({ count: 1 });
+    mocks.presignGetUrl.mockResolvedValueOnce("https://s3/x?sig=1");
+    await GET(req(), {
+      params: params("tok_abc_with_long_enough_token_value_xyz"),
+    });
+    const audit = mocks.auditCreate.mock.calls.at(-1)?.[0].data as {
+      action: string;
+      metadata: Record<string, unknown>;
+    };
+    expect(audit.action).toBe("LINK_ACCESS");
+    expect(audit.metadata.maxDownloads).toBe(10);
+    expect(audit.metadata.allowPublicEmbed).toBe(true);
+    // /api/links 302 redirect is the canonical access path → +1.
+    expect(audit.metadata.downloadCountAfter).toBe(4);
+    expect(audit.metadata.isSubResource).toBe(false);
+  });
+
+  it("LINK_ACCESS audit on null-cap link records maxDownloads=null", async () => {
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({ maxDownloads: null, downloadCount: 7 }),
+    );
+    mocks.resolvePolicy.mockResolvedValueOnce(defaultEffective);
+    mocks.enforcePolicy.mockReturnValueOnce(allow);
+    mocks.updateMany.mockResolvedValueOnce({ count: 1 });
+    mocks.presignGetUrl.mockResolvedValueOnce("https://s3/x?sig=1");
+    await GET(req(), {
+      params: params("tok_abc_with_long_enough_token_value_xyz"),
+    });
+    const audit = mocks.auditCreate.mock.calls.at(-1)?.[0].data as {
+      metadata: Record<string, unknown>;
+    };
+    expect(audit.metadata.maxDownloads).toBeNull();
+    expect(audit.metadata.downloadCountAfter).toBe(8);
+  });
+
+  it("LINK_DENIED race-loss audit carries cap snapshot + unchanged counter", async () => {
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({
+        allowPublicEmbed: true,
+        downloadCount: 4,
+        maxDownloads: 5,
+      }),
+    );
+    mocks.resolvePolicy.mockResolvedValueOnce(defaultEffective);
+    mocks.enforcePolicy.mockReturnValueOnce(allow);
+    mocks.updateMany.mockResolvedValueOnce({ count: 0 });
+    await GET(req(), {
+      params: params("tok_abc_with_long_enough_token_value_xyz"),
+    });
+    const audit = mocks.auditCreate.mock.calls.at(-1)?.[0].data as {
+      action: string;
+      metadata: Record<string, unknown>;
+    };
+    expect(audit.action).toBe("LINK_DENIED");
+    expect(audit.metadata.reason).toBe("race-lost-or-just-exhausted");
+    expect(audit.metadata.maxDownloads).toBe(5);
+    expect(audit.metadata.allowPublicEmbed).toBe(true);
+    // Race-loss: WHERE matched zero rows, counter unchanged.
+    expect(audit.metadata.downloadCountAfter).toBe(4);
+  });
+
+  it("LINK_DENIED on revoked status carries cap snapshot + counter snapshot", async () => {
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({
+        isRevoked: true,
+        maxDownloads: 3,
+        downloadCount: 1,
+      }),
+    );
+    await GET(req(), {
+      params: params("tok_abc_with_long_enough_token_value_xyz"),
+    });
+    const audit = mocks.auditCreate.mock.calls.at(-1)?.[0].data as {
+      action: string;
+      metadata: Record<string, unknown>;
+    };
+    expect(audit.action).toBe("LINK_DENIED");
+    expect(audit.metadata.maxDownloads).toBe(3);
+    expect(audit.metadata.allowPublicEmbed).toBe(false);
+    expect(audit.metadata.downloadCountAfter).toBe(1);
+  });
+
+  it("LINK_DENIED presign-failed audit carries net-zero counter (rollback decrement)", async () => {
+    mocks.findLink.mockResolvedValueOnce(
+      linkRow({
+        allowPublicEmbed: true,
+        downloadCount: 2,
+        maxDownloads: 10,
+      }),
+    );
+    mocks.resolvePolicy.mockResolvedValueOnce(defaultEffective);
+    mocks.enforcePolicy.mockReturnValueOnce(allow);
+    mocks.updateMany.mockResolvedValueOnce({ count: 1 });
+    mocks.decrementCount.mockResolvedValue({});
+    mocks.presignGetUrl.mockRejectedValueOnce(new Error("presign-failed"));
+    await GET(req(), {
+      params: params("tok_abc_with_long_enough_token_value_xyz"),
+    });
+    const audit = mocks.auditCreate.mock.calls.at(-1)?.[0].data as {
+      action: string;
+      metadata: Record<string, unknown>;
+    };
+    expect(audit.action).toBe("LINK_DENIED");
+    expect(audit.metadata.reason).toBe("presign-failed");
+    // After increment + rollback decrement, counter equals snapshot.
+    expect(audit.metadata.downloadCountAfter).toBe(2);
+    expect(audit.metadata.maxDownloads).toBe(10);
+  });
+
   it("private link with policy that has EMPTY allowedDomains does NOT bypass (regression guard)", async () => {
     mocks.findLink.mockResolvedValueOnce(
       linkRow({
