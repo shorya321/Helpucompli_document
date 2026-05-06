@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { DataPagination } from "@/components/ui/data-pagination";
 import { formatDateTime } from "@/lib/format-datetime";
 import type { AuditQueryResult, AuditQueryRow } from "@/lib/audit-query";
 import type { ApiResponse } from "@/types";
@@ -151,32 +151,22 @@ export function UserActivityPaged({
           {error}
         </p>
       ) : null}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
         <span className="text-muted-foreground text-xs tabular-nums">
-          Page {page}
+          {loading ? "Loading…" : `Page ${page}`}
         </span>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            type="button"
-            onClick={goPrev}
-            disabled={!canPrev}
-            data-testid="user-activity-prev"
-          >
-            Previous
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            type="button"
-            onClick={goNext}
-            disabled={!canNext}
-            data-testid="user-activity-next"
-          >
-            {loading ? "Loading…" : "Next"}
-          </Button>
-        </div>
+        <DataPagination
+          mode="cursor"
+          page={page}
+          hasPrev={canPrev}
+          hasNext={canNext}
+          onPrev={() => {
+            void goPrev();
+          }}
+          onNext={() => {
+            void goNext();
+          }}
+        />
       </div>
     </div>
   );

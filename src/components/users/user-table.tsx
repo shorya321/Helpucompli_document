@@ -14,6 +14,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ChevronLeftIcon, ChevronRightIcon, MoreHorizontalIcon } from "lucide-react";
+
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+} from "@/components/ui/pagination";
+import { buttonVariants } from "@/components/ui/button";
+import { buildPageWindow } from "@/components/ui/data-pagination";
+import { cn } from "@/lib/utils";
 import { formatDateTime } from "@/lib/format-datetime";
 import type { UserListRow } from "@/lib/user-list";
 import type { Role } from "@/types";
@@ -241,41 +251,174 @@ export function UserTable({
       )}
 
       {total > pageSize && (
-        <div className="text-muted-foreground flex items-center justify-between text-xs">
-          <span>
+        <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
+          <span className="text-muted-foreground text-xs">
             Page {page} of {totalPages} · {total} users
           </span>
-          <div className="flex gap-2">
-            {page > 1 && (
-              <PageLink query={query} page={page - 1} label="Prev" />
-            )}
-            {page < totalPages && (
-              <PageLink query={query} page={page + 1} label="Next" />
-            )}
-          </div>
+          <UserTablePagination
+            query={query}
+            page={page}
+            totalPages={totalPages}
+          />
         </div>
       )}
     </section>
   );
 }
 
-function PageLink({
-  query,
-  page,
-  label,
-}: {
-  readonly query: UserTableProps["query"];
-  readonly page: number;
-  readonly label: string;
-}) {
+function buildHref(query: UserTableProps["query"], page: number): string {
   const params = new URLSearchParams();
   if (query.q) params.set("q", query.q);
   if (query.role) params.set("role", query.role);
   if (query.status) params.set("status", query.status);
   params.set("page", String(page));
+  return `/users?${params.toString()}`;
+}
+
+const DISABLED_LINK = "pointer-events-none cursor-not-allowed opacity-50";
+
+function UserTablePagination({
+  query,
+  page,
+  totalPages,
+}: {
+  readonly query: UserTableProps["query"];
+  readonly page: number;
+  readonly totalPages: number;
+}) {
+  const isFirst = page <= 1;
+  const isLast = page >= totalPages;
+  const window = buildPageWindow(page, totalPages, 1);
+
   return (
-    <Button asChild variant="outline" size="sm">
-      <Link href={`/users?${params.toString()}`}>{label}</Link>
-    </Button>
+    <Pagination className="sm:mx-0 sm:w-auto sm:justify-end">
+      <PaginationContent>
+        <PaginationItem>
+          <PageNavLink
+            href={buildHref(query, page - 1)}
+            disabled={isFirst}
+            ariaLabel="Go to previous page"
+          >
+            <ChevronLeftIcon />
+            <span className="hidden sm:block">Previous</span>
+          </PageNavLink>
+        </PaginationItem>
+        {window.map((item) => {
+          if (item === "ellipsis-left" || item === "ellipsis-right") {
+            return (
+              <PaginationItem key={item}>
+                <span
+                  aria-hidden="true"
+                  className="flex size-9 items-center justify-center"
+                >
+                  <MoreHorizontalIcon className="size-4" />
+                  <span className="sr-only">More pages</span>
+                </span>
+              </PaginationItem>
+            );
+          }
+          const active = item === page;
+          return (
+            <PaginationItem key={item}>
+              <PageNumberLink
+                href={buildHref(query, item)}
+                page={item}
+                isActive={active}
+              />
+            </PaginationItem>
+          );
+        })}
+        <PaginationItem>
+          <PageNavLink
+            href={buildHref(query, page + 1)}
+            disabled={isLast}
+            ariaLabel="Go to next page"
+          >
+            <span className="hidden sm:block">Next</span>
+            <ChevronRightIcon />
+          </PageNavLink>
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
+  );
+}
+
+function PageNavLink({
+  href,
+  disabled,
+  ariaLabel,
+  children,
+}: {
+  readonly href: string;
+  readonly disabled: boolean;
+  readonly ariaLabel: string;
+  readonly children: React.ReactNode;
+}) {
+  const className = cn(
+    buttonVariants({ variant: "ghost", size: "default" }),
+    "gap-1 px-2.5",
+    disabled && DISABLED_LINK,
+  );
+  if (disabled) {
+    return (
+      <span
+        aria-label={ariaLabel}
+        aria-disabled="true"
+        className={className}
+        data-slot="pagination-link"
+      >
+        {children}
+      </span>
+    );
+  }
+  return (
+    <Link
+      href={href}
+      aria-label={ariaLabel}
+      className={className}
+      data-slot="pagination-link"
+    >
+      {children}
+    </Link>
+  );
+}
+
+function PageNumberLink({
+  href,
+  page,
+  isActive,
+}: {
+  readonly href: string;
+  readonly page: number;
+  readonly isActive: boolean;
+}) {
+  const className = cn(
+    buttonVariants({
+      variant: isActive ? "outline" : "ghost",
+      size: "icon",
+    }),
+  );
+  if (isActive) {
+    return (
+      <span
+        aria-current="page"
+        aria-label={`Go to page ${page}`}
+        data-slot="pagination-link"
+        data-active="true"
+        className={className}
+      >
+        {page}
+      </span>
+    );
+  }
+  return (
+    <Link
+      href={href}
+      aria-label={`Go to page ${page}`}
+      data-slot="pagination-link"
+      className={className}
+    >
+      {page}
+    </Link>
   );
 }

@@ -8,9 +8,9 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DataPagination } from "@/components/ui/data-pagination";
 import { formatStorage } from "@/components/buckets/bucket-card";
 
 interface UploaderSummary {
@@ -271,29 +271,21 @@ export function DocumentSearch({ initialBucketId }: DocumentSearchProps) {
         </table>
       </Card>
 
-      <div className="text-muted-foreground flex items-center gap-2 text-sm">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={filters.page <= 1 || busy}
-          onClick={() => setFilters((f) => ({ ...f, page: f.page - 1 }))}
-        >
-          ← Prev
-        </Button>
-        <span className="tabular-nums">
+      <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
+        <span className="text-muted-foreground text-xs tabular-nums">
           Page {filters.page} of {totalPages} · {total} result
           {total === 1 ? "" : "s"}
         </span>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={filters.page >= totalPages || busy}
-          onClick={() => setFilters((f) => ({ ...f, page: f.page + 1 }))}
-        >
-          Next →
-        </Button>
+        <DataPagination
+          mode="offset"
+          page={filters.page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={(page) => {
+            if (busy) return;
+            setFilters((f) => ({ ...f, page }));
+          }}
+        />
       </div>
     </section>
   );

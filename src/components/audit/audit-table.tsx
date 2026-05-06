@@ -12,8 +12,8 @@ import {
 import { useQuery } from "@tanstack/react-query";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { DataPagination } from "@/components/ui/data-pagination";
 import {
   Table,
   TableBody,
@@ -81,6 +81,9 @@ export function AuditTable({ initial }: AuditTableProps) {
   const [filters, setFilters] = useState<AuditFiltersValue>(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<AuditFiltersValue>(EMPTY_FILTERS);
   const [cursor, setCursor] = useState<string | null>(null);
+  // Cursor history stack — pushed on Next so Prev can pop back. Reset on
+  // filter apply / reset. Page index = history.length + 1.
+  const [history, setHistory] = useState<ReadonlyArray<string | null>>([]);
   const [sorting, setSorting] = useState<SortingState>([
     { id: "createdAt", desc: true },
   ]);
@@ -205,12 +208,14 @@ export function AuditTable({ initial }: AuditTableProps) {
 
   const apply = () => {
     setCursor(null);
+    setHistory([]);
     setAppliedFilters(filters);
   };
   const reset = () => {
     setFilters(EMPTY_FILTERS);
     setAppliedFilters(EMPTY_FILTERS);
     setCursor(null);
+    setHistory([]);
   };
 
   return (
@@ -288,28 +293,30 @@ export function AuditTable({ initial }: AuditTableProps) {
         </Table>
       </Card>
       <div
-        className="text-muted-foreground flex items-center gap-2 py-3 text-sm"
+        className="flex flex-col items-center justify-between gap-3 py-3 sm:flex-row"
         aria-live="polite"
       >
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setCursor(null)}
-          disabled={cursor === null || isFetching}
-        >
-          ⟲ First page
-        </Button>
-        <Button
-          type="button"
-          variant="default"
-          size="sm"
-          onClick={() => nextCursor && setCursor(nextCursor)}
-          disabled={!nextCursor || isFetching}
-        >
-          Next page →
-        </Button>
-        <span>{isFetching ? "Loading…" : `${rows.length} rows`}</span>
+        <span className="text-muted-foreground text-xs tabular-nums">
+          {isFetching ? "Loading…" : `${rows.length} row${rows.length === 1 ? "" : "s"}`}
+        </span>
+        <DataPagination
+          mode="cursor"
+          page={history.length + 1}
+          hasPrev={history.length > 0 && !isFetching}
+          hasNext={!!nextCursor && !isFetching}
+          onPrev={() => {
+            setHistory((h) => {
+              const prev = h.length > 0 ? h[h.length - 1] : null;
+              setCursor(prev);
+              return h.slice(0, -1);
+            });
+          }}
+          onNext={() => {
+            if (!nextCursor) return;
+            setHistory((h) => [...h, cursor]);
+            setCursor(nextCursor);
+          }}
+        />
       </div>
     </div>
   );

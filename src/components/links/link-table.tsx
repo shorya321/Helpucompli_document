@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { DataPagination } from "@/components/ui/data-pagination";
 import { Label } from "@/components/ui/label";
 import {
   Table,
@@ -239,6 +240,14 @@ export function LinkTable({ initial }: LinkTableProps) {
   >("createdAt");
   const [dir, setDir] = useState<"asc" | "desc">("desc");
   const [cursor, setCursor] = useState<string | null>(null);
+  // Cursor history stack — each entry is the cursor used for the page
+  // we came from. Push on Next, pop on Prev. Filter / sort changes reset.
+  const [history, setHistory] = useState<ReadonlyArray<string | null>>([]);
+
+  const resetPagination = () => {
+    setCursor(null);
+    setHistory([]);
+  };
 
   const qs = buildQuery(status, sort, dir, cursor);
   const isInitialQuery =
@@ -270,7 +279,7 @@ export function LinkTable({ initial }: LinkTableProps) {
             value={status}
             onChange={(e) => {
               setStatus(e.target.value as "all" | LinkStatus);
-              setCursor(null);
+              resetPagination();
             }}
             className={nativeSelectClass}
           >
@@ -293,7 +302,7 @@ export function LinkTable({ initial }: LinkTableProps) {
               setSort(
                 e.target.value as "createdAt" | "expiresAt" | "downloadCount",
               );
-              setCursor(null);
+              resetPagination();
             }}
             className={nativeSelectClass}
           >
@@ -311,7 +320,7 @@ export function LinkTable({ initial }: LinkTableProps) {
           aria-label={dir === "desc" ? "Descending" : "Ascending"}
           onClick={() => {
             setDir(dir === "asc" ? "desc" : "asc");
-            setCursor(null);
+            resetPagination();
           }}
         >
           {dir === "desc" ? (
@@ -503,28 +512,28 @@ export function LinkTable({ initial }: LinkTableProps) {
         </Card>
       )}
 
-      <div className="text-muted-foreground flex items-center gap-2 py-3 text-sm">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setCursor(null)}
-          disabled={cursor === null || isFetching}
-        >
-          ⟲ First page
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() => nextCursor && setCursor(nextCursor)}
-          disabled={!nextCursor || isFetching}
-        >
-          Next page →
-        </Button>
-        <span className="tabular-nums">
-          {isFetching ? "Loading…" : `${rows.length} rows`}
+      <div className="flex flex-col items-center justify-between gap-3 py-3 sm:flex-row">
+        <span className="text-muted-foreground text-xs tabular-nums">
+          {isFetching ? "Loading…" : `${rows.length} row${rows.length === 1 ? "" : "s"}`}
         </span>
+        <DataPagination
+          mode="cursor"
+          page={history.length + 1}
+          hasPrev={history.length > 0 && !isFetching}
+          hasNext={!!nextCursor && !isFetching}
+          onPrev={() => {
+            setHistory((h) => {
+              const prev = h.length > 0 ? h[h.length - 1] : null;
+              setCursor(prev);
+              return h.slice(0, -1);
+            });
+          }}
+          onNext={() => {
+            if (!nextCursor) return;
+            setHistory((h) => [...h, cursor]);
+            setCursor(nextCursor);
+          }}
+        />
       </div>
       <ConfirmDialog
         open={confirmRevoke !== null}
