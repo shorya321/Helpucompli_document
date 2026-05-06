@@ -23,7 +23,7 @@ export default async function AuditLogPage() {
   let initial: AuditQueryResult = { rows: [], nextCursor: null };
   let loadError = false;
   try {
-    initial = await queryAuditLogs(asAuditQueryPrisma(prisma), { limit: 10 });
+    initial = await queryAuditLogs(asAuditQueryPrisma(prisma), { limit: 25 });
   } catch {
     loadError = true;
   }

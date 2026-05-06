@@ -96,7 +96,7 @@ function buildQuery(
   sp.set("sort", sort);
   sp.set("dir", dir);
   if (cursor) sp.set("cursor", cursor);
-  sp.set("limit", "10");
+  sp.set("limit", "25");
   return `?${sp.toString()}`;
 }
 

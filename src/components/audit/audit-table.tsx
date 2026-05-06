@@ -52,7 +52,7 @@ function buildQuery(filters: AuditFiltersValue, cursor: string | null): string {
   if (filters.dateTo) sp.set("dateTo", `${filters.dateTo}T23:59:59Z`);
   for (const a of filters.actions) sp.append("actions", a);
   if (cursor) sp.set("cursor", cursor);
-  sp.set("limit", "10");
+  sp.set("limit", "25");
   const qs = sp.toString();
   return qs ? `?${qs}` : "";
 }
