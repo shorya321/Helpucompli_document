@@ -1,9 +1,10 @@
 import {
   CreateBucketCommand,
   DeleteBucketCommand,
+  DeleteObjectsCommand,
   ListBucketsCommand,
   ListMultipartUploadsCommand,
-  ListObjectsV2Command,
+  ListObjectVersionsCommand,
   PutBucketCorsCommand,
   PutBucketEncryptionCommand,
   PutBucketLoggingCommand,
@@ -552,23 +553,104 @@ describe("F3.2 — deleteEmptyHipaaBucket", () => {
     vi.resetModules();
   });
 
-  it("refuses to delete a non-empty bucket (BucketNotEmptyError)", async () => {
+  it("deletes versioned objects and delete markers before deleting the bucket", async () => {
     stubAll();
     const send = vi.fn().mockImplementation((cmd: unknown) => {
-      if (cmd instanceof ListObjectsV2Command) return Promise.resolve({ KeyCount: 3 });
+      if (cmd instanceof ListMultipartUploadsCommand) return Promise.resolve({});
+      if (cmd instanceof ListObjectVersionsCommand) {
+        return Promise.resolve({
+          Versions: [
+            { Key: "folder/image.png", VersionId: "v-current" },
+            { Key: "folder/image.png", VersionId: "v-old" },
+          ],
+          DeleteMarkers: [{ Key: "folder/image.png", VersionId: "dm-1" }],
+          IsTruncated: false,
+        });
+      }
       return Promise.resolve({});
     });
-    const { deleteEmptyHipaaBucket, BucketNotEmptyError } =
+    const { deleteEmptyHipaaBucket, s3Send } = await importBucketsWithMocks({
+      s3Send: send,
+    });
+    await deleteEmptyHipaaBucket("versioned-bucket");
+    const [deleteObjects] = commandCalls(s3Send, DeleteObjectsCommand);
+    expect(deleteObjects.input).toEqual({
+      Bucket: "versioned-bucket",
+      Delete: {
+        Objects: [
+          { Key: "folder/image.png", VersionId: "v-current" },
+          { Key: "folder/image.png", VersionId: "v-old" },
+          { Key: "folder/image.png", VersionId: "dm-1" },
+        ],
+        Quiet: false,
+      },
+    });
+    const [deleteBucket] = commandCalls(s3Send, DeleteBucketCommand);
+    expect(deleteBucket.input.Bucket).toBe("versioned-bucket");
+  });
+
+  it("paginates version cleanup before deleting the bucket", async () => {
+    stubAll();
+    const send = vi.fn().mockImplementation((cmd: unknown) => {
+      if (cmd instanceof ListMultipartUploadsCommand) return Promise.resolve({});
+      if (cmd instanceof ListObjectVersionsCommand) {
+        if (cmd.input.KeyMarker === "folder/a.png") {
+          return Promise.resolve({
+            Versions: [{ Key: "folder/b.png", VersionId: "v-b" }],
+            DeleteMarkers: [],
+            IsTruncated: false,
+          });
+        }
+        return Promise.resolve({
+          Versions: [{ Key: "folder/a.png", VersionId: "v-a" }],
+          DeleteMarkers: [],
+          IsTruncated: true,
+          NextKeyMarker: "folder/a.png",
+          NextVersionIdMarker: "v-a",
+        });
+      }
+      return Promise.resolve({});
+    });
+    const { deleteEmptyHipaaBucket, s3Send } = await importBucketsWithMocks({
+      s3Send: send,
+    });
+    await deleteEmptyHipaaBucket("paged-bucket");
+    expect(commandCalls(s3Send, ListObjectVersionsCommand)).toHaveLength(2);
+    expect(commandCalls(s3Send, DeleteObjectsCommand)).toHaveLength(2);
+  });
+
+  it("refuses to delete the bucket when version cleanup reports object errors", async () => {
+    stubAll();
+    const send = vi.fn().mockImplementation((cmd: unknown) => {
+      if (cmd instanceof ListMultipartUploadsCommand) return Promise.resolve({});
+      if (cmd instanceof ListObjectVersionsCommand) {
+        return Promise.resolve({
+          Versions: [{ Key: "folder/image.png", VersionId: "v-current" }],
+          DeleteMarkers: [],
+          IsTruncated: false,
+        });
+      }
+      if (cmd instanceof DeleteObjectsCommand) {
+        return Promise.resolve({
+          Errors: [{ Key: "folder/image.png", VersionId: "v-current" }],
+        });
+      }
+      return Promise.resolve({});
+    });
+    const { deleteEmptyHipaaBucket, BucketNotEmptyError, s3Send } =
       await importBucketsWithMocks({ s3Send: send });
-    await expect(deleteEmptyHipaaBucket("non-empty")).rejects.toBeInstanceOf(
+    await expect(deleteEmptyHipaaBucket("cleanup-error")).rejects.toBeInstanceOf(
       BucketNotEmptyError,
     );
+    expect(commandCalls(s3Send, DeleteBucketCommand)).toHaveLength(0);
   });
 
   it("deletes an empty bucket", async () => {
     stubAll();
     const send = vi.fn().mockImplementation((cmd: unknown) => {
-      if (cmd instanceof ListObjectsV2Command) return Promise.resolve({ KeyCount: 0 });
+      if (cmd instanceof ListMultipartUploadsCommand) return Promise.resolve({});
+      if (cmd instanceof ListObjectVersionsCommand)
+        return Promise.resolve({ Versions: [], DeleteMarkers: [], IsTruncated: false });
       return Promise.resolve({});
     });
     const { deleteEmptyHipaaBucket, s3Send } = await importBucketsWithMocks({
@@ -582,7 +664,6 @@ describe("F3.2 — deleteEmptyHipaaBucket", () => {
   it("refuses to delete when in-flight multipart uploads exist (sec-review F5.4 H2)", async () => {
     stubAll();
     const send = vi.fn().mockImplementation((cmd: unknown) => {
-      if (cmd instanceof ListObjectsV2Command) return Promise.resolve({ KeyCount: 0 });
       if (cmd instanceof ListMultipartUploadsCommand)
         return Promise.resolve({ Uploads: [{ UploadId: "u-1", Key: "x" }] });
       return Promise.resolve({});
@@ -600,7 +681,9 @@ describe("F3.2 — deleteEmptyHipaaBucket", () => {
       name: "BucketNotEmpty",
     });
     const send = vi.fn().mockImplementation((cmd: unknown) => {
-      if (cmd instanceof ListObjectsV2Command) return Promise.resolve({ KeyCount: 0 });
+      if (cmd instanceof ListMultipartUploadsCommand) return Promise.resolve({});
+      if (cmd instanceof ListObjectVersionsCommand)
+        return Promise.resolve({ Versions: [], DeleteMarkers: [], IsTruncated: false });
       if (cmd instanceof DeleteBucketCommand) return Promise.reject(awsError);
       return Promise.resolve({});
     });

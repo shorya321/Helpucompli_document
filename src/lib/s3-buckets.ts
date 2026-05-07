@@ -3,9 +3,10 @@ import {
   type CORSConfiguration,
   CreateBucketCommand,
   DeleteBucketCommand,
+  DeleteObjectsCommand,
   ListBucketsCommand,
   ListMultipartUploadsCommand,
-  ListObjectsV2Command,
+  ListObjectVersionsCommand,
   PutBucketCorsCommand,
   PutBucketEncryptionCommand,
   PutBucketLifecycleConfigurationCommand,
@@ -30,6 +31,9 @@ import { loadConfig } from "./config";
 // reject AWS-reserved prefixes/suffixes: `xn--` (IDN ACE prefix reserved)
 // and `-s3alias` (access-point aliases reserved).
 const BUCKET_NAME_RE = /^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$/;
+const S3_DELETE_OBJECTS_MAX = 1000;
+const S3_LIST_VERSIONS_MAX = 1000;
+const S3_VERSION_CLEANUP_PAGE_LIMIT = 10_000;
 
 // Prefix every managed bucket MUST start with. Matches the IAM policy
 // resource scope in src/lib/iam-policies.ts (BUCKET_ARN_PATTERN) and the
@@ -380,12 +384,6 @@ export async function listHipaaBuckets(): Promise<
 export async function deleteEmptyHipaaBucket(name: string): Promise<void> {
   assertValidBucketName(name);
   const s3 = getS3Client();
-  const listing = await s3.send(
-    new ListObjectsV2Command({ Bucket: name, MaxKeys: 1 }),
-  );
-  if ((listing.KeyCount ?? 0) > 0) {
-    throw new BucketNotEmptyError(name);
-  }
   // Multipart uploads initiated but not completed do NOT surface in
   // ListObjectsV2 — deleting a bucket with live multipart uploads
   // orphans the parts and can produce orphaned storage charges.
@@ -396,7 +394,56 @@ export async function deleteEmptyHipaaBucket(name: string): Promise<void> {
   if ((multipart.Uploads ?? []).length > 0) {
     throw new BucketNotEmptyError(name);
   }
-  // TOCTOU: concurrent writer may race between ListObjectsV2 and
+  // All managed buckets have versioning enabled. A plain object delete
+  // only adds a delete marker and keeps prior versions, and S3 refuses
+  // DeleteBucket until every object version and delete marker is gone.
+  // Bucket deletion is only reached after the DB active-document guard,
+  // so hidden S3 versions here are leftovers from moves/copies/folder
+  // deletes, not live document records.
+  let keyMarker: string | undefined;
+  let versionIdMarker: string | undefined;
+  for (let page = 0; page < S3_VERSION_CLEANUP_PAGE_LIMIT; page += 1) {
+    const versions = await s3.send(
+      new ListObjectVersionsCommand({
+        Bucket: name,
+        MaxKeys: S3_LIST_VERSIONS_MAX,
+        ...(keyMarker ? { KeyMarker: keyMarker } : {}),
+        ...(versionIdMarker ? { VersionIdMarker: versionIdMarker } : {}),
+      }),
+    );
+    const objects = [
+      ...(versions.Versions ?? []).map((v) => ({
+        Key: v.Key,
+        VersionId: v.VersionId,
+      })),
+      ...(versions.DeleteMarkers ?? []).map((d) => ({
+        Key: d.Key,
+        VersionId: d.VersionId,
+      })),
+    ].filter(
+      (obj): obj is { Key: string; VersionId: string } =>
+        typeof obj.Key === "string" && typeof obj.VersionId === "string",
+    );
+    for (let i = 0; i < objects.length; i += S3_DELETE_OBJECTS_MAX) {
+      const deleted = await s3.send(
+        new DeleteObjectsCommand({
+          Bucket: name,
+          Delete: {
+            Objects: objects.slice(i, i + S3_DELETE_OBJECTS_MAX),
+            Quiet: false,
+          },
+        }),
+      );
+      if ((deleted.Errors ?? []).length > 0) {
+        throw new BucketNotEmptyError(name);
+      }
+    }
+    if (!versions.IsTruncated) break;
+    keyMarker = versions.NextKeyMarker;
+    versionIdMarker = versions.NextVersionIdMarker;
+    if (!keyMarker && !versionIdMarker) break;
+  }
+  // TOCTOU: concurrent writer may race between version cleanup and
   // DeleteBucket. If S3 rejects with BucketNotEmpty we rewrap so callers
   // see a consistent error surface.
   try {
