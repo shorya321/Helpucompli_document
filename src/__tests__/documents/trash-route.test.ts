@@ -3,9 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getSession: vi.fn(),
   ensureUser: vi.fn(),
+  bucketFindMany: vi.fn(),
   documentFindMany: vi.fn(),
   documentCount: vi.fn(),
   userBucketAccessFindMany: vi.fn(),
+  listDeletedFolderMarkers: vi.fn(),
 }));
 
 vi.mock("@/lib/auth0", () => ({
@@ -14,6 +16,9 @@ vi.mock("@/lib/auth0", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    bucket: {
+      findMany: mocks.bucketFindMany,
+    },
     document: {
       findMany: mocks.documentFindMany,
       count: mocks.documentCount,
@@ -24,6 +29,10 @@ vi.mock("@/lib/prisma", () => ({
 
 vi.mock("@/lib/ensure-user", () => ({
   ensureUser: mocks.ensureUser,
+}));
+
+vi.mock("@/lib/folder-restore", () => ({
+  listDeletedFolderMarkers: mocks.listDeletedFolderMarkers,
 }));
 
 import { GET } from "@/app/api/s3/trash/route";
@@ -94,6 +103,10 @@ describe("GET /api/s3/trash", () => {
       },
     ]);
     mocks.documentCount.mockResolvedValue(1);
+    mocks.bucketFindMany.mockResolvedValue([
+      { id: "b1", name: "bucket-a" },
+    ]);
+    mocks.listDeletedFolderMarkers.mockResolvedValue([]);
 
     const res = await GET(reqUrl());
     expect(res.status).toBe(200);
@@ -121,6 +134,8 @@ describe("GET /api/s3/trash", () => {
     ]);
     mocks.documentFindMany.mockResolvedValue([]);
     mocks.documentCount.mockResolvedValue(0);
+    mocks.bucketFindMany.mockResolvedValue([]);
+    mocks.listDeletedFolderMarkers.mockResolvedValue([]);
 
     const res = await GET(reqUrl());
     expect(res.status).toBe(200);
@@ -155,6 +170,8 @@ describe("GET /api/s3/trash", () => {
     ]);
     mocks.documentFindMany.mockResolvedValue([]);
     mocks.documentCount.mockResolvedValue(0);
+    mocks.bucketFindMany.mockResolvedValue([]);
+    mocks.listDeletedFolderMarkers.mockResolvedValue([]);
 
     const res = await GET(reqUrl(`?bucketId=${B1}`));
     expect(res.status).toBe(200);
@@ -173,5 +190,49 @@ describe("GET /api/s3/trash", () => {
 
     const res = await GET(reqUrl(`?bucketId=${B2}`));
     expect(res.status).toBe(403);
+  });
+
+  it("includes deleted folder markers scoped to visible buckets", async () => {
+    const B1 = "11111111-1111-1111-1111-111111111111";
+    mocks.getSession.mockResolvedValue(admin());
+    mocks.ensureUser.mockResolvedValue({ id: "user-a" });
+    mocks.userBucketAccessFindMany.mockResolvedValue([{ bucketId: B1 }]);
+    mocks.documentFindMany.mockResolvedValue([]);
+    mocks.documentCount.mockResolvedValue(0);
+    mocks.bucketFindMany.mockResolvedValue([
+      { id: B1, name: "helpucompli-docs-acme" },
+    ]);
+    mocks.listDeletedFolderMarkers.mockResolvedValue([
+      {
+        key: "docs/",
+        versionId: "dm-docs",
+        deletedAt: new Date("2026-05-02T10:00:00.000Z"),
+      },
+    ]);
+
+    const res = await GET(reqUrl());
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      data: {
+        folders: Array<{
+          bucketId: string;
+          bucketName: string;
+          prefix: string;
+          deletedAt: string;
+        }>;
+      };
+    };
+    expect(body.data.folders).toEqual([
+      {
+        bucketId: B1,
+        bucketName: "helpucompli-docs-acme",
+        prefix: "docs/",
+        deletedAt: "2026-05-02T10:00:00.000Z",
+      },
+    ]);
+    expect(mocks.listDeletedFolderMarkers).toHaveBeenCalledWith({
+      bucket: "helpucompli-docs-acme",
+    });
   });
 });

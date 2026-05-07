@@ -5,8 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { RestoreButton } from "@/components/documents/restore-button";
+import { RestoreFolderButton } from "@/components/documents/restore-folder-button";
 
-export interface TrashEntry {
+export interface TrashDocumentEntry {
+  readonly kind: "document";
   readonly id: string;
   readonly bucketId: string;
   readonly bucketName: string;
@@ -17,6 +19,17 @@ export interface TrashEntry {
   readonly deletedAt: Date | null;
   readonly deletedByEmail: string | null;
 }
+
+export interface TrashFolderEntry {
+  readonly kind: "folder";
+  readonly id: string;
+  readonly bucketId: string;
+  readonly bucketName: string;
+  readonly prefix: string;
+  readonly deletedAt: Date | null;
+}
+
+export type TrashEntry = TrashDocumentEntry | TrashFolderEntry;
 
 interface TrashViewProps {
   readonly entries: ReadonlyArray<TrashEntry>;
@@ -42,6 +55,10 @@ function formatStorage(bytes: bigint): string {
     i += 1;
   }
   return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+function entryTitle(entry: TrashEntry): string {
+  return entry.kind === "folder" ? entry.prefix : entry.filename;
 }
 
 export function TrashView({ entries, canHardDelete }: TrashViewProps) {
@@ -90,29 +107,36 @@ export function TrashView({ entries, canHardDelete }: TrashViewProps) {
               >
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="text-foreground truncate text-sm font-medium">
-                    {e.filename}
+                    {entryTitle(e)}
                   </span>
                   <span className="text-muted-foreground font-mono text-xs tabular-nums">
-                    {e.bucketName} · {formatStorage(e.sizeBytes)}
+                    {e.bucketName}
+                    {e.kind === "document" ? ` · ${formatStorage(e.sizeBytes)}` : ""}
                     {e.deletedAt
                       ? ` · deleted ${DATE_FORMAT.format(e.deletedAt)}`
                       : ""}
-                    {e.deletedByEmail ? ` by ${e.deletedByEmail}` : ""}
+                    {e.kind === "document" && e.deletedByEmail
+                      ? ` by ${e.deletedByEmail}`
+                      : ""}
                   </span>
                   <span className="text-muted-foreground font-mono text-[10px] truncate">
-                    {e.s3Key}
+                    {e.kind === "folder" ? e.prefix : e.s3Key}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="whitespace-nowrap text-[10px] uppercase tracking-wide">
-                    Soft-deleted
+                    {e.kind === "folder" ? "Folder" : "Document"}
                   </Badge>
-                  <RestoreButton
-                    bucketId={e.bucketId}
-                    s3Key={e.s3Key}
-                    filename={e.filename}
-                  />
-                  {canHardDelete ? (
+                  {e.kind === "folder" ? (
+                    <RestoreFolderButton bucketId={e.bucketId} prefix={e.prefix} />
+                  ) : (
+                    <RestoreButton
+                      bucketId={e.bucketId}
+                      s3Key={e.s3Key}
+                      filename={e.filename}
+                    />
+                  )}
+                  {e.kind === "document" && canHardDelete ? (
                     <Button asChild size="sm" variant="outline">
                       <Link
                         href={`/documents?op=hard-delete&bucketId=${encodeURIComponent(

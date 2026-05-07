@@ -6,6 +6,7 @@ import { auth0 } from "@/lib/auth0";
 import { resolveRole } from "@/lib/auth-guard";
 import { toJsonSafe } from "@/lib/bigint";
 import { ensureUser } from "@/lib/ensure-user";
+import { listDeletedFolderMarkers } from "@/lib/folder-restore";
 import { prisma } from "@/lib/prisma";
 import { createRateLimiter } from "@/lib/rate-limit";
 
@@ -80,6 +81,7 @@ export async function GET(req: NextRequest) {
         {
           data: toJsonSafe({
             documents: [],
+            folders: [],
             total: 0,
             page,
             pageSize,
@@ -106,7 +108,7 @@ export async function GET(req: NextRequest) {
     ...(bucketFilter ? { bucketId: bucketFilter } : {}),
   };
 
-  const [rows, total] = await Promise.all([
+  const [rows, total, buckets] = await Promise.all([
     prisma.document.findMany({
       where,
       orderBy: { deletedAt: "desc" },
@@ -126,12 +128,33 @@ export async function GET(req: NextRequest) {
       },
     }),
     prisma.document.count({ where }),
+    prisma.bucket.findMany({
+      where: bucketFilter ? { id: bucketFilter } : {},
+      select: { id: true, name: true },
+    }),
   ]);
+
+  const folders = (
+    await Promise.all(
+      buckets.map(async (bucket) => {
+        const markers = await listDeletedFolderMarkers({ bucket: bucket.name }).catch(
+          () => [],
+        );
+        return markers.map((marker) => ({
+          bucketId: bucket.id,
+          bucketName: bucket.name,
+          prefix: marker.key,
+          deletedAt: marker.deletedAt,
+        }));
+      }),
+    )
+  ).flat();
 
   return json(
     {
       data: toJsonSafe({
         documents: rows,
+        folders,
         total,
         page,
         pageSize,

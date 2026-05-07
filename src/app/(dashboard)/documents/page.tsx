@@ -28,6 +28,7 @@ import { DocumentPreviewDialog } from "@/components/documents/document-preview-d
 import { DocumentSearch } from "@/components/documents/document-search";
 import { TrashView, type TrashEntry } from "@/components/documents/trash-view";
 import { ensureUser } from "@/lib/ensure-user";
+import { listDeletedFolderMarkers } from "@/lib/folder-restore";
 
 export const dynamic = "force-dynamic";
 
@@ -102,33 +103,73 @@ export default async function DocumentsPage({ searchParams }: PageProps) {
       isDeleted: true,
       ...(bucketIdScope !== null ? { bucketId: { in: bucketIdScope } } : {}),
     };
-    const rows = await prisma.document.findMany({
-      where,
-      orderBy: { deletedAt: "desc" },
-      take: 200,
-      select: {
-        id: true,
-        bucketId: true,
-        s3Key: true,
-        filename: true,
-        contentType: true,
-        sizeBytes: true,
-        deletedAt: true,
-        bucket: { select: { name: true } },
-        deletedBy: { select: { email: true } },
-      },
+    const [rows, bucketsForTrash] = await Promise.all([
+      prisma.document.findMany({
+        where,
+        orderBy: { deletedAt: "desc" },
+        take: 200,
+        select: {
+          id: true,
+          bucketId: true,
+          s3Key: true,
+          filename: true,
+          contentType: true,
+          sizeBytes: true,
+          deletedAt: true,
+          bucket: { select: { name: true } },
+          deletedBy: { select: { email: true } },
+        },
+      }),
+      prisma.bucket.findMany({
+        where:
+          bucketIdScope !== null ? { id: { in: bucketIdScope } } : {},
+        select: { id: true, name: true },
+      }),
+    ]);
+    const folderEntries: TrashEntry[] = (
+      await Promise.all(
+        bucketsForTrash.map(async (bucket) => {
+          const markers = await listDeletedFolderMarkers({ bucket: bucket.name }).catch(
+            () => [],
+          );
+          return markers.map((marker) => ({
+            kind: "folder" as const,
+            id: `folder:${bucket.id}:${marker.key}`,
+            bucketId: bucket.id,
+            bucketName: bucket.name,
+            prefix: marker.key,
+            deletedAt: marker.deletedAt,
+          }));
+        }),
+      )
+    ).flat();
+    const documentEntries: TrashEntry[] = rows
+      .filter(
+        (row) =>
+          !folderEntries.some(
+            (folder) =>
+              folder.kind === "folder" &&
+              folder.bucketId === row.bucketId &&
+              row.s3Key.startsWith(folder.prefix),
+          ),
+      )
+      .map((r) => ({
+        kind: "document" as const,
+        id: r.id,
+        bucketId: r.bucketId,
+        bucketName: r.bucket.name,
+        s3Key: r.s3Key,
+        filename: r.filename,
+        contentType: r.contentType,
+        sizeBytes: r.sizeBytes ?? BigInt(0),
+        deletedAt: r.deletedAt,
+        deletedByEmail: r.deletedBy?.email ?? null,
+      }));
+    const entries = [...folderEntries, ...documentEntries].sort((a, b) => {
+      const aTime = a.deletedAt?.getTime() ?? 0;
+      const bTime = b.deletedAt?.getTime() ?? 0;
+      return bTime - aTime;
     });
-    const entries: TrashEntry[] = rows.map((r) => ({
-      id: r.id,
-      bucketId: r.bucketId,
-      bucketName: r.bucket.name,
-      s3Key: r.s3Key,
-      filename: r.filename,
-      contentType: r.contentType,
-      sizeBytes: r.sizeBytes ?? BigInt(0),
-      deletedAt: r.deletedAt,
-      deletedByEmail: r.deletedBy?.email ?? null,
-    }));
     return (
       <TrashView
         entries={entries}
