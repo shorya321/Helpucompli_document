@@ -104,7 +104,6 @@ export interface FolderDeletePrisma {
     findMany(args: {
       where: Prisma.DocumentWhereInput;
       select: { id: true; s3Key: true; isDeleted: true; filename: true };
-      take?: number;
     }): Promise<
       Array<{ id: string; s3Key: string; isDeleted: boolean; filename: string }>
     >;
@@ -200,15 +199,14 @@ export async function softDeleteFolder(
   return { filesDeleted, folderMarkersDeleted };
 }
 
-// Hard-delete every DB document under the folder prefix + remove every
-// currently listed folder marker. DB is the document source of truth here:
-// a document row can outlive its current S3 object if an upload/delete
-// path partially completed, and those rows must not keep bucket deletion
-// blocked after a folder hard-delete.
+// Hard-delete every file inside the folder + remove every folder marker.
 // For each document:
 //   - all S3 versions purged (including delete markers from prior soft-deletes)
 //   - DB row deleted
 //   - DOCUMENT_HARD_DELETE audit row with metadata.viaFolder=true
+// Aborts upfront if ANY document under the folder has active generated
+// links — bearer tokens must be revoked deliberately. Mirrors the
+// single-file route's link gate.
 export async function hardDeleteFolder(
   prisma: FolderDeletePrisma,
   ctx: FolderDeleteContext,
@@ -219,17 +217,15 @@ export async function hardDeleteFolder(
   }
 
   const keys = await listAllKeys(ctx.bucketName, ctx.prefix);
+  if (keys.length === 0) throw new FolderEmptyError();
+
+  const fileKeys = keys.filter((k) => !k.isFolderMarker).map((k) => k.key);
   const markerKeys = keys.filter((k) => k.isFolderMarker).map((k) => k.key);
 
   const docs = await prisma.document.findMany({
-    where: { bucketId: ctx.bucketId, s3Key: { startsWith: ctx.prefix } },
+    where: { bucketId: ctx.bucketId, s3Key: { in: fileKeys } },
     select: { id: true, s3Key: true, isDeleted: true, filename: true },
-    take: FOLDER_DELETE_MAX_OBJECTS + 1,
   });
-  if (keys.length === 0 && docs.length === 0) throw new FolderEmptyError();
-  if (docs.length + markerKeys.length > FOLDER_DELETE_MAX_OBJECTS) {
-    throw new FolderTooLargeError(docs.length + markerKeys.length);
-  }
 
   // Generated links for every document in the folder — active or
   // revoked — are dropped inside each per-doc transaction below. Hard-
