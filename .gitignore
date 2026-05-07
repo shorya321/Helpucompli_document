@@ -69,6 +69,7 @@ prisma/migrations/*.sql.bak
 
 # local agent scratch + resolved skill cache (rehydrated from skills-lock.json)
 .agents/
+.codex/
 .claude/skills/
 
 # per-developer session progress log — noisy diffs, not needed in history

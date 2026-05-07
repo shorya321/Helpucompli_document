@@ -79,10 +79,23 @@ describe("queryAuditLogs", () => {
     expect(stub.calls[0]?.skip).toBe(1);
   });
 
-  it("filters by userId", async () => {
+  it("filters by userId across DB user id and Auth0 id", async () => {
     const stub = makeStub([]);
     await queryAuditLogs(stub.client, { limit: 50, userId: "u-7" });
-    expect(stub.calls[0]?.where).toMatchObject({ userId: "u-7" });
+    expect(stub.calls[0]?.where).toMatchObject({
+      OR: [{ userId: "u-7" }, { user: { is: { auth0Id: "u-7" } } }],
+    });
+  });
+
+  it("supports Auth0 subject values in the userId filter", async () => {
+    const stub = makeStub([]);
+    await queryAuditLogs(stub.client, { limit: 50, userId: "auth0|abc" });
+    expect(stub.calls[0]?.where).toMatchObject({
+      OR: [
+        { userId: "auth0|abc" },
+        { user: { is: { auth0Id: "auth0|abc" } } },
+      ],
+    });
   });
 
   it("filters by actions (multi)", async () => {
@@ -122,7 +135,7 @@ describe("queryAuditLogs", () => {
     };
     await queryAuditLogs(stub.client, filters);
     expect(stub.calls[0]?.where).toMatchObject({
-      userId: "u-1",
+      OR: [{ userId: "u-1" }, { user: { is: { auth0Id: "u-1" } } }],
       action: { in: ["LOGIN"] },
       targetType: "user",
     });

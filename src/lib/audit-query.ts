@@ -72,7 +72,12 @@ function clampLimit(raw: number | undefined): number {
 
 function buildWhere(f: AuditQueryFilters): Record<string, unknown> {
   const where: Record<string, unknown> = {};
-  if (f.userId) where.userId = f.userId;
+  if (f.userId) {
+    where.OR = [
+      { userId: f.userId },
+      { user: { is: { auth0Id: f.userId } } },
+    ];
+  }
   if (f.actions && f.actions.length > 0) where.action = { in: f.actions };
   if (f.targetType) where.targetType = f.targetType;
   if (f.dateFrom || f.dateTo) {

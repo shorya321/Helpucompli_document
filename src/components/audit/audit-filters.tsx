@@ -109,7 +109,7 @@ export function AuditFilters({
               type="text"
               value={value.userId}
               maxLength={128}
-              placeholder="auth0|..."
+              placeholder="DB UUID or auth0|..."
               onChange={(e) => onChange({ ...value, userId: e.target.value })}
             />
           </div>
