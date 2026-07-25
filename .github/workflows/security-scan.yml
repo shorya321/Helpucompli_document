@@ -1,5 +1,7 @@
-# F11.7 — scheduled dependency + secret scans. Fails CI on any
-# HIGH or CRITICAL npm audit finding.
+# F11.7 — scheduled dependency + secret scans. Two-tier gate:
+# production dependencies fail CI on HIGH or CRITICAL; the full tree
+# (including devDependencies) fails on CRITICAL only. See the step
+# comments below and docs/RUNBOOK.md §Dependency scanning.
 name: security-scan
 
 on:
@@ -34,5 +36,16 @@ jobs:
       - name: Install deps (audit mode — ignore scripts)
         run: npm ci --ignore-scripts
 
-      - name: npm audit — fail on HIGH or CRITICAL
-        run: npm audit --audit-level=high
+      # Production dependencies ship to users — any HIGH or CRITICAL
+      # advisory blocks the build. Verified clean as of 2026-07-25.
+      - name: npm audit — production deps, fail on HIGH
+        run: npm audit --omit=dev --audit-level=high
+
+      # Full tree including devDependencies. Gated at CRITICAL because
+      # GHSA-mh99-v99m-4gvg (brace-expansion DoS) has no fix in the 1.x
+      # line, and eslint-plugin-import / -react / -jsx-a11y and
+      # @eslint/eslintrc all still pin minimatch@^3.1.2 at their latest
+      # published versions. Dev-only — never deployed. Findings still
+      # print in the log. Re-review once that chain moves off minimatch@3.
+      - name: npm audit — full tree, fail on CRITICAL
+        run: npm audit --audit-level=critical
